@@ -17,11 +17,16 @@ Examples:
 
 02-20-05
 	3: unittest for gene_stat
+
+02-25-05
+	4: unittest for CrackSplat
+
 """
 import unittest, os, sys, getopt
 from gene_stat_plot import gene_stat
 from gene_stat import gene_stat as gene_stat_slim
 from visualize.subgraph_visualize import subgraph_visualize
+from CrackSplat import CrackSplat
 
 class TestGeneStatPlot(unittest.TestCase):
 	def setUp(self):
@@ -249,7 +254,71 @@ class TestGeneStat(unittest.TestCase):
 		for (tuple, prediction_list) in self.instance.prediction_tuple2list.iteritems():
 			self.assertEqual(tuple, (2,2))
 			self.assertEqual(prediction_list, [[0.001, 3, 6166, 3, -1, -1, -1, 5, 0.25]] )
+
+class TestCrackSplat(unittest.TestCase):
+	"""
+	02-25-05
+	"""
+	def setUp(self):
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		table = 'splat_result_p3g5e6d4q5n80'
+		mcl_table = 'mcl_result_p3g5e6d4q5n80'
+		self.instance = CrackSplat(hostname, dbname, schema, table, mcl_table, \
+			report=1,needcommit=0)
+	
+	def test_splat2graph_dict(self):
+		edge_set='{{1,2},{3,2},{3,4}}'
+		real_graph_dict = {(1,2):1,
+			(2,3):1,
+			(3,4):1}
+		graph_dict = self.instance.splat2graph_dict(edge_set)
+		self.assertEqual(graph_dict, real_graph_dict)
+	
+	def test_graph_dict2graph(self):
+		graph_dict = {(1,2):1,
+			(2,3):1,
+			(3,4):1}
 		
+		(index2no, graph) = self.instance.graph_dict2graph(graph_dict)
+		print index2no
+		print graph
+		return (index2no, graph)
+	
+	def test_call_modes(self):
+		infname = '/tmp/g1.matrix'
+		outfname = '/tmp/g1.output'
+		no_of_genes = 10
+		result_code = self.instance.call_modes(infname, outfname, no_of_genes)
+		print "result_code: %s"%result_code
+	
+	def test_parse_modes_results(self):
+		"""
+		in alphabetical order, this should be run after test_call_modes
+		"""
+		from codense.codense2db import codense2db
+		from graphlib import Graph
+		codense2db_instance = codense2db()
+		(conn, curs) = self.instance.db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#really hard to pick the mapping, must make sure the graph edges exist in the database
+		index2no = {0:898, 1:993, 2:761,3:915,4:3784,5:3808,6:3971,7:5500,8:5517,9:2621}
+		graph = Graph.Graph()
+		graph.add_edge(0,1)
+		graph.add_edge(1,2)
+		graph.add_edge(2,3)
+		graph.add_edge(2,5)
+		graph.add_edge(4,5)
+		graph.add_edge(4,6)
+		graph.add_edge(7,8)
+		graph.add_edge(2,9)
+		ls = self.instance.parse_modes_results(1, '/tmp/g1.output',index2no, graph, codense2db_instance, curs)
+		for mclResult in ls:
+			print "splat_id:%s"%mclResult.splat_id
+			print "connectivity: %s"%mclResult.connectivity
+			print "vertex_set: %s"%(repr(mclResult.vertex_set))
+			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -264,7 +333,8 @@ if __name__ == '__main__':
 	
 	TestCaseDict = {1:TestGeneStatPlot,
 		2: TestSubgraphVisualize,
-		3: TestGeneStat}
+		3: TestGeneStat,
+		4: TestCrackSplat}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
