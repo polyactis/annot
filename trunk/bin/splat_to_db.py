@@ -24,6 +24,7 @@ Description:
 
 
 import sys,os,cStringIO,psycopg,getopt
+from codense.common import db_connect
 
 class splat_result_iterator:
 	'''looping over a splat result file, generate a single pattern result'''
@@ -48,19 +49,22 @@ class splat_result_iterator:
 	
 class splat_to_db:
 	'''
+	03-19-05
+		modify toward module-reuse direction
 	'''
-	def __init__(self, infname, hostname, dbname, schema, table, prefix, report, needcommit=0):
+	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None,\
+		table='splat_result', prefix=None, report=0, needcommit=0):
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
 		self.recurrence_array = []
 		self.edge_set = []
 		
-		self.inf = open(infname, 'r')
+		self.infname = infname
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
 		self.report = int(report)
 		self.needcommit = int(needcommit)
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		self.prefix = prefix
 					
@@ -87,10 +91,16 @@ class splat_to_db:
 			line = pattern.readline()
 			
 	def run(self):
+		"""
+		03-19-05
+		"""
+		self.inf = open(self.infname, 'r')
+		(conn, curs) = self.db_connect(self.hostname, self.dbname, self.schema)
+
 		#if table is not splat_result, create it like splat_result
 		if self.table != 'splat_result':
 			try:
-				self.curs.execute("create table %s(\
+				curs.execute("create table %s(\
 					splat_id		serial primary key,\
 					no_of_edges	integer,\
 					recurrence_pattern	bit varying(200),\
@@ -109,13 +119,13 @@ class splat_to_db:
 			string_recurrence_array = repr(self.recurrence_array)
 			string_recurrence_array = '{'+string_recurrence_array[1:-1]+'}'
 			try:
-				self.curs.execute("insert into %s(no_of_edges, \
+				curs.execute("insert into %s(no_of_edges, \
 							recurrence_pattern, recurrence_array, edge_set) values (%d,B'%s','%s','%s')"%\
 							(self.table, self.no_of_edges, self.recurrence_pattern,\
 							string_recurrence_array, string_edge_set ))
 			except:
 				sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
-				self.conn.rollback()
+				conn.rollback()
 				sys.exit(1)
 			
 			no+=1
@@ -124,7 +134,7 @@ class splat_to_db:
 		if self.report:
 			sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.needcommit:
-			self.conn.commit()
+			conn.commit()
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
 
 if __name__ == '__main__':
