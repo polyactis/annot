@@ -36,6 +36,10 @@ Description:
 import sys,os,psycopg,getopt
 from kjbuckets import *
 
+'''
+Comments in this program is sort of confusing. Some are for the codes above.
+Some are for the codes below.
+'''
 class mcl_id_struc:
 	#deprecated.
 	def __init__(self):
