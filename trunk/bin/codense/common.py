@@ -261,3 +261,20 @@ def get_go_term_id2depth(curs, schema=None, term_table='go.term'):
 	
 	sys.stderr.write("Done\n")
 	return go_term_id2depth
+
+
+def get_go_id2go_no(curs, schema=None, table='go'):
+	"""
+	03-14-05
+		return go_id2go_no
+	"""
+	sys.stderr.write("Getting go_id2go_no...")
+	go_id2go_no = {}
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	curs.execute("select go_no, go_id, depth from %s"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_id2go_no[row[1]] = row[0]
+	sys.stderr.write("Done\n")
+	return go_id2go_no
