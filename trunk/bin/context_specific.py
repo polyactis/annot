@@ -91,7 +91,7 @@ class context_specific:
 
 		self.gene_prediction_dict = {}
 		self.no_of_p_known = 0
-		self.go_no2go_id = {}
+		self.go_no2go_id = {}	
 		#mapping between go_no and go's name
 		self.go_no2go_name = {}
 		#mapping between gene_no and gene_id
@@ -211,6 +211,7 @@ class context_specific:
 					
 					item = function_struc()
 					item.context_dict = Set(unit.p_functions_struc_dict[go_no].context_dict.keys())
+					item.is_correct = unit.p_functions_struc_dict[go_no].is_correct
 					self.go_merge_dict[go_no] = item
 				
 				max_raw_distance = 0
