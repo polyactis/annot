@@ -29,7 +29,7 @@ Description:
 """
 
 import sys,os,cStringIO,psycopg,getopt
-from kjbuckets import *
+from sets import Set
 
 class compute_connectivity:
 	'''
@@ -57,7 +57,7 @@ class compute_connectivity:
 		self.edge_dict = {}
 		#structure to store edges of a splat pattern
 		self.no_of_records = 0
-		self.vertex_pool = kjSet()
+		self.vertex_pool = Set()
 		#store the vertices of all the splat patterns
 		self.log_file = open('/tmp/connectivity.log', 'w')
 					
