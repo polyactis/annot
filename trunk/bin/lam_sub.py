@@ -4,28 +4,28 @@ Usage: lam_sub.py [OPTIONS] ProgramAndArguments
 
 Option:
 
-	-r ...	--rr=...	rank range, 0(default) but range is also ok. i.e. 0-3 means 0,1,2,3
-		This is used to specify the nodes to use.
+	-r ...	--rr=...	rank range, (IGNORE)
+		NOTE use 'n#' by mpirun or mpiexec to control the node.
 	-h, --help              show this help
 	
 Examples:
-	mpirun C lam_sub.py -r 3 ls
+	#run the ls on n3
+	mpirun n3 lam_sub.py ls
 	
 Description:
 	This program is like qsub, but need to specify node and the only way to
 	kill a job is to go to that node and kill it.
-
-	It depends on batch_haiyan_lam.py(one function borrowed)
 	
 	It's better to use lamexec. Simpler and faster.
 	i.e. lamexec n3 ls
 	
+	But the good thing of this program is that it keeps track of the running by mpitask
+	because it invokes MPI functions(the communicator).
 """
 
 
 from Scientific import MPI
 import sys, os, getopt
-from batch_haiyan_lam import batch_haiyan_lam
 
 class lam_sub:
 	"""
@@ -40,27 +40,18 @@ class lam_sub:
 		"""
 		self.rank_range = rank_range
 		self.args = args
-		self.batch_haiyan_lam_instance = batch_haiyan_lam()
 	
 	def run(self):
 		"""
 		03-17-05
-			call _node_fire in batch_haiyan_lam
+			
 		"""
 		#a communicator
 		comm = MPI.world.duplicate()
-		if len(self.rank_range) == 1:
-			node_rank_list = self.rank_range
-		elif self.rank_range[0] > comm.size or self.rank_range[1] > comm.size:
-			sys.stderr.write("Error: invalid rank range: %s"%repr(self.rank_range))
-			sys.exit(2)
-		else:
-			node_rank_list = range(self.rank_range[0], self.rank_range[1]+1)
 		#the first one is the program_path
 		program_path = self.args[0]
-		parameter_list = [self.args]
-		if comm.rank in node_rank_list:
-			self.batch_haiyan_lam_instance._node_fire(comm, program_path, parameter_list, node_rank_list)
+		print "node %s running %s..."%(comm.rank, program_path)
+		os.execvp(program_path, self.args)
 
 
 if __name__ == '__main__':
@@ -73,7 +64,7 @@ if __name__ == '__main__':
 	except:
 		print __doc__
 		sys.exit(2)
-	rank_range = [0]
+	rank_range = None
 	
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
