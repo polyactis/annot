@@ -13,7 +13,7 @@ Option:
 Examples:
 	cluster_stat.py -k shu -c
 	cluster_stat.py -k ming1
-	
+	cluster_stat.py -k shu_whole -c -w
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
 	The length of p_value_vector is subject to the number of functional categories.
@@ -68,7 +68,7 @@ class cluster_stat:
 	def run(self):
 		self.curs.execute("begin")
 		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from mcl_result")
-		self.curs.execute("fetch 500 from crs")
+		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
 			for row in rows:
@@ -79,7 +79,7 @@ class cluster_stat:
 				
 			if self.report:
 				sys.stderr.write("%s%s"%("\x08"*20,self.no_of_records))
-			self.curs.execute("fetch 500 from crs")
+			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
 			self.curs.execute("end")
@@ -142,6 +142,13 @@ class cluster_stat:
 		for go_no in go_no_list:
 			self._local_go_no_dict[go_no] -= 1
 			self._global_go_no_dict[go_no] -= 1
+			if self.wu:
+			# for Wu's strategy
+				if self._local_go_no_dict.has_key(0):
+					self._local_go_no_dict[0] += 1
+				else:
+					self._local_go_no_dict[0] = 1
+				self._global_go_no_dict[0] += 1
 			if self._local_go_no_dict[go_no] == 0:
 				del self._local_go_no_dict[go_no]
 			if self._global_go_no_dict[go_no] == 0:
