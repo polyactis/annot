@@ -199,6 +199,8 @@ class CrackSplat:
 		"""
 		02-24-05
 			parse the modes output file
+		03-06-05
+			change because the way to parse connectivity and recurrence of codense2db_connect changed.
 		"""
 		listOfMclResult = []
 		reader = csv.reader(file(outfname), delimiter='\t')
@@ -211,9 +213,12 @@ class CrackSplat:
 			node_list = row[3:]
 			node_list = map(int, node_list)
 			subgraph = graph.subgraph_from_node_list(node_list)
-			no_of_edges = float(len(subgraph.edges))
-			no_of_nodes = float(len(subgraph.nodes))
-			unit.connectivity = 2*no_of_edges/(no_of_nodes*(no_of_nodes-1))
+			
+			#compute connectivity
+			no_of_edges = len(subgraph.edges)
+			no_of_nodes = len(subgraph.nodes)
+			unit.connectivity = 2*float(no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+			
 			#map the index back to gene_no
 			for i in range(len(node_list)):
 				node_list[i] = index2no[node_list[i]]
@@ -229,9 +234,10 @@ class CrackSplat:
 				else:
 					edge_set.append([index2, index1])
 			#calculate the recurrence_array via codense2db_instance's functions
-			combined_cor_vector = codense2db_instance.get_combined_cor_vector(curs, edge_set)
+			combined_cor_vector, combined_sig_vector = codense2db_instance.get_combined_cor_vector(curs, edge_set)
 			cor_cut_off = 0		#0 means no cut off for those edges.
-			unit.recurrence_array = codense2db_instance.parse_recurrence(combined_cor_vector, \
+			unit.connectivity = codense2db_instance.parse_connectivity(combined_sig_vector, no_of_edges, no_of_nodes)
+			unit.recurrence_array = codense2db_instance.parse_recurrence(combined_sig_vector, \
 				len(edge_set), cor_cut_off)
 			listOfMclResult.append(unit)
 		del reader
