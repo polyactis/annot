@@ -73,12 +73,14 @@ class splat_to_db:
 		for pattern in iter:
 			self.parse(pattern)
 			self.splat_id = '%s_%d'%(self.organism,no)
-			sys.stderr.write(self.splat_id + '\t' + self.no_of_edges + '\n' + self.recurrence_pattern +'\n')
+			string_edge_set = repr(self.edge_set)
+			string_edge_set = string_edge_set.replace('[','{')
+			string_edge_set = string_edge_set.replace(']','}')
 			try:
 				self.curs.execute("insert into splat_result(splat_id, organism,no_of_edges, \
-							recurrence_pattern,edge_set)values ('%s','%s','%s',B'%s',ARRAY%s)"%\
+							recurrence_pattern,edge_set) values ('%s','%s',%s,B'%s','%s')"%\
 							(self.splat_id, self.org_short2long[self.organism], self.no_of_edges, \
-							self.recurrence_pattern,repr(self.edge_set) ))
+							self.recurrence_pattern,string_edge_set ))
 			except:
 				sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 				self.conn.rollback()
@@ -86,6 +88,8 @@ class splat_to_db:
 			no+=1
 		if self.needcommit:
 			self.conn.commit()
+		sys.stderr.write('\tTotal patterns: %d\n'%no-1)
+		sys.stderr.write('\tLast pattern: %s\n'%self.splat_id)
 
 
 if __name__ == '__main__':
