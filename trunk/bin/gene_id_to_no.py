@@ -83,7 +83,8 @@ class gene_id_to_no:
 	
 	def submit(self):
 		for item in self.vertex_dict:
-			self.curs.execute("insert into gene_id_to_no values('%s', %d, '%s')"%(item, self.vertex_dict[item], self.organism))
+			self.curs.execute("insert into gene_id_to_no(gene_id, gene_no, organism) values('%s', %d, '%s')"%\
+				(item, self.vertex_dict[item], self.organism))
 		self.conn.commit()
 
 if __name__ == '__main__':
