@@ -11,7 +11,8 @@ Option:
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
 	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
-	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 5)
+	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 4)
+	-l ..., --level=...	if node_type==3, this determines the level of a qualified go, 4(default)
 	-b, --bfs	construct by BFS instead of index
 	-h, --help      show this help
 	
@@ -145,7 +146,14 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type, node_type):
+	"""
+	03-08-05
+	"""
+	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type, node_type=1, level=4):
+		"""
+		03-08-05
+			add a parameter, level to indicate the level of qualified nodes for node_type==3.
+		"""
 		self.schema = schema
 		if self.schema:
 		#input from database
@@ -159,6 +167,8 @@ class go_informative_node_bfs:
 		self.size = int(size)
 		self.type = int(type)
 		self.node_type = int(node_type)
+		self.level = int(level)
+		
 		output_format_dict = {0:self.output_full,
 			1:self.output_stat,
 			2:self.output_between}
@@ -260,8 +270,8 @@ class go_informative_node_bfs:
 			elif self.node_type==2:
 				self.informative_node_dict[go_id] = 0
 			elif self.node_type==3:
-				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0 and self.go_id2depth[go_id]==4:
-					#not biological_process and have >0 genes associated and depth=4(level=5)
+				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0 and self.go_id2depth[go_id]==self.level:
+					#not biological_process and have >0 genes associated and depth=4(level=4)
 					self.informative_node_dict[go_id] = 1
 		if self.node_type==2:
 			#below is analogous to BFS,
@@ -304,8 +314,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:n:b", ["help", "hostname=", \
-			"dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "node_type=", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:n:l:b", ["help", "hostname=", \
+			"dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "node_type=", "level=", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -318,6 +328,7 @@ if __name__ == '__main__':
 	size = 60
 	type = 0
 	node_type = 1
+	level = 4
 	bfs = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -339,13 +350,17 @@ if __name__ == '__main__':
 			type = int(arg)
 		elif opt in ("-n", "--node_type"):
 			node_type = int(arg)
+		elif opt in ("-l", "--level"):
+			level = int(arg)
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and schema:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, node_type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, \
+			go_index, size, type, node_type, level)
 		instance.run()
 	elif bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, node_type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, \
+			go_index, size, type, node_type, level)
 		instance.run()		
 	elif go_association and go_index:
 		instance = go_informative_node(go_association, go_index, size, type)
