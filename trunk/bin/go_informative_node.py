@@ -185,7 +185,7 @@ class go_informative_node_bfs:
 		#biological_process, not obsolete, not biological_process unknown.
 		self.curs.execute("select a.go_id, g.gene_id from graph.association a, go.term t,\
 			gene g where g.gene_id=a.gene_id and t.acc=a.go_id and\
-			t.term_type='biological_process' and t.acc!='GO:00000004' and t.is_obsolete=0")
+			t.term_type='biological_process' and t.acc!='GO:0000004' and t.is_obsolete=0")
 		rows = self.curs.fetchall()
 		for row in rows:
 		#setup the go_id2gene_id_dict structure
