@@ -6,7 +6,8 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	the database table storing the clusters, mcl_result(default)
-	-p, --prune_type	prune_on_recurrence_array, default is prune_on_edge_set
+	-p ..., --prune_type=...	0(prune_on_edge_set, default), 1(prune_on_recurrence_array)
+		2(prune_on_vertex_set)
 	-s ..., --threshhold=...	the memory threshhold, default is 1e6.
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
@@ -14,16 +15,22 @@ Option:
 	
 Examples:
 	cluster_prune.py -k shu -c -s 3e6 -r
-	cluster_prune.py -k ming1 -p -r
-	cluster_prune.py -k shu_whole -p -c -r
+		:prune_on_edge_set, threshhold 3e6, on table mcl_result
+	cluster_prune.py -k ming1 -p 1 -r
+		:prune_on_recurrence_array, on table mcl_result
+	cluster_prune.py -k shu_whole -p 2 -t mcl_result2 -r -c
+		:prune_on_vertex_set and on table mcl_result2
 
 Description:
 	THis program will discard redundant clusters.
-	Two Criteria to discard:
+	Three types of pruning:
 	1. clusters with same vertex_set and edge_set, choose an arbitrary one to
 	retain and update its recurrence_array.
 	2. Among clusters with same vertex_set and same recurrence_pattern,
 	retain the one with highest connectivity.
+	3. clusters with same vertex_set will be merged. THIS should be carried upon
+	a new table, like mcl_result2 and after above two prunings.
+	
 """
 
 import sys,os,psycopg,getopt
@@ -35,7 +42,7 @@ class mcl_id_struc:
 		self.subgraph = None
 		self.recurrence_array = None
 		self.vertex_set = None
-		self.isgood = 0
+		self.connectivity = None
 
 class cluster_prune:
 
@@ -48,6 +55,10 @@ class cluster_prune:
 		self.threshhold = float(threshhold)
 		self.report = int(report)
 		self.needcommit = int(needcommit)
+		self.prune_func_dict = {0:self.prune_on_edge_set,
+			1:self.prune_on_recurrence_array,
+			2:self.prune_on_vertex_set}
+		#a function mapping structure.
 		self.vertex_set_dict = {}
 		#store a edge_set_dict or recurrence_pattern_dict with the same vertex_set
 		self.mcl_id2connectivity_dict ={}
@@ -159,7 +170,7 @@ class cluster_prune:
 		sys.stderr.write("\tDone\n")
 		self.no_of_goods += len(self.good_mcl_id_dict)
 		self.no_of_bads += len(self.bad_mcl_id_list)
-		
+
 	def prune_on_edge_set(self):
 		i = 0
 		sys.stderr.write("Pruning based on edge_set...\n")
@@ -167,7 +178,121 @@ class cluster_prune:
 			self._prune_on_edge_set()
 		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
 		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
-				
+
+
+	def _prune_on_vertex_set(self):
+		del self.vertex_set_dict
+		del self.good_mcl_id_dict
+		del self.bad_mcl_id_list
+		self.vertex_set_dict = {}
+		self.good_mcl_id_dict = {}
+		self.bad_mcl_id_list = []
+		self.remaining = 0
+		self.run_no += 1
+		#data structure initialization
+		sys.stderr.write("Run No.%d\n"%self.run_no)
+		self.crs = 'crs%d'%self.run_no
+		#in one transaction, multiple cursors to avoid cursor name collision
+		self.curs.execute("DECLARE %s CURSOR FOR select m.mcl_id, m.vertex_set, m0.recurrence_array, m.connectivity \
+			from %s m, mcl_result m0 where m.mcl_id=m0.mcl_id and m.recurrence_array isnull"%(self.crs, self.table))
+		#m.recurrence_array notnull means the clusters which have same vertex_set
+		#and edge_set as m.mcl_id have all been merged into this mcl_id.
+		self.curs.execute("fetch 5000 from %s"%self.crs)
+		rows = self.curs.fetchall()
+		i = 0
+		while rows:
+			for row in rows:
+				mcl_id = row[0]
+				vertex_set = row[1]
+				recurrence_array = row[2][1:-1].split(',')
+				connectivity = row[3]
+				recurrence_array = kjSet(map(int, recurrence_array))
+				if vertex_set in self.vertex_set_dict:
+				#identify a cluster by its vertex_set
+					old_mcl_id = self.vertex_set_dict[vertex_set][0]
+					old_connectivity = self.vertex_set_dict[vertex_set][1]
+					if connectivity <= old_connectivity:
+						#old one is still good
+						self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
+						self.good_mcl_id_dict[old_mcl_id] += recurrence_array
+						#merge recurrence_array
+						self.bad_mcl_id_list.append(mcl_id)
+					else:
+						#new one is good, old one is bad.
+						self.log_file.write("%d swallows %d\n"%(mcl_id, old_mcl_id))
+						self.vertex_set_dict[vertex_set] = [mcl_id, connectivity]
+						#store the old recurrence_array first
+						old_recurrence_array = self.good_mcl_id_dict[old_mcl_id]
+						#push the new one into good_mcl_id_dict
+						self.good_mcl_id_dict[mcl_id] = recurrence_array
+						#merge with the old.
+						self.good_mcl_id_dict[mcl_id] += old_recurrence_array
+						#delete the old from the good_mcl_id_dict
+						del self.good_mcl_id_dict[old_mcl_id]
+						#now old_mcl_id goes to the bad_mcl_id_list
+						self.bad_mcl_id_list.append(old_mcl_id)
+				else:
+					if len(self.good_mcl_id_dict)>self.threshhold:
+						self.remaining += 1
+						#leave it to the next run
+					else:
+						self.good_mcl_id_dict[mcl_id] = recurrence_array
+						#this time, the first one is not always the good one,
+						#it may be replaced by one with higher connectivity
+						self.vertex_set_dict[vertex_set] = [mcl_id, connectivity]
+				self.log_file.write('%s: %s\n'%(mcl_id, vertex_set))
+				i += 1
+			if self.report:
+				sys.stderr.write("%s\t%s"%("\x08"*20, i))
+			self.curs.execute("fetch 5000 from %s"%self.crs)
+			rows = self.curs.fetchall()
+		if self.report:
+			sys.stderr.write('\n')
+		sys.stderr.write("\trecords to be updated: %d\n"%len(self.good_mcl_id_dict))
+		sys.stderr.write("\trecords to be deleted: %d\n"%len(self.bad_mcl_id_list))
+		sys.stderr.write("\tDatabase transacting...")
+		for mcl_id in self.good_mcl_id_dict:
+			#update the recurrence_array of the good mcl_ids
+			recurrence_array = self.good_mcl_id_dict[mcl_id].items()
+			recurrence_array.sort()
+			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
+			self.curs.execute("update %s set recurrence_array = ARRAY%s where mcl_id =%d"%\
+				(self.table, repr(recurrence_array), mcl_id))
+		#delete the bad mcl_ids
+		for mcl_id in self.bad_mcl_id_list:
+			self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
+		sys.stderr.write("\tDone\n")
+		self.no_of_goods += len(self.good_mcl_id_dict)
+		self.no_of_bads += len(self.bad_mcl_id_list)
+		
+	def prune_on_vertex_set(self):
+		'''
+		First off, clone a table named as self.table from mcl_result. Leave the recurrence_array empty.
+		'''
+		#make sure no stupid choice
+		if self.table == 'mcl_result':
+			sys.stderr.write("Not for %s. Please choose mcl_result2.\n"%self.table)
+			sys.exit(2)
+		#create the table structure from mcl_result
+		try:
+			self.curs.execute("create table %s(like mcl_result)"%self.table)
+		except psycopg.ProgrammingError, error:
+			sys.stderr.write('%s\n'%error)
+			sys.exit(2)
+		#real cloning starts here.
+		sys.stderr.write("Cloning mcl_result into %s..."%self.table)
+		self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
+			go_no_vector, unknown_gene_ratio) select mcl_id, splat_id, vertex_set, parameter, connectivity,\
+			p_value_min, go_no_vector, unknown_gene_ratio from mcl_result"%self.table)
+		sys.stderr.write("Done\n")
+		
+		i = 0
+		sys.stderr.write("Pruning based on vertex_set...\n")
+		while self.remaining != 0:
+			self._prune_on_vertex_set()
+		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
+		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
+
 	def prune_on_recurrence_array(self):
 		self.curs.execute("select mcl_id, connectivity from %s"%self.table)
 		rows = self.curs.fetchall()
@@ -218,10 +343,7 @@ class cluster_prune:
 		sys.stderr.write("Done\n")
 	
 	def run(self):
-		if prune_type == 0:
-			self.prune_on_edge_set()
-		elif prune_type == 1:
-			self.prune_on_recurrence_array()
+		self.prune_func_dict[self.prune_type]()
 		if self.needcommit:
 			self.conn.commit()
 
@@ -231,7 +353,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:ps:ct:", ["help", "report", "dbname=", "schema=", "prune_type", "threshhold=", "commit", "table="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:p:s:ct:", ["help", "report", "dbname=", "schema=", "prune_type=", "threshhold=", "commit", "table="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -252,7 +374,7 @@ if __name__ == '__main__':
 		elif opt in ("-k", "--schema"):
 			schema = arg
 		elif opt in ("-p", "--prune_type"):
-			prune_type = 1
+			prune_type = int(arg)
 		elif opt in ("-s", "--threshhold"):
 			threshhold = float(arg)
 		elif opt in ("-c", "--commit"):
