@@ -329,7 +329,12 @@ class go_node_distance:
 				jasmine_distance, common_ancestor_list) values(%d, %d, %d, %d, %d, ARRAY%s)"%\
 				(self.table, go_id1, go_id2, raw_distance, lee_distance, jasmine_distance,\
 				repr(common_ancestor_list)) )
-
+		#create indices
+		self.curs.execute("set search_path to go")
+		self.curs.execute("create index %s_go_id1_idx on go.%s(go_id1)"%\
+			(self.table, self.table))
+		self.curs.execute("create index %s_go_id2_idx on go.%s(go_id2)"%\
+			(self.table, self.table))
 		if self.needcommit:
 			self.curs.execute("end")
 		sys.stderr.write("done.\n")
