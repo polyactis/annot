@@ -67,8 +67,8 @@ class cluster_stat:
 				n = self.no_of_genes -1 - m
 				k = cluster_size-1
 				p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
-				self.logfile.write('%d %d %d %d %d %d %f\n'%\
-					(mcl_id,gene_no,x,m,n,k,p_value))
+				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
+					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
 				p_value_vector[go_no-1] = p_value
 			self.curs.execute("insert into sc_cluster_stat(mcl_id, leave_one_out, p_value_vector)\
 				values(%d, %d, ARRAY%s)"%(mcl_id, gene_no, repr(p_value_vector)))
