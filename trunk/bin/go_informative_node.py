@@ -6,15 +6,18 @@ Option:
 	-a ..., -go_association=...	the file mapping go_id to gene_id
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
+	-t, --stat	output in stats format
 	-b, --bfs	construct by BFS instead of index
 	-h, --help      show this help
 	
 Examples:
-	go_index.py -i process.pathindex.annotation.txt -a go2ug.txt
-	go_index.py -i term2term.txt -a go2ug.txt -b
+	go_informative_node.py -i process.pathindex.annotation.txt -a go2ug.txt
+	go_informative_node.py -i term2term.txt -a go2ug.txt -b
+	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t
+	
 Description:
 	this program constructs informative nodes based on go_association file
-	and go_index file.
+	and go_index file or go_graph file.
 	go_association file format:	go_id	gene_id
 	go_index file format:	go_id	go_index
 	go_graph file format:	term_id1	term_id2	go_id1	go_id2
@@ -25,10 +28,11 @@ import sys, os, getopt, csv
 from kjbuckets import *
 
 class go_informative_node:
-	def __init__(self, go_association, go_index, size):
+	def __init__(self, go_association, go_index, size, stat):
 		self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
 		self.goi_f = csv.reader(open(go_index, 'r'), delimiter='\t')
 		self.size = int(size)
+		self.stat = int(stat)
 		self.go_index2gene_id_dict = {}
 		#value utilizes kjSet data structure
 		self.go_id2go_index_dict = {}
@@ -120,15 +124,19 @@ class go_informative_node:
 			go_index = self.go_id2go_index_dict[go_id][0]
 			#take the first go_index associated with the go_id
 			gene_id_list = self.go_index2gene_id_dict[go_index].items()
-			for gene_id in gene_id_list:
-				sys.stdout.write('%s\t%s\t%s\n'%(go_id, go_index, gene_id))
+			if self.stat:
+				sys.stdout.write("%s\t%d\n"%(go_id, len(gene_id_list)))
+			else:
+				for gene_id in gene_id_list:
+					sys.stdout.write('%s\t%s\t%s\n'%(go_id, go_index, gene_id))
 
 
 class go_informative_node_bfs:
-	def __init__(self, go_association, go_graph, size):
+	def __init__(self, go_association, go_graph, size, stat):
 		self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
 		self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
 		self.size = int(size)
+		self.stat = int(stat)
 		self.root = 'GO:0008150'
 		self.go_graph = kjGraph()
 		self.go_id2gene_id_dict = {}
@@ -184,10 +192,13 @@ class go_informative_node_bfs:
 	
 	def output(self):
 		for go_id,value in self.informative_node_dict.iteritems():
-			if value == 1:
+			if value == 1:	
 				gene_id_list = self.go_id_descendent2gene_id_dict[go_id].items()
-				for gene_id in gene_id_list:
-					sys.stdout.write('%s\t%s\t%s\n'%(go_id, go_id, gene_id))
+				if self.stat:
+					sys.stdout.write("%s\t%d\n"%(go_id, len(gene_id_list)))
+				else:
+					for gene_id in gene_id_list:
+						sys.stdout.write('%s\t%s\t%s\n'%(go_id, go_id, gene_id))
 				
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -195,7 +206,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "ha:i:s:b", ["help", "go_association=", "go_index=", "size=", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "ha:i:s:tb", ["help", "go_association=", "go_index=", "size=", "stat", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -203,6 +214,7 @@ if __name__ == '__main__':
 	go_association = ''
 	go_index = ''
 	size = 60
+	stat = 0
 	bfs = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -214,13 +226,15 @@ if __name__ == '__main__':
 			go_index = arg
 		elif opt in ("-s", "--size"):
 			size = int(arg)
+		elif opt in ("-t", "--stat"):
+			stat = 1
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(go_association, go_index, size)
+		instance = go_informative_node_bfs(go_association, go_index, size, stat)
 		instance.run()		
 	elif go_association and go_index:
-		instance = go_informative_node(go_association, go_index, size)
+		instance = go_informative_node(go_association, go_index, size, stat)
 		instance.run()
 	else:
 		print __doc__
