@@ -58,15 +58,11 @@ class haiyan_cor_vector2db:
 			sig_vector = sig_row[2:]
 			sig_vector = '{' + ','.join(sig_vector) + '}'
 			
-			try:
-				#inserting into the splat_table
-				self.curs.execute("insert into %s(edge_name, cor_vector, sig_vector) \
-							values ('%s', '%s', '%s')"%\
-							(self.table, edge, cor_vector, sig_vector))
-			except:
-				sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
-				self.conn.rollback()
-				sys.exit(1)
+
+			#inserting into the splat_table
+			self.curs.execute("insert into %s(edge_name, cor_vector, sig_vector) \
+				values ('%s', '%s', '%s')"%\
+				(self.table, edge, cor_vector, sig_vector))
 		if self.needcommit:
 			self.curs.execute("create index %s_edge_name_idx on %s(edge_name)"%(self.table, self.table))
 			self.conn.commit()
