@@ -1,0 +1,232 @@
+#!/usr/bin/env python
+"""
+Usage: go_node_distance.py -k SCHEMA [OPTIONS]
+
+Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database, go(default)
+	-t ..., --table=...	table to store the node distances, node_distance(default)
+	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
+	-n,	--new_table	table is new. (create it first)
+	-r, --report	report the progress(a number) IGNORE
+	-c, --commit	commit the database transaction
+	-l, --log	enable logging
+	-h, --help              show this help
+
+Examples:
+	go_node_distance.py -k go
+
+Description:
+	Program to compute three kinds of distances between two GO nodes and
+	store them into a go table.
+	branch illustration:
+	0:	molecular_function
+	1:	biological_process
+	2:	cellular_component
+"""
+
+import sys, os, psycopg, getopt
+from graphlib import Graph, GraphAlgo
+from sets import Set
+
+
+class go_node_distance:
+	def __init__(self, hostname, dbname, schema, table, branch, new_table, report=0, \
+		needcommit=0, log=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to %s"%schema)
+		self.table = table
+
+		self.new_table = int(new_table)
+		self.report = int(report)
+		self.needcommit = int(needcommit)
+		self.log = int(log)
+		
+		#mapping for the branches
+		self.branch_dict = {0:'molecular_function',
+			1:'biological_process',
+			2:'cellular_component'}
+		self.branch = self.branch_dict[int(branch)]
+		if self.log:
+			self.log_file = open('/tmp/go_node_distance.log','w')
+		#mapping between go_id and go_acc
+		self.go_id2acc = {}
+		#GO DAG (directed)
+		self.go_digraph = Graph.Graph()
+		#GO undirected Graph, to compute distance between two nodes
+		self.go_graph = Graph.Graph()
+
+	def dstruc_loadin(self):
+		sys.stderr.write("Loading Data STructure...")
+		
+		#setup self.go_id2acc
+		self.curs.execute("select id, acc from go.term where term_type='%s'"%(self.branch))
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.go_id2acc[row[0]] = row[1]
+		
+		#get the non-obsolete biological_process GO DAG
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
+			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
+			t1.term_type='%s' and t2.term_type='%s' "%(self.branch, self.branch))
+		rows = self.curs.fetchall()
+		for row in rows:
+			#setup the go_digraph and go_graph structure
+			self.go_digraph.add_edge(row[0], row[1])
+			self.go_graph.add_edge(row[0], row[1])
+			self.go_graph.add_edge(row[1], row[0])
+		
+		#setup the node list
+		self.node_list = self.go_digraph.node_list()
+		self.node_list.sort()
+		
+		sys.stderr.write("Done\n")
+		
+	def run(self):
+		if self.new_table:
+			#first create the target_table
+			try:
+				self.curs.execute("create table %s(\
+					go_id1	integer,\
+					go_id2	integer,\
+					raw_distance	integer,\
+					lee_distance	integer,\
+					jasmine_distance	integer,\
+					lc_ancestors	integer[])"%self.table)
+
+			except:
+				sys.stderr.write("Error occurred when creating table %s\n"%self.table)
+				self.curs.execute("set search_path to %s"%schema)
+		
+		no_of_nodes = len(self.node_list)
+		for i in range(no_of_nodes):
+			for j in range(i+1, no_of_nodes):
+				go_id1 = self.node_list[i]
+				go_id2 = self.node_list[j]
+				lc_ancestors = self.lowest_common_ancestor(go_id1, go_id2)
+				raw_dist = self.raw_distance(go_id1, go_id2)
+				lee_dist = self.lee_distance(lc_ancestors)
+				jasmine_dist = self.jasmine_distance(go_id1, go_id2, lc_ancestors)
+				
+				if self.log:
+					self.log_file.write("%s and %s:\n"%(self.go_id2acc[go_id1], self.go_id2acc[go_id2]))
+					self.log_file.write("\traw_dist: %d\n"%raw_dist)
+					self.log_file.write("\tlee_dist: %d\n"%lee_dist)
+					self.log_file.write("\tjasmine_dist: %d\n"%jasmine_dist)
+					lc_ancestors_acc = []
+					for ancestor in lc_ancestors:
+						lc_ancestors_acc.append(self.go_id2acc[ancestor])
+					self.log_file.write("\tlowest_common_ancestors: %s\n"%repr(lc_ancestors_acc))
+				self.curs.execute("insert into %s(go_id1, go_id2, raw_distance, lee_distance, jasmine_distance, lc_ancestors) \
+					values(%d, %d, %d, %d, %d, ARRAY%s)"%(self.table, go_id1, go_id2, raw_dist, lee_dist, jasmine_dist,\
+					repr(lc_ancestors)))
+		if self.needcommit:
+			self.curs.execute("end")
+			
+	def depth_of_one_node(self, go_id):
+		#find the root based on different branches
+		self.curs.execute("select id from go.term where name='%s'"%self.branch)
+		rows = self.curs.fetchall()
+		root = rows[0][0]
+		return len(GraphAlgo.shortest_path(self.go_digraph, root, go_id))
+		
+	def lowest_common_ancestor(self, go_id1, go_id2):
+		subgraph1 = self.go_digraph.back_bfs_subgraph(go_id1)
+		subgraph2 = self.go_digraph.back_bfs_subgraph(go_id2)
+		set1 = Set(subgraph1.node_list())
+		set2 = Set(subgraph2.node_list())
+		intersection_set = set1 & set2
+		lc_ancestors = []
+		tuple_list = []
+		for node in intersection_set:
+			tuple_list.append((self.depth_of_one_node(node), node))
+		#sort based on depth, first field in the tuple
+		tuple_list.sort()
+		#in ascending order
+		tuple_list.reverse()
+		max_depth = tuple_list[0][0]
+		for (depth,node) in tuple_list:
+			if depth == max_depth:
+				lc_ancestors.append(node)
+			elif depth < max_depth:
+				break
+		
+		return lc_ancestors
+
+	def raw_distance(self, go_id1, go_id2):
+		distance = len(GraphAlgo.shortest_path(self.go_graph, go_id1, go_id2))-1
+		return distance
+
+	def lee_distance(self, lc_ancestors):
+		#this distance is based on paper Lee2004a
+		#all the nodes in the lc_ancestors list are of the same depth, so first one is enough
+		depth = self.depth_of_one_node(lc_ancestors[0])
+		return 15-depth
+		
+	def jasmine_distance(self, go_id1, go_id2, lc_ancestors):
+		min_distance = 100
+		for ancestor in lc_ancestors:
+			distance1 = len(GraphAlgo.shortest_path(self.go_digraph, ancestor, go_id1))-1
+			distance2 = len(GraphAlgo.shortest_path(self.go_digraph, ancestor, go_id2))-1
+			if distance1 < min_distance:
+				min_distance = distance1
+			if distance2 < min_distance:
+				min_distance = distance2
+		return min_distance
+
+if __name__ == '__main__':
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+	
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", \
+		"branch", "new_table", "report", "commit", "log"]
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:b:nrcl", long_options_list)
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	hostname = 'zhoudb'
+	dbname = 'graphdb'
+	schema = 'go'
+	table = 'node_distance'
+	branch = 1
+	new_table = 0
+	report = 0
+	commit = 0
+	log = 0
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
+		elif opt in ("-b", "--branch"):
+			mcl_table = int(arg)
+		elif opt in ("-n", "--new_table"):
+			new_table = 1
+		elif opt in ("-r", "--report"):
+			report = 1
+		elif opt in ("-c", "--commit"):
+			commit = 1
+		elif opt in ("-l", "--log"):
+			log = 1
+			
+	if schema:
+		instance = go_node_distance(hostname, dbname, schema, table, branch, new_table, report, \
+			commit, log)
+		instance.dstruc_loadin()
+		instance.run()
+	else:
+		print __doc__
+		sys.exit(2)
