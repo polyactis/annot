@@ -11,6 +11,7 @@ Option:
 	-g ..., --graphdir=...	the directory contains all graphs in gspan format.
 	-a ..., --avg=...	CHOICE is 'p'(avg the top #support connectivities) or
 		'a'(avg all the connectivities)
+	-f ..., --form=...	'fim_result' or 'mcl_result'
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
@@ -42,18 +43,19 @@ class connectivity_no_splat:
 	5000 records are done in one time. Reduce the memory usage.
 	This is done through postgresql's CURSOR mechanism.
 	'''
-	def __init__(self, hostname, dbname, schema, table, graphdir, avg, report, needcommit=0):
+	def __init__(self, hostname, dbname, schema, table, graphdir, avg, form, report, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
+		self.form = form
 		#mapping between table and update functions
 		update_dict = {'fim_result': self.fim_atom_update,
 			'mcl_result': self.mcl_atom_update}
-		if self.table not in update_dict:
-			sys.stderr.write("%s doesn't exist.\n"%self.table)
+		if self.form not in update_dict:
+			sys.stderr.write("%s is not supported.\n"%self.form)
 			sys.exit(2)
-		self._atom_update = update_dict[self.table]
+		self._atom_update = update_dict[self.form]
 		self.graphdir = graphdir
 		self.avg = avg
 		self.report = int(report)
@@ -71,13 +73,13 @@ class connectivity_no_splat:
 		#mapping between table and records counter
 		records_dict = {'fim_result': self.no_of_fim_records,
 			'mcl_result': self.no_of_mcl_records}
-		self.records = records_dict[self.table]
+		self.records = records_dict[self.form]
 		self.p_no = re.compile(r'\d+$')
 		self.log_file = open('/tmp/connectivity_no_splat.log', 'w')
 		#mapping between table and connectivity indices
 		idx_dict = {'fim_result': 'connectivity_fim_result_idx',
 			'mcl_result': 'connectivity_mcl_result_idx'}
-		self.connectivity_idx = idx_dict[self.table]
+		self.connectivity_idx = idx_dict[self.form]
 		try:
 			self.curs.execute("drop index %s"%self.connectivity_idx)
 		except psycopg.ProgrammingError, error:
@@ -133,7 +135,7 @@ class connectivity_no_splat:
 		minor connectivity computing function
 		only for fim_result, compute its connectivity from connectivity_array
 		'''
-		if self.table != 'fim_result':
+		if self.form != 'fim_result':
 			sys.stderr.write('--avg only works on fim_result table\n')
 			sys.exit(2)
 		sys.stderr.write("Compute the connectivity of %s, avg type: %s.\n"%(self.table, self.avg))
@@ -231,8 +233,8 @@ class connectivity_no_splat:
 			(self.table, connectivity, mcl_id))
 			#insert the edge_list of a mcl cluster into splat_result as a pseudo splat result
 			#leave the possibility of computing the connectivity of fim_result.
-			self.curs.execute("insert into splat_result(splat_id, no_of_edges, edge_set) \
-				values(%d, %d, ARRAY%s)"%(mcl_id, no_of_edges, repr(edge_list)))
+			#self.curs.execute("insert into splat_result(splat_id, no_of_edges, edge_set) \
+			#	values(%d, %d, ARRAY%s)"%(mcl_id, no_of_edges, repr(edge_list)))
 		except:
 			sys.stderr.write('Error occurred while setting connectivity\n')
 			sys.exit(1)
@@ -281,7 +283,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:a:rc", ["help", "hostname=", "dbname=", "schema=", "table=", "graphdir=", "avg=", "report", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:a:f:rc", ["help", "hostname=", "dbname=", "schema=", "table=", "graphdir=", "avg=", "form=", "report", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -292,6 +294,7 @@ if __name__ == '__main__':
 	table = ''
 	graphdir = ''
 	avg = None
+	form = 'mcl_result'
 	commit = 0
 	report = 0
 
@@ -311,6 +314,8 @@ if __name__ == '__main__':
 			graphdir = arg
 		elif opt in ("-a", "--avg"):
 			avg = arg
+		elif opt in ("-f", "--form"):
+			form = arg
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
@@ -318,7 +323,7 @@ if __name__ == '__main__':
 
 
 	if schema and table and graphdir:
-		instance = connectivity_no_splat(hostname, dbname, schema, table, graphdir, avg, report, commit)
+		instance = connectivity_no_splat(hostname, dbname, schema, table, graphdir, avg, form, report, commit)
 		instance.run()
 	elif schema and table and avg:
 		instance = connectivity_no_splat(hostname, dbname, schema, table, graphdir, avg, report, commit)
