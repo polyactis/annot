@@ -68,6 +68,8 @@ class go_informative_node:
 				if go_index not in self.go_index2gene_id_dict:
 					if go_id in self.go_id2gene_id_dict:
 						self.go_index2gene_id_dict[go_index] = self.go_id2gene_id_dict[go_id]
+					else:
+						self.go_index2gene_id_dict[go_index] = kjSet()
 				else:
 					self.log_file.write("Error: %s has >1 corresponding go_id\n"%go_index)
 	
