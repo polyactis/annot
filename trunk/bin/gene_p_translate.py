@@ -16,7 +16,7 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	gene_p_translate.py -k sc_54 -t p_gene_repos_2_e5
+	gene_p_translate.py -k sc_54 -t p_gene_repos_2_e5 -m mcl_result_repos_2
 		-n gene_p_repos_2_e5 >/tmp/gene_p_translate.out
 	
 Description:
@@ -30,6 +30,7 @@ import sys, os, getopt, csv
 from codense.common import db_connect, get_gene_no2direct_go, get_go_no2name
 from codense.common import get_gene_no2gene_id, get_go_no2go_id, dict_map
 from p_gene_analysis import accuracy_struc
+from numarray import array, greater
 from sets import Set
 
 class function_struc:
@@ -271,6 +272,37 @@ class gene_p_translate:
 		#a blank line
 		writer.writerow([])
 	
+	def stat_output(self, outf, known_gene_no2p_gene_id_src, unknown_gene_no2p_gene_id_src):
+		"""
+		03-09-05
+			give an overview stats for distinct function group of each gene
+		"""
+		sys.stderr.write("Outputting stats ... ")
+		#make some blank lines
+		outf.write("\n\n")
+		list_of_function_groups_of_known_genes = map(len, known_gene_no2p_gene_id_src.values())
+		list_of_function_groups_of_unknown_genes = map(len, unknown_gene_no2p_gene_id_src.values())
+		no_of_known_genes = len(known_gene_no2p_gene_id_src)
+		known_genes_with_multiple_function_groups = sum(greater(list_of_function_groups_of_known_genes,1))
+		no_of_unknown_genes = len(unknown_gene_no2p_gene_id_src)
+		unknown_genes_with_multiple_function_groups = sum(greater(list_of_function_groups_of_unknown_genes,1))
+		no_of_genes = no_of_known_genes +no_of_unknown_genes
+		avg_functions_groups_per_known_gene = sum(list_of_function_groups_of_known_genes)/float(no_of_known_genes)
+		avg_functions_groups_per_unknown_gene = sum(list_of_function_groups_of_unknown_genes)/float(no_of_unknown_genes)
+		avg_functions_groups_per_gene = \
+			sum(list_of_function_groups_of_known_genes + list_of_function_groups_of_unknown_genes)/float(no_of_genes)
+		outf.write("Total predicted genes: %s.\n"%no_of_genes)
+		outf.write("\tAverage number of function groups per gene: %s.\n"%avg_functions_groups_per_gene)
+		outf.write("Total known genes: %s. %s of them with multiple function groups\n"%\
+			(no_of_known_genes, known_genes_with_multiple_function_groups))
+		outf.write("\tAverage number of function groups per known gene: %s.\n"%avg_functions_groups_per_known_gene)
+		outf.write("Total unknown genes: %s. %s of them with multiple function groups\n"%\
+			(no_of_unknown_genes, unknown_genes_with_multiple_function_groups))
+		outf.write("\tAverage number of function groups per unknown gene: %s.\n"%avg_functions_groups_per_unknown_gene)
+
+		sys.stderr.write("Done.\n")
+
+	
 	def run(self):
 		"""
 		03-02-05
@@ -281,6 +313,7 @@ class gene_p_translate:
 		
 		self.data_fetch(curs, self.p_gene_table, self.gene_p_table, self.mcl_table)
 		self.output(curs, sys.stdout, self.known_gene_no2p_gene_id_src, self.unknown_gene_no2p_gene_id_src, self.p_gene_id_src_map)
+		self.stat_output(sys.stdout, self.known_gene_no2p_gene_id_src, self.unknown_gene_no2p_gene_id_src)
 	
 
 if __name__ == '__main__':
