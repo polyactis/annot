@@ -94,8 +94,10 @@ class kMax_batch_run:
 					job_outf.write(splat_id_line)
 					#write the parameter second
 					job_outf.write('p %s %d\n'%(self.parameter, self.max_bound))
+					#write the rest in the kMax_block into the intermediate_if
 					intermediate_if = open(self.intermediate_ifname, 'w')
 					intermediate_if.write(kMax_block.read())
+					intermediate_if.close()
 					job_f = open(job_fname, 'w')
 					out_block = '#!/bin/sh\n'		#this is '=' not '+='
 					out_block += 'cd %s\n'%self.dir
