@@ -22,12 +22,19 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	p_gene_analysis.py -k sc_54 -g p_gene_e5 -p 0.001 stat_table
-	p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table
-	p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5
-		-l lm_p_gene_repos_2_e5_v40 stat_table
-	p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5 -c -n gene_p_repos_2_e5
-		-l lm_p_gene_repos_2_e5_v40 stat_table
+	#Use the p_value_cut_off
+		p_gene_analysis.py -k sc_54 -g p_gene_e5 -p 0.001 stat_table
+		p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table
+	
+	
+	#Don't use p_value_cut_off, get the linear model from table lm_p_gene_repos_2_e5_v40
+		p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5
+			-l lm_p_gene_repos_2_e5_v40 stat_table
+	
+	#Don't use p_value_cut_off, get the linear model from table lm_p_gene_repos_2_e5_v40
+	#commit the changes to table gene_p_repos_2_e5.
+		p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5 -c -n gene_p_repos_2_e5
+			-l lm_p_gene_repos_2_e5_v40 stat_table
 
 Description:
 	02-28-05
@@ -134,6 +141,7 @@ class p_gene_analysis:
 		self.no_of_records = 0
 		
 		#data structures to be created
+		self.go_no2prediction_space = {}
 		self.prediction_space2attr = {}
 		self.prediction_pair2attr = {}
 		self.go_no2accuracy = {}
@@ -200,30 +208,7 @@ class p_gene_analysis:
 				connectivity*self.general_lm_results[2]
 		return p_value_cut_off
 		
-	def run(self):
-		"""
-		02-28-05
-		"""
-		self.init()
-		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-		self.known_genes_dict = self.get_known_genes_dict(curs)
-		if self.p_value_cut_off == 0:
-			if self.lm_table:
-				self.go_no2lm_results, lm_results_2d_list = self.get_go_no2lm_results(curs, self.lm_table)
-				self.general_lm_results = self.get_general_lm_results(lm_results_2d_list)
-			else:
-				sys.stderr.write("p_value_cut_off==0, need the lm_table to get the linear model\n")
-				sys.exit(127)
-		
-		self.data_fetch(curs, self.gene_table)
-		if self.stat_table_fname:
-			self.overview_stats(self.stat_table_f)
-			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
-			self.table_output(self.stat_table_f)
-		if self.gene_p_table:
-			self.gene_p_table_submit(curs, self.gene_p_table, self.gene_p_list)
-		if self.needcommit:
-			curs.execute("end")
+
 
 	def data_fetch(self, curs, gene_table):
 		"""
@@ -254,6 +239,8 @@ class p_gene_analysis:
 		03-01-05
 			use the hardcode p_value_cut_off or get it from linear_model
 			depend on whether self.p_value_cut_off==0
+		03-06-05
+			seperate the data of different function categories, into go_no2prediction_space
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -275,8 +262,27 @@ class p_gene_analysis:
 		else:
 			self.gene_p_list.append([p_gene_id, p_value_cut_off])
 		
+		if go_no not in self.go_no2prediction_space:
+			self.go_no2prediction_space[go_no] = {}
+		#pass the value to ease programming
+		local_prediction_space2attr = self.go_no2prediction_space[go_no]
+		
 		prediction_space = (recurrence, connectivity)
 		prediction_pair = (gene_no, go_no)
+		
+		"""
+		0. deal with local_prediction_space2attr
+		"""
+		if prediction_space not in local_prediction_space2attr:
+			#initalize its attribute if it doesn't exist
+			local_prediction_space2attr[prediction_space] = prediction_space_attr()
+		#pass the value to a value, ease programming
+		unit = local_prediction_space2attr[prediction_space]
+		unit.correct_predictions += (is_correct+1)/2	#increment when is_correct=1
+		unit.known_predictions += int(is_correct>=0)	#increment when is_correct=0 or 1
+		unit.unknown_predictions += -(is_correct-1)/2	#increment when is_correct = -1
+		unit.tuple_list.append([p_value, is_correct])	#the tuple_list where the p_value_cut_off comes
+
 		"""
 		1 deal with self.prediction_space2attr
 		"""
@@ -411,7 +417,7 @@ class p_gene_analysis:
 					go_no, unit.ratio, unit.known, unit.unknown))
 			"""
 
-	def table_output(self, stat_table_f):
+	def table_output(self, stat_table_f, prediction_space2attr):
 		'''
 		
 		'''
@@ -419,10 +425,10 @@ class p_gene_analysis:
 		header = ['recurrence', 'connectivity', 'accuracy', 'known_predictions', 'unknown_predictions',\
 		'accuracy_pair', 'known_predictions_pair', 'unknown_predictions_pair', 'known genes', 'unknown genes']
 		stat_table_f.writerow(header)
-		prediction_space_list = self.prediction_space2attr.keys()
+		prediction_space_list = prediction_space2attr.keys()
 		prediction_space_list.sort()
 		for prediction_space in prediction_space_list:
-			unit = self.prediction_space2attr[prediction_space]
+			unit = prediction_space2attr[prediction_space]
 			recurrence = prediction_space[0]
 			connectivity = prediction_space[1]
 			if unit.known_predictions != 0:
@@ -457,6 +463,175 @@ class p_gene_analysis:
 			curs.execute("insert into %s(p_gene_id, p_value_cut_off)\
 					values(%d, %f)"%(gene_p_table, p_gene_id, p_value_cut_off))
 		sys.stderr.write("done.\n")
+
+
+
+
+
+	def return_go_no_group2prediction_space(self, go_no2prediction_space, curs, distance_table):
+		"""
+		03-06-05
+			input: go_no2prediction_space, curs
+			output: go_no_group2prediction_space
+			group the go_no2prediction_space, data of several go_nos who are parent-child
+			will be merged.
+		"""
+		go_no_list = go_no2prediction_space.keys()
+		go_no_map = self.return_go_no_map(go_no_list, curs, distance_table)
+		go_no_groups = self.dict_map2group(go_no_map)
+		go_no_group2prediction_space = {}
+		sys.stderr.write("Grouping go_no2prediction_space data...")
+		for go_no_group in go_no_groups:
+			unit = self.return_data_of_the_group(go_no_group, go_no2prediction_space)
+			key = tuple(go_no_group)
+			go_no_group2prediction_space[key] = unit
+		sys.stderr.write("done.\n")
+		return go_no_group2prediction_space
+	
+	def return_go_no_map(self, go_no_list, curs, distance_table):
+		"""
+		03-06-05
+			input: a list of go_nos, curs
+			output: a map showing which go_no corresponds to which
+			
+			curs is used to get the go_no2term_id and nodes pairwise distance
+		"""
+		sys.stderr.write("Mapping go_nos...")
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		from codense.common import get_go_no2term_id
+		borrowed_instance = gene_p_map_redundancy()
+		go_no_map = {}
+		go_no2term_id = get_go_no2term_id(curs)
+		go_no2distance = {}
+		
+		for i in range(len(go_no_list)):
+			go_no = go_no_list[i]
+			if go_no not in go_no_map:
+				#not flagged, map
+				go_no_map[go_no] = go_no
+				for j in range(i+1, len(go_no_list)):
+					go_no2 = go_no_list[j]
+					if go_no < go_no2:
+						key= (go_no, go_no2)
+					else:
+						key = (go_no2, go_no)
+					if key in go_no2distance:
+						jasmine_distance = go_no2distance[key][2]
+					else:
+						jasmine_distance = borrowed_instance.get_distance(curs, go_no, go_no2, distance_table, go_no2distance, go_no2term_id)
+					if jasmine_distance == 0:
+						#jasmine_distance=0 means they are parent-child
+						go_no_map[go_no2] = go_no
+		sys.stderr.write("done.\n")
+		return go_no_map	
+		
+	def dict_map2group(self, go_no_map):
+		"""
+		03-06-05
+			input: a map of go_nos
+			output: a list of lists, each list consists of go_nos who are parent-child
+		"""
+		go_no_reverse_map = {}
+		for (go_no, go_no_src) in go_no_map.iteritems():
+			if go_no_src not in go_no_reverse_map:
+				go_no_reverse_map[go_no_src] = [go_no]
+			else:
+				go_no_reverse_map[go_no_src].append(go_no)
+		return go_no_reverse_map.values()
+		
+	
+	def return_data_of_the_group(self, go_no_list, go_no2prediction_space):
+		"""
+		03-06-05
+			input: a list of go_nos, go_no2prediction_space
+			output: the combined data(prediction_space_attr) of the go_nos from the go_no_list
+		"""
+		local_prediction_space2attr = {}
+		for go_no in go_no_list:
+			for (prediction_space,unit) in go_no2prediction_space[go_no].iteritems():
+				if prediction_space not in local_prediction_space2attr:
+					local_prediction_space2attr[prediction_space] = prediction_space_attr()
+				#pass the value to a value, ease programming
+				local_unit = local_prediction_space2attr[prediction_space]
+				local_unit.correct_predictions += unit.correct_predictions
+				local_unit.known_predictions += unit.known_predictions
+				local_unit.unknown_predictions += unit.unknown_predictions
+				local_unit.tuple_list += unit.tuple_list
+		return local_prediction_space2attr
+
+	
+	def return_cumulative_prediction_space2attr(self, prediction_space2attr, recurrence_gap_size=2, connectivity_gap_size=2):
+		"""
+		03-06-05
+			input: prediction_space2attr
+			output: a cumulative version of prediction_space2attr
+		"""
+		cumulative_prediction_space2attr = {}
+		prediction_space_keys = prediction_space2attr.keys()
+		prediction_space_array = array(prediction_space_keys)
+		min_recurrence = int(min(prediction_space_array[:,0]))
+		max_recurrence = int(max(prediction_space_array[:,0]))
+		min_connectivity = int(min(prediction_space_array[:,1]))
+		max_connectivity = int(max(prediction_space_array[:,1]))
+		for recurrence in range(min_recurrence, max_recurrence+recurrence_gap_size, recurrence_gap_size):
+			for connectivity in range(min_connectivity, max_connectivity+connectivity_gap_size, connectivity_gap_size):
+				prediction_space = (recurrence, connectivity)
+				cumulative_prediction_space2attr[prediction_space] = prediction_space_attr()
+				#pass the value to ease programming
+				cumulative_unit = cumulative_prediction_space2attr[prediction_space] 
+				for real_prediction_space in prediction_space_keys:
+					if real_prediction_space[0]>=prediction_space[0] and real_prediction_space[1]>=prediction_space[1]:
+						unit = prediction_space2attr[real_prediction_space]
+						cumulative_unit.correct_predictions += unit.correct_predictions
+						cumulative_unit.known_predictions += unit.known_predictions
+						cumulative_unit.unknown_predictions += unit.unknown_predictions
+						cumulative_unit.tuple_list += unit.tuple_list
+		return cumulative_prediction_space2attr
+
+
+
+	def run(self):
+		"""
+		02-28-05
+		
+		03-07-05
+			implementing two posterior maneuvering of go_no2prediction_space, grouping and accumulatiing.
+			See log of 2005, section 'linear model overfitting' for detail.
+		"""
+		self.init()
+		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+		self.known_genes_dict = self.get_known_genes_dict(curs)
+		if self.p_value_cut_off == 0:
+			if self.lm_table:
+				self.go_no2lm_results, lm_results_2d_list = self.get_go_no2lm_results(curs, self.lm_table)
+				self.general_lm_results = self.get_general_lm_results(lm_results_2d_list)
+			else:
+				sys.stderr.write("p_value_cut_off==0, need the lm_table to get the linear model\n")
+				sys.exit(127)
+		
+		self.data_fetch(curs, self.gene_table)
+		if self.stat_table_fname:
+			self.overview_stats(self.stat_table_f)
+			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
+			self.table_output(self.stat_table_f, self.prediction_space2attr)
+			
+			#the gap between two recurrences
+			self.recurrence_gap_size = 2
+			self.connectivity_gap_size = 2
+			self.stat_table_f.writerow([])
+			distance_table = 'go.node_dist'
+			go_no_group2prediction_space = self.return_go_no_group2prediction_space(self.go_no2prediction_space, curs, distance_table)
+			for (go_no_group, unit) in go_no_group2prediction_space.iteritems():
+				self.stat_table_f.writerow(['go_no_group:', go_no_group])
+				self.table_output(self.stat_table_f, unit)
+				self.stat_table_f.writerow(["cumulative form"])
+				cumulative_unit = self.return_cumulative_prediction_space2attr(unit, self.recurrence_gap_size, self.connectivity_gap_size)
+				self.table_output(self.stat_table_f, cumulative_unit)
+				
+		if self.gene_p_table:
+			self.gene_p_table_submit(curs, self.gene_p_table, self.gene_p_list)
+		if self.needcommit:
+			curs.execute("end")
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
