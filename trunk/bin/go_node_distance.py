@@ -5,7 +5,7 @@ Usage: go_node_distance.py -k SCHEMA [OPTIONS]
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database, go(default)
+	-k ..., --schema=...	which schema in the database to get the node_list
 	-t ..., --table=...	table to store the node distances, node_distance(default)
 	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
 	-n,	--new_table	table is new. (create it first)
@@ -57,6 +57,8 @@ class go_node_distance:
 		self.go_digraph = Graph.Graph()
 		#GO undirected Graph, to compute distance between two nodes
 		self.go_graph = Graph.Graph()
+		#the node_list contains the nodes to compute pairwise distances
+		self.node_list = []
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -80,7 +82,10 @@ class go_node_distance:
 			self.go_graph.add_edge(row[1], row[0])
 		
 		#setup the node list
-		self.node_list = self.go_digraph.node_list()
+		self.curs.execute("select t.id from go g, go.term t where g.go_id=t.acc and g.go_no!=0")
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.node_list.append(row[0])
 		self.node_list.sort()
 		
 		sys.stderr.write("Done\n")
@@ -89,7 +94,7 @@ class go_node_distance:
 		if self.new_table:
 			#first create the target_table
 			try:
-				self.curs.execute("create table %s(\
+				self.curs.execute("create table go.%s(\
 					go_id1	integer,\
 					go_id2	integer,\
 					raw_distance	integer,\
@@ -120,7 +125,7 @@ class go_node_distance:
 					for ancestor in lc_ancestors:
 						lc_ancestors_acc.append(self.go_id2acc[ancestor])
 					self.log_file.write("\tlowest_common_ancestors: %s\n"%repr(lc_ancestors_acc))
-				self.curs.execute("insert into %s(go_id1, go_id2, raw_distance, lee_distance, jasmine_distance, lc_ancestors) \
+				self.curs.execute("insert into go.%s(go_id1, go_id2, raw_distance, lee_distance, jasmine_distance, lc_ancestors) \
 					values(%d, %d, %d, %d, %d, ARRAY%s)"%(self.table, go_id1, go_id2, raw_dist, lee_dist, jasmine_dist,\
 					repr(lc_ancestors)))
 		if self.needcommit:
@@ -192,7 +197,7 @@ if __name__ == '__main__':
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
-	schema = 'go'
+	schema = ''
 	table = 'node_distance'
 	branch = 1
 	new_table = 0
