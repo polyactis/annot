@@ -65,17 +65,17 @@ class complete_cor_vector:
 				cor_calculate
 				file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
 		"""
+		self.schema = schema
 		self.table = table
 		self.input_file = input_file
 		self.output_file = output_file
 		self.label = int(label)
 		self.dir_files = dir_files
 		self.dir = dir
-		if schema:
+		if self.schema:
 			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 			self.curs = self.conn.cursor()
-			self.schema = schema
-			self.curs.execute("set search_path to %s"%schema)
+			self.curs.execute("set search_path to %s"%self.schema)
 		else:
 			if self.dir == None:
 				sys.stderr.write("Either schema or data directory should be specified\n")
