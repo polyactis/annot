@@ -5,6 +5,7 @@ Usage: gene_stat_on_mcl_result.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION]
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	mcl_result(default) or fim_result
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_gene_ratio_cut_off, 0.25(default)
 	-l ..., --limit=...,	IGNORE it, interface relics.
@@ -17,7 +18,7 @@ Option:
 Examples:
 	gene_stat_on_mcl_result.py -k shu -p 0.001
 	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7
-	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c
+	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c -t fim_result
 
 Description:
 
@@ -40,10 +41,11 @@ class gene_prediction:
 		self.mcl_id_list = []
 
 class gene_stat_on_mcl_result:
-	def __init__(self, dbname, schema, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
+	def __init__(self, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.table = table
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.unknown_cut_off = float(unknown_cut_off)
 		self.limit = int(limit)
@@ -109,7 +111,7 @@ class gene_stat_on_mcl_result:
 			sys.exit(2)
 
 		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio\
-				from mcl_result where connectivity>=%f and p_value_min notnull"%(self.connectivity_cut_off))
+				from %s where connectivity>=%f and p_value_min notnull"%(self.table, self.connectivity_cut_off))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -265,15 +267,16 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "dbname=", "schema=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:u:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:p:u:l:n:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = ''
+	table = 'mcl_result'
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
@@ -289,6 +292,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-u", "--unknown_cut_off"):
@@ -305,7 +310,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat_on_mcl_result(dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat_on_mcl_result(dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:

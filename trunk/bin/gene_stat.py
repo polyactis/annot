@@ -5,6 +5,7 @@ Usage: gene_stat.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION]
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	cluster_stat(default), ignore it, interface relics
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.85(default), for wu's
 	-l ..., --limit=...,	OBSOLETE, accepted for backwards compatibility
@@ -35,9 +36,9 @@ from gene_stat_on_mcl_result import gene_stat_on_mcl_result, gene_prediction
 
 
 class gene_stat(gene_stat_on_mcl_result):
-	def __init__(self, dbname, schema, p_value_cut_off, unknown_cut_off, limit=0, \
+	def __init__(self, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, \
 		connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
-		gene_stat_on_mcl_result.__init__(self, dbname, schema, p_value_cut_off, \
+		gene_stat_on_mcl_result.__init__(self, dbname, schema, table, p_value_cut_off, \
 			unknown_cut_off, limit, connectivity_cut_off, wu, report, needcommit)
 
 	def dstruc_loadin(self):
@@ -150,15 +151,16 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "dbname=", "schema=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:u:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:p:u:l:n:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = ''
+	table = 'cluster_stat'
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
@@ -174,6 +176,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-u", "--unknown_cut_off"):
@@ -190,7 +194,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat(dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat(dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:

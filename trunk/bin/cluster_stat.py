@@ -5,6 +5,7 @@ Usage: cluster_stat.py -k SCHEMA [OPTION]
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	mcl_result(default) or fim_result
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
@@ -14,7 +15,8 @@ Option:
 Examples:
 	cluster_stat.py -k shu -c
 	cluster_stat.py -k ming1
-	cluster_stat.py -k shu_whole -c -w -b
+	cluster_stat.py -k sc_yh_60_fp -t fim_result -c -w -b
+
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
 	The length of p_value_vector is subject to the number of functional categories.
@@ -30,7 +32,7 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class cluster_stat:
-	def __init__(self, dbname, schema, bonferroni=0, report=0, wu=0, needcommit=0):
+	def __init__(self, dbname, schema, table, bonferroni=0, report=0, wu=0, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -41,6 +43,7 @@ class cluster_stat:
 			self.curs.execute("set search_path to %s"%schema)
 		self.curs.execute("truncate cluster_stat")
 		self.curs.execute("alter sequence cluster_stat_cluster_stat_id_seq restart with 1")
+		self.table = table
 		self.bonferroni = int(bonferroni)
 		self.report = int(report)
 		self.wu = int(wu)
@@ -77,7 +80,7 @@ class cluster_stat:
 		
 	def run(self):
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from mcl_result")
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s"%self.table)
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -101,8 +104,8 @@ class cluster_stat:
 		
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
 		if vertex_set in self.cluster_memory:
+			entry = self.cluster_memory[vertex_set]
 			if self.needcommit:
-				entry = self.cluster_memory[vertex_set]
 				for gene_no in entry:
 					p_value_vector = entry[gene_no]
 					self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
@@ -110,7 +113,7 @@ class cluster_stat:
 			self.no_of_records += len(entry)
 			return
 		else:
-			_cluster_memroy = {}
+			_cluster_memory = {}
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
 		for i in range(len(vertex_list_all)):
@@ -145,12 +148,12 @@ class cluster_stat:
 					p_value_vector[go_no] = p_value
 				else:
 					p_value_vector[go_no-1] = p_value
-			_cluster_memroy[gene_no] = p_value_vector
+			_cluster_memory[gene_no] = p_value_vector
 			if self.needcommit:
 				self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
 				values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
 			self.no_of_records += 1
-		self.cluster_memory[vertex_set] = _cluster_memroy
+		self.cluster_memory[vertex_set] = _cluster_memory
 
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
@@ -199,13 +202,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:bcw", ["help", "report", "dbname=", "schema=", "bonferroni", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:t:bcw", ["help", "report", "dbname=", "schema=", "table=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = ''
+	table = 'mcl_result'
 	bonferroni = 0
 	commit = 0
 	report = 0
@@ -218,6 +222,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -228,7 +234,7 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = cluster_stat(dbname, schema, bonferroni, report, wu, commit)
+		instance = cluster_stat(dbname, schema, table, bonferroni, report, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 

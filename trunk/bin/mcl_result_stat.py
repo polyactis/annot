@@ -5,6 +5,7 @@ Usage: mcl_result_stat.py -k SCHEMA [OPTION]
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	mcl_result(default) or fim_result
 	-b, --bonferroni	bonferroni correction(default, ignore it)
 	-w, --wu	apply Wu's strategy(default, ignore it)
 	-c, --commit	commit the database transaction
@@ -14,7 +15,8 @@ Option:
 Examples:
 	mcl_result_stat.py -k shu -c
 	mcl_result_stat.py -k ming1
-	mcl_result_stat.py -k shu_whole -c -w -b
+	mcl_result_stat.py -k shu_whole -c -t fim_result
+
 Description:
 	Program for computing cluster p-value vectors.
 """
@@ -23,10 +25,11 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class mcl_result_stat:
-	def __init__(self, dbname, schema, bonferroni=0, report=0, wu=1, needcommit=0):
+	def __init__(self, dbname, schema, table, bonferroni=0, report=0, wu=1, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.table = table
 		self.bonferroni = int(bonferroni)
 		self.report = int(report)
 		self.wu = int(wu)
@@ -64,7 +67,7 @@ class mcl_result_stat:
 		
 	def run(self):
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set from mcl_result")
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set from %s"%self.table)
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -80,8 +83,8 @@ class mcl_result_stat:
 		if self.needcommit:
 			sys.stderr.write("\nDatabase updating...")
 			for item in self.to_db:
-				self.curs.execute("update mcl_result set p_value_min=%f, go_no_vector=ARRAY%s, unknown_gene_ratio=%f\
-					where mcl_id=%d"%(item[0], item[1], item[2], item[3]))
+				self.curs.execute("update %s set p_value_min=%f, go_no_vector=ARRAY%s, unknown_gene_ratio=%f\
+					where mcl_id=%d"%(self.table, item[0], item[1], item[2], item[3]))
 			self.curs.execute("end")
 			sys.stderr.write("Done.\n")
 			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
@@ -164,13 +167,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:bcw", ["help", "report", "dbname=", "schema=", "bonferroni", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:t:bcw", ["help", "report", "dbname=", "table=", "schema=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = ''
+	table = 'mcl_result'
 	bonferroni = 1
 	commit = 0
 	report = 0
@@ -183,6 +187,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -193,7 +199,7 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = mcl_result_stat(dbname, schema, bonferroni, report, wu, commit)
+		instance = mcl_result_stat(dbname, schema, table, bonferroni, report, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 
