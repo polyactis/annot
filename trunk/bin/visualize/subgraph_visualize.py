@@ -391,7 +391,7 @@ class subgraph_visualize:
 					sys.exit(2)
 					
 				sub_subgraph = self.subgraph_in_one_dataset(curs, self.table, self.mcl_table, self.edge_table, self.mcl_id, i)
-				self.subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+				self.subgraph_output(self.r_f, sub_subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
 					self.centralnode, self.function, self.functioncolor, self.plot_type)
 				
 				self.r_f.close()
