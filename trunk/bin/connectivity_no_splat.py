@@ -30,6 +30,8 @@ Description:
 	This is done through postgresql's CURSOR mechanism.
 	Two kinds of usage:
 	First is to compute connectivity of mcl_result and connectivity_array of fim_result.
+		This needs a directory containing all graph datasets in gspan format.
+		The number at the end of each filename is used as the splat_id.
 	Second is to compute the connectivity of fim_result.
 
 """
