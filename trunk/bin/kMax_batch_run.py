@@ -84,7 +84,7 @@ class kMax_batch_run:
 				job_outfname = os.path.join(self.parent_dir, 'out%s'%number)
 				job_outf = open(job_outfname, 'w')				
 				#job_fname is the file with the commands of a job(kMax job).
-				job_fname = os.path.join(self.jobdir, 'kMax_batch_run_%s_%s.sh'%(file, number))
+				job_fname = os.path.join(self.jobdir, 'kMax_batch_run_%s.sh'%(file))
 				#open the file to iterate
 				inf = open(os.path.join(self.dir, file), 'r')
 				iter = kMax_iterator(inf)
@@ -114,8 +114,8 @@ class kMax_batch_run:
 					max_patterns_file.close()
 				#close the output file.
 				job_outf.close()
-		#remove the job_f
-		#os.remove(job_fname)
+				#remove the job_f
+				os.remove(job_fname)
 		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
