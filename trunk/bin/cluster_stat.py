@@ -27,6 +27,8 @@ Examples:
 	cluster_stat.py -k sc_yh_60_fp -s fim_result -c -w -b
 		:wu's strategy + bonferroni correction
 	cluster_stat.py -k sc_yh60_splat_5 -s mcl_result2 -t cluster_stat2 -c -b -r
+	cluster_stat.py -k sc_38_no_informative -o 10*2 -m 10*1 -p /tmp/tmp -l
+		-w -s mcl_result_merge_sup_6 -r -b
 
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
@@ -53,7 +55,7 @@ class cluster_stat:
 		self.curs.execute("set search_path to %s"%schema)
 		self.source_table = source_table
 		self.target_table = target_table
-		self.offset = int(offset)
+		self.offset = offset
 		self.limit = limit
 		self.output = output
 		if self.output:
@@ -117,7 +119,7 @@ class cluster_stat:
 			except:
 				sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s order by mcl_id offset %d limit %s"%\
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s order by mcl_id offset %s limit %s"%\
 			(self.source_table, self.offset, self.limit))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
@@ -274,9 +276,9 @@ if __name__ == '__main__':
 		elif opt in ("-t", "--target_table"):
 			target_table = arg
 		elif opt in ("-o", "--offset"):
-			offset = int(arg)
+			offset = arg
 		elif opt in ("-m", "--limit"):
-			limit = int(arg)
+			limit = arg
 		elif opt in ("-p", "--output"):
 			output = arg
 		elif opt in ("-b", "--bonferroni"):
