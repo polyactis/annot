@@ -126,3 +126,19 @@ def get_go_no2name(curs, schema=None, table='go'):
 		go_no2name[row[0]] = row[1]
 	sys.stderr.write("Done\n")
 	return go_no2name
+
+def get_go_no2term_id(curs, schema=None, term_table='go.term'):
+	"""
+	03-04-05
+		get the go_no2term_id dictionary
+	"""
+	sys.stderr.write("Getting go_no2term_id...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	go_no2term_id = {}
+	curs.execute("select g.go_no, t.name, t.id from go g, %s t where g.go_id=t.acc"%(term_table))
+	rows = curs.fetchall()
+	for row in rows:
+		go_no2term_id[row[0]] = row[2]
+	sys.stderr.write("Done\n")
+	return go_no2term_id
