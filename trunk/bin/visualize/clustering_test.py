@@ -19,15 +19,15 @@ Option:
 	-c ..., --functioncolor=...	'green'(default) or 'red'
 	-n ..., --centralnode=...	a gene_no
 	-l ..., --mcl_id=...	the id corresponding to a mcl_cluster
-	-y ..., --type=...	the type, 1(reformat), 2 (visualize)
+	-y ..., --type=...	the type, 1(reformat, default), 2 (visualize)
 	-h, --help              show this help
 
 Examples:
-	clustering_test.py -i sc_gspan -y 1 -o matrix /tmp/test.R
+	clustering_test.py -i sc_gspan -y 1 -o matrix
 	
 	clustering_test.py -i sc_gspan -y 2 /tmp/test.R
 	
-	clustering_test.py -i sc_gspan -y 2 -c myoutput /tmp/test.R
+	clustering_test.py -i sc_gspan -y 2 -s myoutput /tmp/test.R
 	
 Description:
 	This program is used for two purposes:
