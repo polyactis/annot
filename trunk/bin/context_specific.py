@@ -24,6 +24,8 @@ Examples:
 
 Description:
 	This program inspects the cluster contexts of the functions predicted for one gene.
+	It only keeps those functions which only have distinct contexts. Functions with similar
+	contexts will be merged.
 	The depth of the predicted function on the GO tree is drawn as
 	a histogram in 'depth_hist.pdf'.
 	The max_raw_distance, max_lee_distance, max_jasmine_distance
@@ -64,6 +66,16 @@ class accuracy_struc:
 		self.ratio = 0
 
 class context_specific:
+	"""
+	dstruc_loadin()
+		--cluster_context2dict()
+	run()
+		--distinct_contexts()
+			--is_context_diff()
+		--table_output()
+		--stat_output()
+		--plot()
+	"""
 	def __init__(self, hostname, dbname, schema, table, mcl_table, node_dist_table, contrast=0.3, report=0, \
 		needcommit=0, log=0, gene_table='p_gene', stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
@@ -180,6 +192,9 @@ class context_specific:
 		sys.stderr.write("Done\n")
 
 	def cluster_context2dict(self, cluster_context):
+		"""
+		convert a cluster_context string fetched from database to a context_dict
+		"""
 		context_dict = {}
 		complex_gene_list = cluster_context.split(';')
 		for complex_gene in complex_gene_list:
@@ -263,6 +278,11 @@ class context_specific:
 			'max_jasmine_distance of predicted functions of one gene')
 
 	def distinct_contexts(self):
+		"""
+		shrink the go_nos based on their contexts,
+		among those go_nos which have similar contexts(is_context_diff()), only keep one go_no
+		and merge their contexts
+		"""
 		go_no_list = self.go_merge_dict.keys()
 		no_of_gos = len(go_no_list)
 		need_recursive = 0
@@ -291,6 +311,9 @@ class context_specific:
 
 
 	def is_context_diff(self, set1, set2):
+		"""
+		to see whether two context sets are different or not.
+		"""
 		#defaultly, regard two sets as different
 		diff_result = 1
 		intersection_set = set1 & set2
