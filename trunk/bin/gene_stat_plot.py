@@ -363,13 +363,7 @@ class gene_stat:
 					
 				#tp is indicator variable indicating the prediction is true positive or false.
 				tp = 0
-				if gene_no in self.known_genes_dict:
-					k_functions_list = self.known_genes_dict[gene_no]
-					for k_go_no in k_functions_list:
-						if self.is_L0(go_no, k_go_no):
-							tp = 1
-				else:
-					tp = 2
+
 				#
 				#
 				
@@ -383,9 +377,7 @@ class gene_stat:
 				#
 				if go_no not in self.gene_prediction_dict[gene_no].p_functions_struc_dict:
 					self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no] = function_struc()
-				#setup the is_correct variable
-				if tp == 1:
-					self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no].is_correct = 1
+
 				#push in the min_p_value
 				self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no].p_value_list.append(min_p_value)
 				#push in the mcl_id
@@ -404,28 +396,29 @@ class gene_stat:
 		#One possible error is the case that one cluster has >1 functions with min_p_value.
 		#I didn't fix it because the possibility is low and the plotting dictionaries are not crucial.
 		#
-		if (self.plottype == 2) or (tp == self.plottype):
-			#codes below fill in the data structures for plotting
-			#variable for cluster_size2cluster and cluster_size2go_no
-			cluster_size = len(vertex_set)
-			self.add_item_to_dict(self.cluster_size2cluster, cluster_size, mcl_id)
-			self.add_item_to_dict(self.cluster_size2go_no, cluster_size, go_no)
-			self.add_item_to_dict(self.go_no2cluster, go_no, mcl_id)
-			self.add_item_to_dict(self.go_no2gene, go_no, gene_no)
-			for dataset_no in recurrence_array:
-				self.add_item_to_dict(self.dataset_no2cluster, dataset_no, mcl_id)
-				self.add_item_to_dict(self.dataset_no2go_no, dataset_no, go_no)
-			self.add_item_to_dict(self.gene_no2cluster, gene_no, mcl_id)
-		if tp == 0:
-			cluster_size = len(vertex_set)
-			self.add_item_to_dict(self.cluster_size2cluster_fp, cluster_size, mcl_id)
-			self.add_item_to_dict(self.cluster_size2go_no_fp, cluster_size, go_no)
-			self.add_item_to_dict(self.go_no2cluster_fp, go_no, mcl_id)
-			self.add_item_to_dict(self.go_no2gene_fp, go_no, gene_no)
-			for dataset_no in recurrence_array:
-				self.add_item_to_dict(self.dataset_no2cluster_fp, dataset_no, mcl_id)
-				self.add_item_to_dict(self.dataset_no2go_no_fp, dataset_no, go_no)
-			self.add_item_to_dict(self.gene_no2cluster_fp, gene_no, mcl_id)
+		if self.plottype != 3:
+			if (self.plottype == 2) or (tp == self.plottype):
+				#codes below fill in the data structures for plotting
+				#variable for cluster_size2cluster and cluster_size2go_no
+				cluster_size = len(vertex_set)
+				self.add_item_to_dict(self.cluster_size2cluster, cluster_size, mcl_id)
+				self.add_item_to_dict(self.cluster_size2go_no, cluster_size, go_no)
+				self.add_item_to_dict(self.go_no2cluster, go_no, mcl_id)
+				self.add_item_to_dict(self.go_no2gene, go_no, gene_no)
+				for dataset_no in recurrence_array:
+					self.add_item_to_dict(self.dataset_no2cluster, dataset_no, mcl_id)
+					self.add_item_to_dict(self.dataset_no2go_no, dataset_no, go_no)
+				self.add_item_to_dict(self.gene_no2cluster, gene_no, mcl_id)
+			if tp == 0:
+				cluster_size = len(vertex_set)
+				self.add_item_to_dict(self.cluster_size2cluster_fp, cluster_size, mcl_id)
+				self.add_item_to_dict(self.cluster_size2go_no_fp, cluster_size, go_no)
+				self.add_item_to_dict(self.go_no2cluster_fp, go_no, mcl_id)
+				self.add_item_to_dict(self.go_no2gene_fp, go_no, gene_no)
+				for dataset_no in recurrence_array:
+					self.add_item_to_dict(self.dataset_no2cluster_fp, dataset_no, mcl_id)
+					self.add_item_to_dict(self.dataset_no2go_no_fp, dataset_no, go_no)
+				self.add_item_to_dict(self.gene_no2cluster_fp, gene_no, mcl_id)
 		#
 		#Filling done.
 		
@@ -489,12 +482,9 @@ class gene_stat:
 			#initialize three data structures
 			L0_dict = {}
 			L1_dict = {}
-			#L0 or L1 are all good known functions
-			good_k_functions_dict = {}
 			#each entry is a gene_prediction class
 			entry = self.gene_prediction_dict[gene_no]
 			p_functions_dict = entry.p_functions_dict.copy()
-			p_functions = p_functions_dict.keys()
 			if gene_no not in self.known_genes_dict:
 				#unknown genes are not validatable. Ignore.
 				#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
@@ -502,28 +492,20 @@ class gene_stat:
 			k_functions_list = self.known_genes_dict[gene_no]
 			self.no_of_p_known += 1
 			#compare the known go_no with the predicted go_no to see if they match
-			#L0 level or L1 level
-			for p_go_no in p_functions_dict:
-				for k_go_no in k_functions_list:
-					if self.is_L0(p_go_no, k_go_no):
-						L0_dict[p_go_no] = p_functions_dict[p_go_no]
-						good_k_functions_dict[k_go_no] = 1
-					elif self.is_L1(p_go_no, k_go_no):
-						L1_dict[p_go_no] = p_functions_dict[p_go_no]
-						good_k_functions_dict[k_go_no] = 1
-			#if one L1 is also counted as L0, remove it from L1_dict.
-			#this case happens when one known function has both L0 and L1 matches in the predicted functions
-			for go_no in L0_dict:
-				if go_no in L1_dict:
-					del L1_dict[go_no]
+
+			for k_go_no in k_functions_list:
+				if p_go_no in p_functions_dict:
+					L0_dict[p_go_no] = p_functions_dict[p_go_no]
+					self.gene_prediction_dict[gene_no].p_functions_struc_dict[p_go_no].is_correct = 1
+					del p_functions_dict[p_go_no]
+				else:
+					entry.fn[k_go_no] = 1
+
+
 			entry.tp = L0_dict
 			entry.tp1 = L1_dict
-			for k_go_no in k_functions_list:
-				if k_go_no not in good_k_functions_dict:
-					entry.fn[k_go_no] = 1
-			for p_go_no in p_functions_dict:
-				if p_go_no not in L0_dict and p_go_no not in L1_dict:
-					entry.fp[p_go_no] = p_functions_dict[p_go_no]
+			#the p_go_no's left in p_functions_dict are false positive's
+			entry.fp = p_functions_dict
 			
 			entry.tn = self.no_of_functions - (len(entry.tp)+len(entry.tp1)+len(entry.fp)+len(entry.fn))
 			self.tp += len(entry.tp)
