@@ -54,6 +54,11 @@ class gene_stat:
 	
 	03-08-05
 		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
+	03-14-05
+		distance loading on the fly
+	03-15-05
+		several functions were changed because the need to record down the lowest common ancestors 
+		between the predicted function and known functions.
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, \
 		mcl_table=None, leave_one_out=0, wu=0, report=0,\
@@ -207,7 +212,9 @@ class gene_stat:
 		
 		03-14-05
 			getting go_no2distance via node_distance_class
-			
+		
+		03-15-05
+			get lca's for common_ancestor_deep_enough approach
 		"""
 		
 		mcl_id = row[0]
@@ -294,9 +301,11 @@ class gene_stat:
 					is_correct = -1
 					is_correct_L1 = -1
 					is_correct_lca = -1
-				
+					#clear lca_list
+					self.lca_list = []
+					
 				prediction_list = [p_value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
-					is_correct_lca, len(vertex_set), unknown_gene_ratio]
+					is_correct_lca, len(vertex_set), unknown_gene_ratio, self.lca_list]
 				self.prediction_tuple2list[prediction_tuple].append(prediction_list)
 
 	def index_tuple(self, list):
@@ -373,44 +382,71 @@ class gene_stat:
 			find a bug, in case of k_go_no==p_go_no, the function should return 1.
 		03-14-05
 			getting go_no2distance via node_distance_class
+		03-15-05
+			add a feature to get the lca's between p_go_no and k_functions_set
 		"""
 		if self.debug_common_ancestor_deep_enough:
 			print "\t\t ### Enter common_ancestor_deep_enough() "
+		#the lowest common ancestor is blank list by default, use global variable not to change the interface.
+		self.lca_list = []
+		
 		if self.go_no2depth[p_go_no] < self.depth_cut_off:
-			#not good 
+			#not good
+			if self.debug_common_ancestor_deep_enough:
+				print "%s doesn't pass the depth_cut_off.\n"%(self.go_no2go_id[p_go_no])
+			self.lca_list = []
 			return 0
+		#each element is a tuple, like (depth, go_no)
 		ancestor_set = Set()
 		for k_go_no in k_functions_set:
 			if k_go_no == p_go_no:
 				#bug here corrected.
+				if self.debug_common_ancestor_deep_enough:
+					print "%s hits itself.\n"%(self.go_no2go_id[p_go_no])
+				self.lca_list = [p_go_no]
 				return 1
 			elif k_go_no < p_go_no:
 				key = (k_go_no, p_go_no)
 			elif k_go_no > p_go_no:
 				key = (p_go_no, k_go_no)
-			if key in self.go_no2distance:
-				ancestor_set |= self.go_no2distance[key][3]
-			else:
+			if key not in self.go_no2distance:
+				#load in the distances and common_ancestors
 				node_distance_class.get_distance(curs, k_go_no, p_go_no, self.distance_table, \
 					self.go_no2distance, self.go_no2term_id)
-				ancestor_set |= self.go_no2distance[key][3]
-			
-		#in case no ancestor at all
-		depth = 0
-		for ancestor in ancestor_set:
-			depth = self.go_term_id2depth[ancestor]
-			if depth >= self.depth_cut_off:
-				if self.debug_common_ancestor_deep_enough:
-					print "%s's common_ancestor %s\n"%(self.go_no2go_id[p_go_no], \
-						self.go_no2go_id[self.go_term_id2go_no[ancestor]])
-				#pre-stop the loop
-				break
-		if depth >= self.depth_cut_off:
+				
+			for ancestor in self.go_no2distance[key][3]:
+				#NOTE: ancestor is in term_id. neither go_no nor go_id
+				depth = self.go_term_id2depth[ancestor]
+				if depth >= self.depth_cut_off:
+					ancestor_set.add((depth, ancestor))
+					if self.debug_common_ancestor_deep_enough:
+						print "%s's common_ancestor %s passes the depth_cut_off, with depth %d.\n"%\
+						(self.go_no2go_id[p_go_no], self.go_no2go_id[self.go_term_id2go_no[ancestor]], depth)
+		#convert ancestor_set to a list to sort
+		depth_lca_list = list(ancestor_set)
+
+		if len(depth_lca_list)>0:
+			#sort based on depth
+			depth_lca_list.sort()
+			#find the lca's(might have >1)
+			max_depth = depth_lca_list[-1][0]
+			if self.debug_common_ancestor_deep_enough:
+				print "the maximum depth of the common_ancestors between %s and %s is %d"%\
+					(p_go_no, repr(k_functions_set), max_depth)
+			#only get those lca's whose depth ==max_depth
+			for (depth,lca) in depth_lca_list:
+				if depth==max_depth:
+					if self.debug_common_ancestor_deep_enough:
+						print "lca: %s has the max_depth"%self.go_no2go_id[self.go_term_id2go_no[lca]]
+					#map term_id to go_no
+					self.lca_list.append(self.go_term_id2go_no[lca])
 			return 1
 		else:
+			if self.debug_common_ancestor_deep_enough:
+				print "No common_ancestors deep enough for function %s"%self.go_no2go_id[p_go_no]
+			self.lca_list = []
 			return 0
-		if self.debug_common_ancestor_deep_enough:
-			print "\t\t ### Leave common_ancestor_deep_enough() "
+
 	
 	def submit(self, curs, gene_table):
 		"""
@@ -430,6 +466,9 @@ class gene_stat:
 			10. add two more integers, is_correct_L1, is_correct_lca
 			11. unknown_cut_off is the real unknown_gene_ratio
 			12. e_accuracy is deprecated
+		03-15-05
+			add another column lca_list to store the lowest common ancestors between
+			the predicted functions and the assigned ones
 		"""
 		sys.stderr.write("Creating table %s..."%gene_table)
 		if gene_table!='p_gene':
@@ -452,7 +491,8 @@ class gene_stat:
 				cluster_size_cut_off    integer,\
 				unknown_cut_off      float,\
 				depth_cut_off integer,\
-				mcl_id integer\
+				mcl_id integer,\
+				lca_list integer[]\
 				)"%gene_table)
 		sys.stderr.write("Done.\n")
 		
@@ -472,13 +512,26 @@ class gene_stat:
 				is_correct_lca = unit[6]
 				cluster_size = unit[7]
 				unknown_gene_ratio = unit[8]
-				curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
-					avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
-					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id)\
-					values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s)"%\
-					(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
-					p_value, 1, repr([mcl_id]), p_value, recurrence,\
-					connectivity, cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id))
+				lca_list = unit[9]
+				if len(lca_list)==0:
+					curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+						avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
+						connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id)\
+						values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s)"%\
+						(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+						p_value, 1, repr([mcl_id]), p_value, recurrence, connectivity, \
+						cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id))
+
+				else:
+					lca_list_string = '{'+repr(lca_list)[1:-1] + '}'
+					curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+						avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
+						connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list)\
+						values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s, '%s')"%\
+						(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+						p_value, 1, repr([mcl_id]), p_value, recurrence, connectivity, \
+						cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id, lca_list_string))
+
 
 		sys.stderr.write("done.\n")
 
