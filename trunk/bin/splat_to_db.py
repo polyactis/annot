@@ -25,8 +25,9 @@ class splat_result_iterator:
 class splat_to_db:
 	'''
 	'''
-	def __init__(self, infname, dbname, needcommit=0):
-		self.organism = ''
+	def __init__(self, infname, dbname, organism, needcommit=0):
+		self.splat_id = ''
+		self.organism = organism
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
 		self.edge_set = []
@@ -50,7 +51,6 @@ class splat_to_db:
 					'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
 					
 	def parse(self, pattern):
-		self.organism = self.org_short2long['sc']
 		line = pattern.readline()
 		no_in_string = line[:-1]
 		self.no_of_edges = no_in_string
@@ -69,23 +69,38 @@ class splat_to_db:
 			
 	def run(self):
 		iter = splat_result_iterator(self.inf)
+		no = 1
 		for pattern in iter:
 			self.parse(pattern)
-			sys.stderr.write(self.organism + '\n' + self.no_of_edges + '\n' + self.recurrence_pattern +'\n')
+			self.splat_id = '%s_%d'%(self.organism,no)
+			sys.stderr.write(self.splat_id + '\t' + self.no_of_edges + '\n' + self.recurrence_pattern +'\n')
 			try:
-				self.curs.execute("insert into splat_result(organism,no_of_edges, \
-							recurrence_pattern,edge_set)values (%s,%s,B%s,ARRAY"+repr(self.edge_set) + ")",  \
-							(self.organism, self.no_of_edges, self.recurrence_pattern ))
+				self.curs.execute("insert into splat_result(splat_id, organism,no_of_edges, \
+							recurrence_pattern,edge_set)values ('%s','%s','%s',B'%s',ARRAY%s)"%\
+							(self.splat_id, self.org_short2long[self.organism], self.no_of_edges, \
+							self.recurrence_pattern,repr(self.edge_set) ))
 			except:
 				sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 				self.conn.rollback()
 				sys.exit(1)
+			no+=1
 		if self.needcommit:
 			self.conn.commit()
 
 
 if __name__ == '__main__':
-	instance = splat_to_db(sys.argv[1], sys.argv[2], 1)
-	#argv[1] is the splat result file.
-	#argv[2] is the database name
+	def helper():
+		sys.stderr.write('\
+		argv[1] is the splat result file.\n\
+		argv[2] is the database name.\n\
+		argv[3] is the two abbreviation letters for organism.\n\
+		argv[4] is 0 or 1 indicating whether to commit or not.\n')
+		
+	if len(sys.argv) ==5:
+		instance = splat_to_db(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+	elif len(sys.argv) == 4:
+		instance = splat_to_db(sys.argv[1], sys.argv[2], sys.argv[3], 0)
+	else:
+		helper()
+		sys.exit(1)
 	instance.run()

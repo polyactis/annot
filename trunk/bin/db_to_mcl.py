@@ -30,7 +30,7 @@ class db_to_mcl:
 		row = self.curs.fetchone()
 		while row:
 			splat_id = row[0]
-			outfname = '%s_%d'%(organism,splat_id,)
+			outfname = splat_id
 			path = os.path.join(outdir, outfname)
 			outf = open(path, 'w')
 			self.vertex_dict = {}	#intialize the vertex_dict
@@ -65,8 +65,15 @@ class db_to_mcl:
 		outf.write(')\n')
 		
 if __name__ == '__main__':
-	instance = db_to_mcl(sys.argv[1])
-	#argv[1] is the name of the database.
-	instance.get_from_db(sys.argv[2], sys.argv[3])
-	#argv[2] is organism abbreviation word
-	#argv[3] is the output directory.
+	def helper():
+		sys.stderr.write('\
+		argv[1] is the output directory.\n\
+		argv[2] is two-letter organism abbreviation.\n\
+		argv[3] is the database name.\n')
+		
+	if len(sys.argv) == 4:
+		instance = db_to_mcl(sys.argv[2])
+
+		instance.get_from_db(sys.argv[3], sys.argv[1])
+	else:
+		helper()
