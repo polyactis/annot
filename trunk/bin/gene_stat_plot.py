@@ -93,7 +93,8 @@ class accuracy_struc:
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
-		log=0, judger_type=0, depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
+		log=0, judger_type=0, depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene', \
+		dominant=0, plottype=3, stat_table_fname='null', mcl_id2vertex_set=None):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -120,6 +121,7 @@ class gene_stat:
 		self.dominant = int(dominant)
 		self.plottype = int(plottype)
 		self.stat_table_fname = stat_table_fname
+		self.mcl_id2vertex_set = mcl_id2vertex_set
 		
 		self.tp = 0.0
 		self.tp_m = 0.0
@@ -130,7 +132,7 @@ class gene_stat:
 		self.fp_m =0.0
 		self.fn = 0.0
 		#mapping between gene_no and its directly assigned go functions
-		#key is a gene_no, value is a set of go_no's.
+		#key is a gene_no, value is a set of go_id's.
 		self.gene_no2direct_go = {}
 		#mapping between gene_no and go_no list
 		self.known_genes_dict = {}
@@ -214,8 +216,8 @@ class gene_stat:
 				self.known_genes_dict[row[0]].add(int(go_no))
 		
 		#setup self.gene_no2direct_go
-		self.curs.execute("select ge.gene_no, g.go_no from go g, graph.association a, gene ge\
-			where ge.gene_id=a.gene_id and g.go_id=a.go_id")
+		self.curs.execute("select ge.gene_no, a.go_id from graph.association a, gene ge\
+			where ge.gene_id=a.gene_id")
 		rows = self.curs.fetchall()
 		for row in rows:
 			if row[0] in self.gene_no2direct_go:
@@ -292,6 +294,34 @@ class gene_stat:
 		
 		sys.stderr.write("Done\n")
 
+	def core_all_from_files(self):
+		#following codes are attaching directory path to each file in the list
+		file_list = os.listdir(self.dir_files)
+		file_path_list = []
+		for filename in file_list:
+			file_path_list.append(os.path.join(self.dir_files, filename))
+		#multiple files constitute the source of data
+		self.files = fileinput.input(file_path_list)
+		#wrap it with a reader
+		self.reader = csv.reader(self.files, delimiter='\t')
+		for row in self.reader:
+			row[0] = int(row[0])
+			row[1] = int(row[1])
+			row[3] = float(row[3])
+			self.curs.execute("select recurrence_array, vertex_set from %s where mcl_id=%d"%(self.mcl_table, int(row[0])) )
+			rows = self.curs.fetchall()
+			#first append the recurrence_array
+			row.append('{1}')
+			#second append the vertex_set
+			row.append(self.mcl_id2vertex_set[int(row[0])])
+			#only leave_one_out
+			self._gene_stat_leave_one_out(row)
+
+			if self.report and self.no_of_records%2000==0:
+				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+		if self.report:
+			sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+
 	def core_from_files(self):
 		#following codes are attaching directory path to each file in the list
 		file_list = os.listdir(self.dir_files)
@@ -353,7 +383,9 @@ class gene_stat:
 		if self.dir_files and self.leave_one_out==0:
 			sys.stderr.write("working on files of cluster_stat.py results, it must be leave_one_out.\n")
 			sys.exit(2)
-		if self.dir_files:
+		if self.mcl_id2vertex_set:
+			self.core_all_from_files()
+		elif self.dir_files:
 			self.core_from_files()
 		else:
 			self.core()
@@ -410,13 +442,14 @@ class gene_stat:
 		recurrence_array = map(int, recurrence_array)
 		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
-		if len(recurrence_array) != self.recurrence_cut_off:
+		if len(recurrence_array) < self.recurrence_cut_off:
 			#the recurrence is not enough
 			return
 		if len(vertex_set) > self.cluster_size_cut_off:
 			#the cluster is too big
 			return
-		if connectivity < self.connectivity_cut_off or connectivity > self.connectivity_cut_off+0.05:
+		if connectivity < self.connectivity_cut_off:
+			#or connectivity > self.connectivity_cut_off+0.05:
 			#the cluster is not dense enough
 			return
 		#transform into float type
@@ -942,10 +975,11 @@ class gene_stat:
 			if gene_no in self.known_genes_dict:
 				function_known_list = []
 				for go_known in self.known_genes_dict[gene_no]:
-					if go_known not in self.gene_no2direct_go[gene_no]:
-						function_known_list.append('%s(parent)'%self.go_no2go_id[go_known])
+					go_id = self.go_no2go_id[go_known]
+					if go_id not in self.gene_no2direct_go[gene_no]:
+						function_known_list.append('%s(parent)'%go_id)
 					else:
-						function_known_list.append('%s'%self.go_no2go_id[go_known])
+						function_known_list.append('%s'%go_id)
 				row.append(';'.join(function_known_list))
 			else:
 				row.append('')
