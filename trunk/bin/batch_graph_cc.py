@@ -3,6 +3,14 @@
 
 import os,sys
 
+'''
+Usage:	'program_name' arg1 arg2
+	
+	arg1 is the name of the directory containing datasets
+	arg2 is the name of the directory to hold the results
+'''
+
+
 def batch(dataset_dir, result_dir):
 	files = os.listdir(dataset_dir)
 	if not os.path.isdir(result_dir):

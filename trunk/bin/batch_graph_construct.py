@@ -3,6 +3,16 @@
 import os,sys
 from graph import *
 
+'''
+Usage:	'program_name' arg1 arg2
+
+	arg1 is the name of the directory containing the datasets
+	arg2 is the name of the file to hold the results of ALL the datasets.
+		only the filename. it'll be put into user's home directory.
+		arg2 is different from the arg2 of batch_graph_cc.py.
+'''
+
+
 def batch(dir, of_name):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
