@@ -208,8 +208,11 @@ class netmine_wrapper:
 				
 			print "node: %s, at %s, clusters: %s"%(node_rank, time_to_run_jobs, repr(node_rank2cluster_no[node_rank]))
 			#schedule it
-			wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
-			os.spawnvp(os.P_WAIT, 'at', wl)
+			#wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
+			#04-01-05 at has a problem. 'at' only executes the first 'ssh nodexx ....' and it replaces the whole 'at' job. return without
+			#running the following 'ssh ...'
+			sh_wl = ['sh', job_fname]
+			os.spawnvp(os.P_NOWAIT, 'sh', sh_wl)
 				
 			job_number+=1
 
