@@ -32,9 +32,8 @@ class graph_construct
 	int no_of_01;
 	ifstream in;
 	ofstream out;
-	ofstream out2;
 	public:
-		graph_construct(char* inf_name, char* outf_name, char* outf_name2, char* g_name);
+		graph_construct(char* inf_name, char* outf_name, char* g_name);
 		~graph_construct();
 		void cor_array_readin(char* cor_fname);
 		vector<string> general_split(string line, char ch);
@@ -47,11 +46,10 @@ class graph_construct
 		void split(string line);
 };
 
-graph_construct::graph_construct(char* inf_name, char* outf_name, char* outf_name2, char* g_name)
+graph_construct::graph_construct(char* inf_name, char* outf_name, char* g_name)
 {
 	in.open(inf_name);
 	out.open(outf_name);
-	out2.open(outf_name2);
 	graph_name = g_name;
 	//ios::app | ios::out);
 	no_of_cor6 = 0;
@@ -143,7 +141,6 @@ void graph_construct::edge_construct()
 	float tmp_cor, abs_min_cor, min_cor = 1.1;
 	
 	out<<"t\t#\t"<<graph_name<<endl;
-	out2<<"t\t#\t"<<graph_name<<endl;
 	for ( i=0; i<no_of_genes; i++)
 		for ( j=i+1; j<no_of_genes; j++)
 		{	
@@ -175,10 +172,6 @@ void graph_construct::edge_construct()
 				{
 					no_of_01++;
 					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
-				}
-				else
-				{
-					out2<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
 				}
 			}
 		}			
@@ -299,7 +292,7 @@ int main(int argc, char* argv[])
 {
 	//ifstream inf(argv[1]);
 	//ofstream outf(argv[2], ios::app | ios::out);
-	graph_construct instance(argv[1], argv[2], argv[3], argv[4] );
+	graph_construct instance(argv[1], argv[2], argv[3] );
 	instance.cor_array_readin("/home/yuhuang/p_value_cor.output");
 	instance.input();
 	instance.edge_construct();
