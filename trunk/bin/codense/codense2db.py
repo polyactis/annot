@@ -10,6 +10,7 @@ Option:
 	-t ..., --table=...	the splat_result table (edge_set)
 	-m ..., -mcl_table=...	the mcl_result table (vertex_set)
 	-p ..., --mapping_file=...	the file to get the mapping between haiyan's index and my gene_no
+	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0.6(default)
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
@@ -47,7 +48,8 @@ class cluster_dstructure:
 class codense2db:
 	'''
 	'''
-	def __init__(self, infname, hostname, dbname, schema, table, mcl_table, mapping_file, report, needcommit=0):		
+	def __init__(self, infname, hostname, dbname, schema, table, mcl_table, mapping_file, cor_cut_off,\
+			report, needcommit=0):		
 		self.inf = csv.reader(open(infname, 'r'), delimiter='\t')
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -55,6 +57,7 @@ class codense2db:
 		self.table = table
 		self.mcl_table = mcl_table
 		self.mapping_file = mapping_file
+		self.cor_cut_off = float(cor_cut_off)
 		self.report = int(report)
 		self.needcommit = int(needcommit)		
 		self.haiyan_no2gene_no = {}
@@ -107,7 +110,11 @@ class codense2db:
 		cor_array = numarray.reshape(cor_array, (no_of_edges, y_dimension))
 		recurrence_array = []
 		for i in range(y_dimension):
-			recurrence_array.append(sum(cor_array[:,i])/float(no_of_edges))
+			#regard the correlations >= self.cor_cut_off to be 1, others 0
+			edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], self.cor_cut_off)
+			recurrence_array.append(sum(edge_cor_in_one_dataset)/float(no_of_edges))
+		#handle this in gene_stat_plot.py
+		#recurrence_array = numarray.greater_equal(recurrence_array, self.subgraph_cut_off)
 		return recurrence_array
 	
 	def create_tables(self):
@@ -179,8 +186,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:t:m:p:c", ["help", "report", "hostname=", \
-			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:cr", ["help", "hostname=", \
+			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
+			"commit", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -188,10 +196,11 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
-	commit = 0
 	table = 'splat_result'
 	mcl_table = 'mcl_result'
 	mapping_file = None
+	cor_cut_off = 0.6
+	commit = 0
 	report = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -209,12 +218,15 @@ if __name__ == '__main__':
 			mcl_table = arg
 		elif opt in ("-p", "--mapping_file"):
 			mapping_file = arg
+		elif opt in ("-o", "--cor_cut_off"):
+			cor_cut_off = float(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and len(args)==1:
-		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, report, commit)
+		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, cor_cut_off,\
+			report, commit)
 		instance.run()
 	else:
 		print __doc__
