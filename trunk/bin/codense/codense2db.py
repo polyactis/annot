@@ -81,6 +81,8 @@ class codense2db:
 		self.debug = 0
 		self.parser_dict = {1:self.copath_parser,
 			2: self.codense_parser}
+		
+		self.cluster_no = 0
 
 	
 	def copath_parser(self, row, argument=None, argument2=None):
@@ -98,7 +100,7 @@ class codense2db:
 		haiyan_no2gene_no = argument
 		curs = argument2
 		cluster = cluster_dstructure()
-		cluster.cluster_id = int(row[0])
+		cluster.cluster_id = self.cluster_no
 		cluster.splat_connectivity = float(row[1])
 		cluster.vertex_set = row[2][1:-2].split(';')
 		cluster.vertex_set = map(int, cluster.vertex_set)
@@ -125,7 +127,7 @@ class codense2db:
 		cluster.connectivity = self.parse_connectivity(combined_sig_vetor, cluster.no_of_edges, len(cluster.vertex_set))
 		
 		cluster.recurrence_array = self.parse_recurrence(combined_sig_vetor, cluster.no_of_edges, self.cor_cut_off)
-		
+		self.cluster_no+=1
 		return cluster
 	
 	def get_combined_cor_vector(self, curs, edge_set):
