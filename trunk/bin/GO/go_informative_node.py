@@ -253,17 +253,17 @@ class go_informative_node_bfs:
 			for descendent in descendent_set.items():
 				if descendent in self.go_id2gene_id_dict:
 					self.go_id_descendent2gene_id_dict[go_id] += self.go_id2gene_id_dict[descendent]
-			if self.node_type==2:
-				self.informative_node_dict[go_id] = 0
-			elif self.node_type==1:
+			if self.node_type==1:
 				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0:
 					#not biological_process and have >0 genes associated, then they are informative nodes.
 					self.informative_node_dict[go_id] = 1
+			elif self.node_type==2:
+				self.informative_node_dict[go_id] = 0
 			elif self.node_type==3:
 				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0 and self.go_id2depth[go_id]==4:
 					#not biological_process and have >0 genes associated and depth=4(level=5)
 					self.informative_node_dict[go_id] = 1
-		if self.node_type==1:
+		if self.node_type==2:
 			#below is analogous to BFS,
 			#informative_node_dict's role is similar to vertex coloring in real BFS
 			self.informative_node_dict[self.root] = 1
