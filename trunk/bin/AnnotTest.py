@@ -35,6 +35,8 @@ Examples:
 	12: crack_by_splat
 03-31-05
 	13: p_gene_factor
+04-03-05
+	14: connectivity2homogeneity
 """
 import unittest, os, sys, getopt, csv
 
@@ -873,6 +875,59 @@ class TestPGeneFactor(unittest.TestCase):
 		key2data = self.instance.group_data(list_2d, key_column=0, no_of_groups=3)
 		print key2data
 
+class TestConnectivity2Homogeneity(unittest.TestCase):
+	"""
+	04-03-05
+		
+	"""
+	def setUp(self):
+		"""
+		04-03-05
+		"""
+		from connectivity2homogeneity import connectivity2homogeneity
+		homedir = os.path.expanduser('~')
+		schema = 'sc_54_6661'
+		input_file = os.path.join(homedir, 'bin/hhu_clustering/data/input/sc_54_6661_7')
+		self.instance = connectivity2homogeneity(input_file=input_file, schema=schema, \
+			output_fname='/tmp/data', debug=1, random_subgraph_size=6)
+
+	def test_get_summary_graph(self):
+		summary_graph = self.instance.get_summary_graph(self.instance.input_file)
+		print "The summary_graph is %s"%repr(summary_graph)
+
+	def test_get_gene_no2go_no_list(self):
+		"""
+		04-03-05
+		"""
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.debug = 0
+		gene_no2go_no_list = self.instance.get_gene_no2go_no_list(curs)
+		print "The length of gene_no2go_no_list is %s"%len(gene_no2go_no_list)
+		return gene_no2go_no_list
+	
+	def test__connectivity2homogeneity(self):
+		"""
+		04-03-05
+		"""
+		from graphlib import Graph
+		subgraph = Graph.Graph()
+		#testing example from mcl_result_copathsc_54_6661_merge_6g5e6d40q20s80c50so of sc_54_6661
+		subgraph.add_edge(1215,5616,5)
+		subgraph.add_edge(1215,6325,5)
+		subgraph.add_edge(4240,6325,5)
+		subgraph.add_edge(5135,6325,5)
+		subgraph.add_edge(1428,5135,5)
+		subgraph_id =1
+		node_list = subgraph.node_list()
+		edge_list = subgraph.edge_list()
+		edge_set = map(subgraph.edge_by_id, edge_list)
+		gene_no2go_no_list = self.test_get_gene_no2go_no_list()
+		writer = csv.writer(sys.stdout, delimiter='\t')
+		self.instance.debug = 1
+		self.instance._connectivity2homogeneity(subgraph_id, node_list, edge_set, gene_no2go_no_list,writer)
+		
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -897,7 +952,8 @@ if __name__ == '__main__':
 		10: TestCodense2db,
 		11: TestCrackByModes,
 		12: TestCrackBySplat,
-		13: TestPGeneFactor}
+		13: TestPGeneFactor,
+		14: TestConnectivity2Homogeneity}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
