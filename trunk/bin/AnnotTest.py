@@ -454,8 +454,9 @@ class TestPGeneLm(unittest.TestCase):
 		03-27-05
 			The lm model is got from the real p_gene_table, same as above.(via R)
 		"""
+		self.instance.debug=1
 		score_list = [[6,1],[3,0],[3,0],[4,1],[3,0],[4,0],[4,0],[5,1],[6,1],[5,1],[5,0],[6,1]]
-		score_cut_off = self.instance.return_score_cut_off(score_list, 0.7)
+		score_cut_off = self.instance.return_score_cut_off(score_list, 0.7, -1)
 		print "\nthe score cutoff is %s"%repr(score_cut_off)
 
 class TestPGeneAnalysis(unittest.TestCase):
@@ -482,13 +483,19 @@ class TestPGeneAnalysis(unittest.TestCase):
 			report, judger_type, commit, gene_table, lm_table)
 			
 	def test_lm(self):
+		"""
+		03-27-05
+			test the new prediction_accepted()
+		"""
+		import math
 		from codense.common import db_connect
-		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
-		self.instance.go_no2lm_results, lm_results_2d_list = self.instance.get_go_no2lm_results(curs, self.instance.lm_table)
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, 'sc_54_6661')
+		self.instance.go_no2lm_results, lm_results_2d_list = self.instance.get_go_no2lm_results(curs,\
+			'p_gene_lm_tmp_2')
 		self.instance.general_lm_results = self.instance.get_general_lm_results(lm_results_2d_list)
 		print self.instance.go_no2lm_results
 		print self.instance.general_lm_results
-		print self.instance.return_p_value_cut_off(56, 18, 2)
+		print self.instance.prediction_accepted(56, [-math.log(0.00001),15,0.03])
 		
 	def test_return_go_no_map(self):
 		"""
