@@ -53,6 +53,8 @@ class gene_table_setup:
 		rows = self.curs.fetchall()
 		for row in rows:
 			go_no = row[0]
+			if row[1] == '{}':
+				continue
 			gene_no_list = row[1][1:-1].split(',')
 			gene_no_list = map(int, gene_no_list)
 			for gene_no in gene_no_list:
@@ -73,9 +75,11 @@ class gene_table_setup:
 			known = '1'
 			if len(self.geneno_go_dict[gene_no])==1 and self.geneno_go_dict[gene_no][0]==0 :
 				known = '0'
+			string_geneno_go_dict = repr(self.geneno_go_dict[gene_no])
+			string_geneno_go_dict = '{' + string_geneno_go_dict[1:-1] + '}'
 			self.curs.execute("insert into gene(gene_id, gene_no, known, \
-				go_functions) values ('%s', %d, '%s', ARRAY%s)"%\
-				(gene_id, gene_no, known, repr(self.geneno_go_dict[gene_no]) ))
+				go_functions) values ('%s', %d, '%s', '%s')"%\
+				(gene_id, gene_no, known, string_geneno_go_dict ))
 		if self.needcommit:
 			self.conn.commit()
 
