@@ -8,8 +8,9 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	the splat_result table (edge_set)
-	-m ..., -mcl_table=...	the mcl_result table (vertex_set)
+	-m ..., --mcl_table=...	the mcl_result table (vertex_set)
 	-p ..., --mapping_file=...	the file to get the mapping between haiyan's index and my gene_no
+		(02-19-05)if not given, regard the input graph uses gene_no instead of haiyan's index
 	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0.6(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-c, --commit	commit this database transaction
@@ -69,7 +70,8 @@ class codense2db:
 		cluster.connectivity = float(row[1])
 		cluster.vertex_set = row[2][1:-2].split(';')
 		cluster.vertex_set = map(int, cluster.vertex_set)
-		cluster.vertex_set = dict_map(self.haiyan_no2gene_no, cluster.vertex_set)
+		if self.mapping_file != None:
+			cluster.vertex_set = dict_map(self.haiyan_no2gene_no, cluster.vertex_set)
 		#in ascending order
 		cluster.vertex_set.sort()
 		#cluster.vertex_set_string = row[2][1:-2].replace(';',',')
@@ -81,7 +83,8 @@ class codense2db:
 		for edge in edge_list:
 			edge = edge.split(',')
 			edge = map(int, edge)
-			edge = dict_map(self.haiyan_no2gene_no, edge)
+			if self.mapping_file!=None:
+				edge = dict_map(self.haiyan_no2gene_no, edge)
 			#in ascending order
 			edge.sort()
 			cluster.edge_set.append(edge)
@@ -167,8 +170,9 @@ class codense2db:
 			sys.exit(1)
 
 	def run(self):
-		#setup the self.haiyan_no2gene_no	
-		self.haiyan_no2gene_no = get_haiyan_no2gene_no(self.mapping_file)
+		#setup the self.haiyan_no2gene_no
+		if self.mapping_file != None:
+			self.haiyan_no2gene_no = get_haiyan_no2gene_no(self.mapping_file)
 		
 		self.create_tables()
 		no = 0
