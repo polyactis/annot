@@ -33,11 +33,11 @@ from graphlib import Graph, GraphAlgo
 from sets import Set
 
 class distance_of_2nodes:
-	def __init__(self):
+	def __init__(self, raw_distance=10000, lee_distance=10000, jasmine_distance=10000):
 		self.common_ancestor_set = Set()
-		self.raw_distance = 10000
-		self.lee_distance = 10000
-		self.jasmine_distance = 10000
+		self.raw_distance = raw_distance
+		self.lee_distance = lee_distance
+		self.jasmine_distance = jasmine_distance
 
 class go_node_distance:
 	def __init__(self, hostname, dbname, schema, table, branch, all, new_table, report=0, \
@@ -72,7 +72,7 @@ class go_node_distance:
 		self.node_list = Set()
 		#the list containing all indices
 		self.index_list = Set()
-		#key structure, mapping between go id and its associated distances
+		#key structure, mapping between a pair of go_id's and its associated distances
 		self.go_id2distance = {}
 		
 	def dstruc_loadin(self):
