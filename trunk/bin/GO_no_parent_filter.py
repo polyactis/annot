@@ -6,6 +6,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, go(default)
 	-t ..., --type=...	which branch of GO, 0, 1(default) or 2(IGNORE it)
+	-v, --visualize	visualize the subgraph GraphDot
 	-h, --help              show this help
 
 Examples:
@@ -19,21 +20,25 @@ Description:
 
 import sys, os, psycopg, getopt, csv
 from GO_graphxml import GO_graphxml
+from graphlib import GraphDot
 
 class GO_no_parent_filter(GO_graphxml):
-	def __init__(self, dbname, schema, type, output):
+	def __init__(self, dbname, schema, type, dir, output, visualize):
 		GO_graphxml.__init__(self, dbname, schema, type, output)
-		
-	def batch_filter(self, dir):
+		self.dir = dir
+		self.visualize = visualize
+	
+	def batch_filter(self):
 		#loadin three data structures
 		self.dstruc_loadin()
-		files = os.listdir(dir)
+		files = os.listdir(self.dir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-		of = open(self.ofname, 'w')
+		if self.visualize == 0:
+			of = open(self.ofname, 'w')
 		
 		for f in files:
 			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
-			src_file = os.path.join(dir, f)
+			src_file = os.path.join(self.dir, f)
 			reader = csv.reader(file(src_file), delimiter='\t')
 			#throw away the first line
 			reader.next()
@@ -49,11 +54,23 @@ class GO_no_parent_filter(GO_graphxml):
 						#may not be obsolete, but still not exist
 						if acc in self.acc2id_dict:
 							node_list.append(self.acc2id_dict[acc])
+					#get the subgraph constituted by these nodes
 					go_subgraph = self.go_graph.subgraph_from_node_list(node_list)
-					for node in node_list:
-						#terminal node in this subgraph is the real GO annotation, also not obsolete
-						if self.go_graph.out_degree(node) == 0 and self.termid_dict[node].is_obsolete == 0:
-							of.write('%s\t%s\n'%(probe_id, self.termid_dict[node].acc))
+					#visualize it
+					if self.visualize==1:
+						dot = GraphDot.Dot(go_subgraph)
+						dot.display()
+						yes = raw_input("Continue? (y/n):\t")
+						if yes == 'y':
+							continue
+						else:
+							sys.exit(2)
+					#get the terminal nodes
+					else:
+						for node in node_list:
+							#terminal node in this subgraph is the real GO annotation, output the third column to indicate obsolete or not
+							if go_subgraph.out_degree(node) == 0:
+								of.write('%s\t%s\t%d\t%d\n'%(probe_id, self.termid_dict[node].acc, node, self.termid_dict[node].is_obsolete))
 
 
 if __name__ == '__main__':
@@ -61,9 +78,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 
-	long_options_list = ["help", "dbname=", "schema=", "type="]
+	long_options_list = ["help", "dbname=", "schema=", "type=", "visualize"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:v", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -71,6 +88,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = 'go'
 	type = 1
+	visualize = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -81,14 +99,16 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-t", "--type"):
 			type = int(arg)
+		elif opt in ("-v", "--visualize"):
+			visualize = 1
 
 	if len(args) == 2:
 		'''
 		args[0] is the DATADIR
 		args[1] is the Outputfile
 		'''
-		instance = GO_no_parent_filter(dbname, schema, type, args[1])
-		instance.batch_filter(args[0])
+		instance = GO_no_parent_filter(dbname, schema, type, args[0], args[1], visualize)
+		instance.batch_filter()
 	else:
 		print __doc__
 		sys.exit(2)
