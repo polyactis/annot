@@ -296,7 +296,6 @@ class TestCrackSplat(unittest.TestCase):
 	
 	def test_call_modes(self):
 		infname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/input/g1.matrix') 
-		outfname = '~/script/hhu_clustering/data/output/g1.output'
 		outfname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/output/g1.output') 
 		no_of_genes = 10
 		result_code = self.instance.call_modes(infname, outfname, no_of_genes)
