@@ -110,11 +110,14 @@ class p_gene_analysis:
 		--table_output()
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
-		table=None, mcl_table=None, p_value_cut_off=None, report=0, \
+		table=None, mcl_table=None, p_value_cut_off=0.01, report=0, \
 		judger_type=0, needcommit=0, gene_table='p_gene', lm_table=None, \
 		stat_table_fname=None, debug=0, accuracy_cut_off=0, gene_p_table=None,\
 		recurrence_gap_size=2, connectivity_gap_size=2):
-		
+		"""
+		03-08-05
+			p_value_cut_off=0.01, otherwise float(None) doesn't work.
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema		
