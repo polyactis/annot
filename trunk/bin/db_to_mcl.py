@@ -4,6 +4,7 @@ Usage: db_to_mcl.py -k SCHEMA -s SIZE [OPTION] MCLINPUTDIR
 
 Option:
 	MCLINPUTDIR a directory to save the mcl input files.
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-s ..., --size=...	the number of splat records in one output file
@@ -21,9 +22,9 @@ Description:
 import sys,os,cStringIO,psycopg,getopt
 
 class db_to_mcl:
-	def __init__(self, dbname, schema):
+	def __init__(self, hostname, dbname, schema):
 		self.vertex_dict = {}
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 
@@ -90,11 +91,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:s:", ["help", "dbname=", "schema=", "size="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:s:", ["help", "hostname=", "dbname=", "schema=", "size="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	size = 0
@@ -102,6 +104,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -110,7 +114,7 @@ if __name__ == '__main__':
 			size = int(arg)
 
 	if schema and size and len(args)==1:
-		instance = db_to_mcl(dbname, schema)
+		instance = db_to_mcl(hostname, dbname, schema)
 		instance.get_from_db(args[0], size)
 
 	else:
