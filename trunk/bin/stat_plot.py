@@ -91,7 +91,7 @@ class stat_plot:
 		writer = csv.writer(open(self.ofname,'w'), delimiter='\t')
 		writer.writerow(['recurrence_cut_off', 'connectivity_cut_off', 'accuracy'])
 		self.curs.execute("select  tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn, recurrence_cut_off, \
-			connectivity_cut_off from stat_plot_data where tag='%s' order by recurrence_cut_off,\
+			connectivity_cut_off from stat_plot_data where tag='%s' and p_value_cut_off=0.1 order by recurrence_cut_off,\
 			connectivity_cut_off"%(self.tag))
 		plot_data = self.curs.fetchall()
 		for entry in plot_data:

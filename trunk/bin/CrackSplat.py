@@ -15,7 +15,8 @@ Option:
 	-y ..., --type=...	the type, 1(modes, default), 2
 	-n,	--new_table	target_table is new. (create it first)
 	-c, --commit	commit this database transaction
-	-r ..., --report=...	report flag
+	-r, --report	report flag
+	-b, --debug debug flag
 	-h, --help              show this help
 
 Examples:
@@ -51,11 +52,12 @@ class CrackSplat:
 		Break copath results, which are stored in splat_result table, where the name
 		comes, into dense parts via calling other clustering algorithm.
 		The results will be stored in a new mcl_result-like table.
-		
+	02-25-05
+		a debug flag	
 		--run
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, table=None, mcl_table=None, dir_files='/tmp/CrackSplat',\
-		parameter_a=0.2, parameter_b=4, type=1, new_table=0, needcommit=0, report=0):
+		parameter_a=0.2, parameter_b=4, type=1, new_table=0, needcommit=0, report=0, debug=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -68,6 +70,7 @@ class CrackSplat:
 		self.new_table = int(new_table)
 		self.needcommit = int(needcommit)
 		self.report = int(report)
+		self.debug = int(debug)
 	
 	def init(self):
 		"""
@@ -123,6 +126,8 @@ class CrackSplat:
 			--parse_modes_results
 		02-25-05
 			check the exit code of modes
+		02-25-05
+			debug flag used here to visualize the modes cracking result
 		#argument1 and argument2 are for future purpose
 		
 		"""
@@ -134,6 +139,8 @@ class CrackSplat:
 			#modes' normal exit code is 1
 			print 'call modes failed'
 			sys.exit(1)
+		if self.debug:
+			clustering_test_instance.visualize_clusters(outfname, graph, index2no, '/tmp/test.R')
 		codense2db_instance = argument2
 		curs = argument3
 		return self.parse_modes_results(splat_id, outfname, index2no, graph, codense2db_instance, curs)
@@ -200,12 +207,14 @@ class CrackSplat:
 			unit = MclResult()
 			unit.splat_id = splat_id
 			mcl_id = int(row[0])
-			no_of_nodes = int(row[1])
-			no_of_edges = float(row[2])
-			unit.connectivity = 2*no_of_edges/(no_of_nodes*(no_of_nodes-1))
+			#no_of_nodes = int(row[1])
+			#no_of_edges = float(row[2])		#02-25-05	I saw connectivity =0 in the database with real connectivity=0.5. Some errors in this.
 			node_list = row[3:]
 			node_list = map(int, node_list)
 			subgraph = graph.subgraph_from_node_list(node_list)
+			no_of_edges = float(len(subgraph.edges))
+			no_of_nodes = float(len(subgraph.nodes))
+			unit.connectivity = 2*no_of_edges/(no_of_nodes*(no_of_nodes-1))
 			#map the index back to gene_no
 			for i in range(len(node_list)):
 				node_list[i] = index2no[node_list[i]]
@@ -331,6 +340,7 @@ if __name__ == '__main__':
 	new_table = 0
 	commit = 0
 	report = 0
+	debug = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -359,9 +369,11 @@ if __name__ == '__main__':
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
+		elif opt in ("-b", "--debug"):
+			debug = 1
 	if schema:
 		instance = CrackSplat(hostname, dbname, schema, table, mcl_table, dir_files, parameter_a,\
-			parameter_b, type, new_table, commit, report)
+			parameter_b, type, new_table, commit, report, debug)
 		instance.run()
 	else:
 		print __doc__
