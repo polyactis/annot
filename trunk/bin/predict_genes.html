@@ -1,0 +1,69 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML>
+<HEAD>
+	<META HTTP-EQUIV="CONTENT-TYPE" CONTENT="text/html; charset=gb2312">
+	<TITLE> Predict Functions of Genes(Yeast) </TITLE>
+	<META NAME="GENERATOR" CONTENT="OpenOffice.org 1.1.2  (Linux)">
+	<META NAME="CREATED" CONTENT="20041016;13373200">
+	<META NAME="CHANGEDBY" CONTENT="Yu Huang">
+	<META NAME="CHANGED" CONTENT="20041016;15003500">
+	<STYLE>
+	<!--
+		@page { size: 8.5in 11in }
+	-->
+	</STYLE>
+</HEAD>
+<BODY LANG="en-US" DIR="LTR">
+<P ALIGN=CENTER STYLE="margin-bottom: 0in">Predict Genes</P>
+<P ALIGN=CENTER STYLE="margin-bottom: 0in"><BR>
+</P>
+<FORM ACTION="/cgi_bin/predict_genes.cgi" METHOD="POST" ENCTYPE="multipart/form-data">
+	<TABLE WIDTH=605 BORDER=0 CELLPADDING=2 CELLSPACING=0>
+		<COL WIDTH=601>
+		<TR>
+			<TD WIDTH=601>
+				<P>Cut and paste your genes, one gene per line, (yeast orfname
+				only):<BR><TEXTAREA NAME="gene" ROWS=4 COLS=66></TEXTAREA> 
+				</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><B>Or</B> 
+				</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P>Select the gene file you wish to use (one gene per line):<BR><INPUT TYPE=FILE NAME="genefile" SIZE=34>
+								</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><BR>P_value cutoff:<INPUT TYPE=TEXT NAME="p_value" VALUE="0.001" SIZE=10 MAXLENGTH=10>
+				Recurrence cutoff:<INPUT TYPE=TEXT NAME="recurrence" VALUE="6" SIZE=3 MAXLENGTH=3>
+				Connectivty cutoff:<INPUT TYPE=TEXT NAME="connectivity" VALUE="0.80" SIZE=4 MAXLENGTH=4>
+								</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><BR>Email Address (Optional):<INPUT TYPE=TEXT NAME='email' SIZE=40 VALUE="">
+				</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><BR><INPUT TYPE=SUBMIT VALUE="SUBMIT"> <INPUT TYPE=RESET VALUE="RESET">
+				</P>
+			</TD>
+		</TR>
+	</TABLE>
+</FORM>
+<P><BR><BR>
+</P>
+<H3 ALIGN=CENTER><BR><BR>
+</H3>
+</BODY>
+</HTML>
