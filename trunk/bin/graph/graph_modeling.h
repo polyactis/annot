@@ -20,6 +20,8 @@ struct edge
 	float value;
 	//degree of freedom, discard those invalid columns
 	int degree;
+	//03-02-05 significane flag
+	int significance;
 };
 
 //once I thought wrapping a C++ class with a c function would solve the problem linking with python. But it's not.
@@ -32,7 +34,7 @@ void python_call(char* outf_name, vector<int> edge_vector, vector<string> expr_a
  * */
 edge ind_min_cor(vf v1, vf v2);
 edge ind_cor(vf v1, vf v2, int position);
-
+void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_given);
 
 class graph_construct
 {

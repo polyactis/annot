@@ -1,9 +1,17 @@
+/*
+*
+*03-02-05
+*       add a feature to get a significance flag for each edge
+*/
+
+
 #include "graph_modeling.h"
 
 const int GENE_CUT_OFF = 8;
 const int JK_CUT_OFF = 7;
 const float COR_CUT_OFF = 0.6;
 
+vector<float> cor_cut_off_vector;
 
 void python_call(char* outf_name, vector<int> edge_vector, vector<string> expr_array, int no_genes)
 {
@@ -18,11 +26,19 @@ edge ind_min_cor(vf v1, vf v2)
 	edge edge_data_tmp;
 	edge_data_to_return.value = 10.0;
 	edge_data_to_return.degree = 0;
+	//03-02-05	significance flag default to 0
+	edge_data_to_return.significance = 0;
 	for(int i=0; i<v1.size(); i++)
 	{
 		edge_data_tmp = ind_cor(v1, v2, i);
 		if(abs(edge_data_tmp.value)<abs(edge_data_to_return.value))
 			edge_data_to_return = edge_data_tmp;
+	}
+	if((edge_data_to_return.degree+2)>=JK_CUT_OFF && \
+		edge_data_to_return.value >= cor_cut_off_vector[edge_data_to_return.degree-1] && edge_data_to_return.value<=1.0)
+	{
+		//03-02-05	valid data points = degree + 2
+		edge_data_to_return.significance = 1;
 	}
 	return edge_data_to_return;
 }
@@ -72,7 +88,28 @@ edge ind_cor(vf v1, vf v2, int position)
 		edge_data.value = xy/(sqrt(xx*yy));
 	//correlation is modeled as a t distribution of n-2 degree.
 	edge_data.degree = no_of_valids-2;
+	edge_data.significance = 0;
 	return edge_data;
+}
+
+
+//03-02-05	fill the global cor_cut_off_vector with cutoff values, if p_value_cut_off is ==0, use cor_cut_off_given instead.
+void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_given)
+{
+	double cor_cut_off, t;
+	for(int i=1; i<400; i++)
+	{
+		if(p_value_cut_off != 0)
+		{
+			t = gsl_cdf_tdist_Qinv(p_value_cut_off, i);
+			//convert the t to the correlation, see log file.
+			cor_cut_off = sqrt(gsl_pow_2(t)/(gsl_pow_2(t)+i));
+			cor_cut_off_vector.push_back((float)cor_cut_off);
+		}
+		else
+			cor_cut_off_vector.push_back((float)cor_cut_off_given);
+
+	}
 }
 
 
@@ -244,7 +281,7 @@ void graph_construct::edge_construct()
 		for (int j=i+1; j<no_of_genes; j++)
 		{
 			edge_data = min_cor(gene_array[i], gene_array[j]);
-			if(edge_data.degree>=JK_CUT_OFF && edge_data.value >= cor_cut_off_array[edge_data.degree-1] && edge_data.value<=1.0)
+			if((edge_data.degree+2)>=JK_CUT_OFF && edge_data.value >= cor_cut_off_array[edge_data.degree-1] && edge_data.value<=1.0)
 			{
 				no_of_01++;
 				out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<edge_data.value<<endl;
