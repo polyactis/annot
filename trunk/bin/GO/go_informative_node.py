@@ -11,7 +11,7 @@ Option:
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
 	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
-	-n, --informative	employ the informative node approach
+	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 5)
 	-b, --bfs	construct by BFS instead of index
 	-h, --help      show this help
 	
@@ -20,7 +20,7 @@ Examples:
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t 1
 	go_informative_node.py -k hs_yh60_42 -b
-	go_informative_node.py -k sc_38_all_no_info -n -b
+	go_informative_node.py -k sc_38_all_no_info -n 2 -b
 
 Description:
 	First usage:
@@ -145,7 +145,7 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type, informative):
+	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type, node_type):
 		self.schema = schema
 		if self.schema:
 		#input from database
@@ -158,7 +158,7 @@ class go_informative_node_bfs:
 			self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
 		self.size = int(size)
 		self.type = int(type)
-		self.informative = int(informative)
+		self.node_type = int(node_type)
 		output_format_dict = {0:self.output_full,
 			1:self.output_stat,
 			2:self.output_between}
@@ -174,6 +174,7 @@ class go_informative_node_bfs:
 		self.go_id2go_name = {}	#mapping between go_id an it's name
 		self.go_id_descendent2gene_id_dict = {}
 		self.informative_node_dict = {}
+		self.go_id2depth = {}
 		self.log_file = open('/tmp/go_informative_node.log', 'w')
 
 	def dstruc_loadin(self):
@@ -209,7 +210,7 @@ class go_informative_node_bfs:
 			else:
 				self.go_id2gene_id_dict[go_id].add(gene_id)
 		#get the non-obsolete biological_process GO DAG
-		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc,t1.depth, t2.depth from \
 			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
 			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
 			t1.term_type='biological_process' and t2.term_type='biological_process' ")
@@ -217,6 +218,10 @@ class go_informative_node_bfs:
 		for row in rows:
 		#setup the go_graph structure
 			self.go_graph.add((row[2], row[3]))
+			depth1 = int(row[4])
+			depth2 = int(row[5])
+			self.go_id2depth[row[2]] = depth1
+			self.go_id2depth[row[3]] = depth2
 		self.go_id_set = kjSet(self.go_graph.keys() + self.go_graph.values())
 		
 		#setup self.go_id2go_name
@@ -228,6 +233,10 @@ class go_informative_node_bfs:
 		sys.stderr.write("Done\n")
 
 	def run(self):
+		"""
+		03-06-05
+			add the third node type, level=5
+		"""
 		if self.schema:
 		#input from database	
 			self.dstruc_loadin_from_db()
@@ -244,14 +253,17 @@ class go_informative_node_bfs:
 			for descendent in descendent_set.items():
 				if descendent in self.go_id2gene_id_dict:
 					self.go_id_descendent2gene_id_dict[go_id] += self.go_id2gene_id_dict[descendent]
-			if self.informative:
+			if self.node_type==2:
 				self.informative_node_dict[go_id] = 0
-			else:
+			elif self.node_type==1:
 				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0:
 					#not biological_process and have >0 genes associated, then they are informative nodes.
 					self.informative_node_dict[go_id] = 1
-				
-		if self.informative:
+			elif self.node_type==3:
+				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0 and self.go_id2depth[go_id]==4:
+					#not biological_process and have >0 genes associated and depth=4(level=5)
+					self.informative_node_dict[go_id] = 1
+		if self.node_type==1:
 			#below is analogous to BFS,
 			#informative_node_dict's role is similar to vertex coloring in real BFS
 			self.informative_node_dict[self.root] = 1
@@ -292,7 +304,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:nb", ["help", "hostname=", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "informative", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:n:b", ["help", "hostname=", \
+			"dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "node_type=", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -304,7 +317,7 @@ if __name__ == '__main__':
 	go_index = ''
 	size = 60
 	type = 0
-	informative = 0
+	node_type = 1
 	bfs = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -324,15 +337,15 @@ if __name__ == '__main__':
 			size = int(arg)
 		elif opt in ("-t", "--type"):
 			type = int(arg)
-		elif opt in ("-n", "--informative"):
-			informative = 1
+		elif opt in ("-n", "--node_type"):
+			node_type = int(arg)
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and schema:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, informative)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, node_type)
 		instance.run()
 	elif bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, informative)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, node_type)
 		instance.run()		
 	elif go_association and go_index:
 		instance = go_informative_node(go_association, go_index, size, type)
