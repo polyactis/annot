@@ -286,6 +286,7 @@ class graph_reorganize:
 			return	1
 		global_struc = pickle.load(open(self.pickle_fname, 'r'))
 		self.global_graph_list = global_struc['graph_list']
+		self.global_vertex_dict = global_struc['vertex_dict']
 		self.global_vertex_list = global_struc['vertex_list']
 		for i in self.global_vertex_list:
 			self.vertex_block += 'v %d %s\n'%(self.global_vertex_list.index(i)+1, i)
@@ -308,8 +309,8 @@ class graph_reorganize:
 				vertex1_label = list[1]
 				vertex2_label = list[2]
 				outf.write('e %d %d %s\n'% \
-								(self.global_vertex_list.index(vertex1_label)+1, \
-								self.global_vertex_list.index(vertex2_label)+1, \
+								(self.global_vertex_dict[vertex1_label], \
+								self.global_vertex_dict[vertex2_label], \
 								list[3],)
 								)
 			line = inf.readline()
@@ -353,9 +354,11 @@ def mapping_batch(dir):
 
 	instance.global_vertex_list = instance.global_vertex_dict.keys()
 	instance.global_vertex_list.sort()
-	instance.global_graph_list = instance.global_graph_dict.keys()
-	global_struc = {'vertex_list': instance.global_vertex_list,
-			'graph_list': instance.global_graph_list}
+	for i in range(len(instance.global_vertex_list)):
+		instance.global_vertex_dict[instance.global_vertex_list[i]] = i+1
+	global_struc = {'vertex_dict': instance.global_vertex_dict,
+			'vertex_list': instance.global_vertex_list,
+			'graph_list': instance.global_graph_dict}
 	pickle.dump(global_struc, open(instance.pickle_fname, 'w') )
 
 if __name__ == '__main__':
