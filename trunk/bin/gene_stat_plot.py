@@ -647,7 +647,10 @@ class gene_stat:
 				key = (k_go_no, p_go_no)
 			elif k_go_no > p_go_no:
 				key = (p_go_no, k_go_no)
-			ancestor_set |= self.go_no2distance[key][3]
+			if key in self.go_no2distance:
+				ancestor_set |= self.go_no2distance[key][3]
+			elif self.log:
+				self.log_file("distance for %s doesn't exist.\n"%(repr(key)))
 		
 		for ancestor in ancestor_set:
 			depth = self.go_term_id2depth[ancestor]
