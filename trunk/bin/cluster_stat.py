@@ -5,6 +5,7 @@ Usage: cluster_stat.py -k SCHEMA [OPTION]
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
@@ -13,7 +14,7 @@ Option:
 Examples:
 	cluster_stat.py -k shu -c
 	cluster_stat.py -k ming1
-	cluster_stat.py -k shu_whole -c -w
+	cluster_stat.py -k shu_whole -c -w -b
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
 	The length of p_value_vector is subject to the number of functional categories.
@@ -29,10 +30,18 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class cluster_stat:
-	def __init__(self, dbname, schema, report=0, wu=0, needcommit=0):
+	def __init__(self, dbname, schema, bonferroni=0, report=0, wu=0, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		try:
+			self.curs.execute("drop index connectivity_idx")
+		except psycopg.ProgrammingError, error:
+			conn.rollback()
+			self.curs.execute("set search_path to %s"%schema)
+		self.curs.execute("truncate cluster_stat")
+		self.curs.execute("alter sequence cluster_stat_cluster_stat_id_seq restart with 1")
+		self.bonferroni = int(bonferroni)
 		self.report = int(report)
 		self.wu = int(wu)
 		self.needcommit = int(needcommit)
@@ -41,6 +50,7 @@ class cluster_stat:
 		self.global_gene_to_go_dict = {}
 		self.no_of_records = 0
 		self.logfile = open('/tmp/cluster_stat.log','w')
+		self.cluster_memory = {}
 
 	def dstruc_loadin(self):
 		if self.wu:
@@ -82,6 +92,7 @@ class cluster_stat:
 			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
+			self.curs.execute("create index connectivity_idx on cluster_stat(connectivity)")
 			self.curs.execute("end")
 			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
 		else:
@@ -89,6 +100,17 @@ class cluster_stat:
 			sys.stderr.write('\n\tNo real updates\n')
 		
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
+		if vertex_set in self.cluster_memory:
+			if self.needcommit:
+				entry = self.cluster_memory[vertex_set]
+				for gene_no in entry:
+					p_value_vector = entry[gene_no]
+					self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
+						values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
+			self.no_of_records += len(entry)
+			return
+		else:
+			_cluster_memroy = {}
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
 		for i in range(len(vertex_list_all)):
@@ -113,17 +135,22 @@ class cluster_stat:
 					m = self._global_go_no_dict[go_no]
 					n = self.no_of_genes -1 - m
 					k = cluster_size-1
-				p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
+				if self.bonferroni:
+					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)*len(self._local_go_no_dict)
+				else:
+					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
 				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
 					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
 				if self.wu:
 					p_value_vector[go_no] = p_value
 				else:
 					p_value_vector[go_no-1] = p_value
+			_cluster_memroy[gene_no] = p_value_vector
 			if self.needcommit:
 				self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
 				values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
 			self.no_of_records += 1
+		self.cluster_memory[vertex_set] = _cluster_memroy
 
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
@@ -172,13 +199,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:cw", ["help", "report", "dbname=", "schema=", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:bcw", ["help", "report", "dbname=", "schema=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = ''
+	bonferroni = 0
 	commit = 0
 	report = 0
 	wu = 0
@@ -190,6 +218,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-b", "--bonferroni"):
+			bonferroni = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
@@ -198,7 +228,7 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = cluster_stat(dbname, schema, report, wu, commit)
+		instance = cluster_stat(dbname, schema, bonferroni, report, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 
