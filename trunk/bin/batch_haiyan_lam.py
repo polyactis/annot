@@ -116,15 +116,20 @@ class batch_haiyan_lam:
 		
 		03-19-05
 			op contains the output directory.
+		03-21-05
+			don't expand '~'.
 			
 		"""
 		#None arguments
 		if self.id == None:
-			self.id = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/data/input')
+			#self.id = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/data/input')
+			self.id = '~/bin/hhu_clustering/data/input'
 		if self.od == None:
-			self.od = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/data/output')
+			#self.od = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/data/output')
+			self.od = '~/bin/hhu_clustering/data/output'
 		if self.bd == None:
-			self.bd = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/bin')
+			#self.bd = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/bin')
+			self.bd = '~/bin/hhu_clustering/bin'
 		
 		#additional class wide parameters
 		self.input_matrix_file = os.path.join(self.id, self.mp+'.matrix')
