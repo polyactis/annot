@@ -35,11 +35,13 @@ Description:
 
 import sys, os, psycopg, getopt, csv, fileinput, math
 from sets import Set
+from codense.common import db_connect
+from numarray import greater_equal
 
 class gene_stat:
 	"""
-	dstruc_loadin()
 	run()
+		--dstruc_loadin()
 		--core_from_files()
 		or
 		--core()
@@ -53,13 +55,14 @@ class gene_stat:
 	03-08-05
 		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 	"""
-	def __init__(self, hostname, dbname, schema, table, mcl_table, leave_one_out, wu, report=0,\
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, \
+		mcl_table=None, leave_one_out=0, wu=0, report=0,\
 		depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene',\
-		subgraph_cut_off=0.8, debug=0, recurrence_gap_size=2, connectivity_gap_size=2):
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
+		subgraph_cut_off=0, debug=0, recurrence_gap_size=2, connectivity_gap_size=2):
+		
+		self.hostname = hostname
+		self.dbname = dbname
 		self.schema = schema
-		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		self.mcl_table = mcl_table
 		self.leave_one_out = int(leave_one_out)
@@ -76,6 +79,9 @@ class gene_stat:
 		#debug flags in several functions
 		self.debug_L1_match = 0
 		self.debug_common_ancestor_deep_enough = 0
+		
+		self.distance_table = 'go.node_dist'
+		
 		#the gap between two recurrences
 		self.recurrence_gap_size = int(recurrence_gap_size)
 		self.connectivity_gap_size = int(connectivity_gap_size)
@@ -93,75 +99,27 @@ class gene_stat:
 		self.go_term_id2depth = {}
 		self.go_term_id2go_no = {}
 		self.go_no2go_id = {}
+		self.go_no2term_id = {}
 		self.no_of_records = 0
 
-	def dstruc_loadin(self):
-		sys.stderr.write("Loading Data STructure...")
+	def dstruc_loadin(self, curs):
+		"""
+		03-14-05
+			remove the distance loading part
+		"""
+		sys.stderr.write("Loading Data STructure...\n")
+		from codense.common import get_known_genes_dict, get_go_no2go_id,\
+			get_go_no2term_id, get_go_no2depth, get_go_term_id2go_no, \
+			get_go_term_id2depth
 		
-		#setup self.known_genes_dict
-		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
-		rows = self.curs.fetchall()
-		for row in rows:
-			go_functions_list = row[1][1:-1].split(',')
-			self.known_genes_dict[row[0]] = Set()
-			for go_no in go_functions_list:
-				self.known_genes_dict[row[0]].add(int(go_no))
-
-		#setup self.go_no2go_name and self.go_term_id2go_no
-		self.curs.execute("select g.go_no, t.name, t.id from go g, go.term t where g.go_id=t.acc")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.go_term_id2go_no[row[2]] = row[0]
-		
-		#setup sefl.go_no2go_id and self.go_no2depth
-		self.curs.execute("select go_no, go_id, depth from go")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.go_no2go_id[row[0]] = row[1]
-			self.go_no2depth[row[0]] = row[2]
-		
-		#setup self.go_term_id2depth
-		self.curs.execute("select id, depth from go.term where depth NOTNULL")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.go_term_id2depth[row[0]] = row[1]
-		
-		#setup self.go_no2distance
-		sys.stderr.write("loading distances ....")
-		self.curs.execute("DECLARE dist_crs CURSOR FOR select go_id1, go_id2, raw_distance, lee_distance, jasmine_distance, \
-			common_ancestor_list from go.node_dist")
-		self.curs.execute("fetch 10000 from dist_crs")
-		rows = self.curs.fetchall()
-		while rows:
-			for row in rows:
-				go_no1 = self.go_term_id2go_no.get(row[0])
-				go_no2 = self.go_term_id2go_no.get(row[1])
-				common_ancestor_list = row[5][1:-1].split(',')
-				common_ancestor_list = map(int, common_ancestor_list)
-				common_ancestor_set = Set(common_ancestor_list)
-				if go_no1 and go_no2:
-					#key tuple in ascending order
-					if go_no1<go_no2:
-						self.go_no2distance[(go_no1, go_no2)] = (row[2], row[3], row[4], common_ancestor_set)
-					else:
-						self.go_no2distance[(go_no2, go_no1)] = (row[2], row[3], row[4], common_ancestor_set)
-			self.curs.execute("fetch 5000 from dist_crs")
-			rows = self.curs.fetchall()
+		self.known_genes_dict = get_known_genes_dict(curs)
+		self.go_no2go_id = get_go_no2go_id(curs)
+		self.go_no2term_id = get_go_no2term_id(curs)
+		self.go_no2depth = get_go_no2depth(curs)
+		self.go_term_id2go_no = get_go_term_id2go_no(curs)
+		self.go_term_id2depth = get_go_term_id2depth(curs)
 		
 		sys.stderr.write("Done\n")
-
-	def run(self):
-		if self.dir_files and self.leave_one_out==0:
-			sys.stderr.write("working on files of cluster_stat.py results, it must be leave_one_out.\n")
-			sys.exit(2)
-		if self.dir_files:
-			self.core_from_files()
-		else:
-			self.core()
-
-		if self.needcommit and self.leave_one_out:
-			#Database updating is too slow. Do it only if needcommit.
-			self.submit()
 
 	def core_from_files(self):
 		#following codes are attaching directory path to each file in the list
@@ -177,8 +135,8 @@ class gene_stat:
 			row[0] = int(row[0])
 			row[1] = int(row[1])
 			row[3] = float(row[3])
-			self.curs.execute("select recurrence_array, vertex_set from %s where mcl_id=%d"%(self.mcl_table, int(row[0])) )
-			rows = self.curs.fetchall()
+			curs.execute("select recurrence_array, vertex_set from %s where mcl_id=%d"%(self.mcl_table, int(row[0])) )
+			rows = curs.fetchall()
 			#first append the recurrence_array
 			row.append(rows[0][0])
 			#second append the vertex_set
@@ -191,34 +149,42 @@ class gene_stat:
 		if self.report:
 			sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 
-	def core(self):
+	def core(self, curs):
+		"""
+		03-14-05
+			load go_no2distance on demand
+		"""
+		sys.stderr.write("Starting gene-stat...\n")
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		node_distance_class = gene_p_map_redundancy()
 		#the central function of the class
 		if self.leave_one_out:
 			#leave_one_out method gets data from both cluster_stat-like and mcl_result-like table
-			self.curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.leave_one_out, c.p_value_vector, \
+			curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.leave_one_out, c.p_value_vector, \
 				 c.connectivity, m.recurrence_array, m.vertex_set from %s c, %s m where c.mcl_id=m.mcl_id"\
 				%(self.table, self.mcl_table))
 		else:
 			#no leave_one_out method gets data only from mcl_result-like table
-			self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio, \
+			curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio, \
 				recurrence_array from %s where connectivity>=%f and p_value_min notnull and array_upper(recurrence_array, 1)>=%d\
 				and array_upper(vertex_set, 1)<=%d"%(self.mcl_table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
 		
-		self.curs.execute("fetch 5000 from crs")
-		rows = self.curs.fetchall()
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
 		while rows:
 			for row in rows:
 				if self.leave_one_out:
 					#in leave_one_out, only one gene's function is predicted based on one row
-					self._gene_stat_leave_one_out(row)
+					self._gene_stat_leave_one_out(row, node_distance_class, curs)
 				else:
 					#in no leave_one_out, function of all vertices in that cluster is predicted based on one row
 					self._gene_stat_no_leave_one_out(row)
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 			
-			self.curs.execute("fetch 5000 from crs")
-			rows = self.curs.fetchall()
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		sys.stderr.write("Done.\n")
 	
 	def _gene_stat_no_leave_one_out(self, row):
 		"""
@@ -226,7 +192,7 @@ class gene_stat:
 		"""
 		pass
 	
-	def _gene_stat_leave_one_out(self, row):
+	def _gene_stat_leave_one_out(self, row, node_distance_class=None, curs=None):
 		"""
 		03-08-05
 			set a default(1.0) for min_p_value
@@ -238,8 +204,12 @@ class gene_stat:
 		03-08-05
 			fix another important bug
 			when looking for other functions that have same min_p_value, the depth_cut_off requirement is forgotten.
+		
+		03-14-05
+			getting go_no2distance via node_distance_class
 			
 		"""
+		
 		mcl_id = row[0]
 		gene_no = row[1]
 		p_value_vector = row[2][1:-1].split(',')
@@ -249,11 +219,12 @@ class gene_stat:
 		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
 		
-		#take the floor of the recurrence
+		#subgraph_cut_off is the cutoff for a cluster to be counted as occurred
 		if self.subgraph_cut_off!=0:
 			#0 means no cutoff
 			recurrence_array = greater_equal(recurrence_array, self.subgraph_cut_off)
 		"""
+		#take the floor of the recurrence
 		recurrence = int(math.floor(sum(recurrence_array)/self.recurrence_gap_size)*self.recurrence_gap_size)
 		#take the floor of the connectivity *10
 		connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
@@ -316,8 +287,8 @@ class gene_stat:
 				if gene_no in self.known_genes_dict:
 					k_functions_set = self.known_genes_dict[gene_no]
 					is_correct = self.direct_match(go_no, k_functions_set)
-					is_correct_L1 = self.L1_match(go_no, k_functions_set)
-					is_correct_lca = self.common_ancestor_deep_enough(go_no, k_functions_set)
+					is_correct_L1 = self.L1_match(go_no, k_functions_set, node_distance_class, curs)
+					is_correct_lca = self.common_ancestor_deep_enough(go_no, k_functions_set, node_distance_class, curs)
 				else:
 					#unknown gene
 					is_correct = -1
@@ -344,7 +315,7 @@ class gene_stat:
 		new_list.sort()
 		return new_list
 
-	def direct_match(self, p_go_no, k_functions_set):
+	def direct_match(self, p_go_no, k_functions_set, node_distance_class=None, curs=None):
 		if self.go_no2depth[p_go_no] < self.depth_cut_off:
 			#first see if it's deep enough
 			return 0
@@ -354,7 +325,11 @@ class gene_stat:
 			else:
 				return 0
 	
-	def L1_match(self, p_go_no, k_functions_set):
+	def L1_match(self, p_go_no, k_functions_set, node_distance_class=None, curs=None):
+		"""
+		03-14-05
+			getting go_no2distance via node_distance_class
+		"""
 		if self.debug_L1_match:
 			print "\t\t ### In function L1_match() "
 		#default not match
@@ -374,27 +349,30 @@ class gene_stat:
 			elif  k_go_no > p_go_no:
 				key = (p_go_no, k_go_no)
 			if key in self.go_no2distance:
-				if self.go_no2distance[key][2] == 1:
-					#jasmine distance = 1
-					if self.debug_L1_match:
-						print 'One of %s and %s are one step away from their lowest common ancestor, \
-							with depth_cut_off, %d'%(p_go_no, k_go_no, self.depth_cut_off)
-						raw_input("Pause:")
-					flag = 1
-					break
+				jasmine_distance = self.go_no2distance[key][2]
 			else:
+				jasmine_distance = node_distance_class.get_distance(curs, k_go_no, p_go_no, self.distance_table, \
+					self.go_no2distance, self.go_no2term_id)
+			if jasmine_distance == 1:
+				#jasmine distance = 1
 				if self.debug_L1_match:
-					print "something wrong, %s's distance is unknown"%repr(key)
+					print 'One of %s and %s are one step away from their lowest common ancestor, \
+						with depth_cut_off, %d'%(p_go_no, k_go_no, self.depth_cut_off)
+					raw_input("Pause:")
+				flag = 1
+				break
 			
 		if self.debug_L1_match:
 			print "\t\t ###leave function L1_match()"
 		return flag
 	
-	def common_ancestor_deep_enough(self, p_go_no, k_functions_set):
+	def common_ancestor_deep_enough(self, p_go_no, k_functions_set, node_distance_class=None, curs=None):
 		"""
 		03-10-05
 			add three lines in the beginning to check if p_go_no is deep enough.
 			find a bug, in case of k_go_no==p_go_no, the function should return 1.
+		03-14-05
+			getting go_no2distance via node_distance_class
 		"""
 		if self.debug_common_ancestor_deep_enough:
 			print "\t\t ### Enter common_ancestor_deep_enough() "
@@ -412,8 +390,11 @@ class gene_stat:
 				key = (p_go_no, k_go_no)
 			if key in self.go_no2distance:
 				ancestor_set |= self.go_no2distance[key][3]
-			elif self.debug_common_ancestor_deep_enough:
-				print "distance for %s doesn't exist.\n"%(repr(key))
+			else:
+				node_distance_class.get_distance(curs, k_go_no, p_go_no, self.distance_table, \
+					self.go_no2distance, self.go_no2term_id)
+				ancestor_set |= self.go_no2distance[key][3]
+			
 		#in case no ancestor at all
 		depth = 0
 		for ancestor in ancestor_set:
@@ -431,7 +412,7 @@ class gene_stat:
 		if self.debug_common_ancestor_deep_enough:
 			print "\t\t ### Leave common_ancestor_deep_enough() "
 	
-	def submit(self):
+	def submit(self, curs, gene_table):
 		"""
 		02-21-05
 			Changes to table p_gene,
@@ -450,10 +431,10 @@ class gene_stat:
 			11. unknown_cut_off is the real unknown_gene_ratio
 			12. e_accuracy is deprecated
 		"""
-		sys.stderr.write("Database transacting...")
-		if self.gene_table!='p_gene':
+		sys.stderr.write("Creating table %s..."%gene_table)
+		if gene_table!='p_gene':
 			#create the table if it's not 'p_gene'
-			self.curs.execute("create table %s(\
+			curs.execute("create table %s(\
 				p_gene_id       serial,\
 				gene_no integer,\
 				go_no   integer,\
@@ -472,8 +453,10 @@ class gene_stat:
 				unknown_cut_off      float,\
 				depth_cut_off integer,\
 				mcl_id integer\
-				)"%self.gene_table)
+				)"%gene_table)
+		sys.stderr.write("Done.\n")
 		
+		sys.stderr.write("Database submitting...")
 		"""the value of self.prediction_tuple2list, [[p_value, cluster_id, gene_no, go_no, is_correct, \
 			is_correct_L1, is_correct_lca, cluster_size, unknown_gene_ratio], [...],  ... ] """
 		for (tuple, prediction_list)  in self.prediction_tuple2list.iteritems():
@@ -489,17 +472,37 @@ class gene_stat:
 				is_correct_lca = unit[6]
 				cluster_size = unit[7]
 				unknown_gene_ratio = unit[8]
-				self.curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+				curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 					avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
 					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id)\
 					values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s)"%\
-					(self.gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
+					(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 					p_value, 1, repr([mcl_id]), p_value, recurrence,\
 					connectivity, cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id))
 
-		if self.needcommit:
-			self.curs.execute("end")
 		sys.stderr.write("done.\n")
+
+	def run(self):
+		"""
+		03-14-05
+			module reuse direction
+			load go distance on demand
+		"""
+		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+		self.dstruc_loadin(curs)
+		if self.dir_files and self.leave_one_out==0:
+			sys.stderr.write("working on files of cluster_stat.py results, it must be leave_one_out.\n")
+			sys.exit(2)
+		if self.dir_files:
+			self.core_from_files()
+		else:
+			self.core(curs)
+
+		if self.needcommit and self.leave_one_out:
+			#Database updating is too slow. Do it only if needcommit.
+			self.submit(curs, self.gene_table)
+		if self.needcommit:
+			curs.execute("end")
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -572,7 +575,6 @@ if __name__ == '__main__':
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, \
 			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table, \
 			subgraph_cut_off, debug, recurrence_gap_size, connectivity_gap_size)
-		instance.dstruc_loadin()
 		instance.run()
 	else:
 		print __doc__
