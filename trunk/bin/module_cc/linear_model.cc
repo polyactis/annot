@@ -15,6 +15,7 @@ class linear_model
 	void run();
 	list coefficients();
 	tuple chisq_return();
+	void cleanup();
 	
 	double chisq;
 	gsl_matrix *X, *cov;
@@ -28,6 +29,14 @@ linear_model::linear_model()
 
 linear_model::~linear_model()
 {
+}
+
+void linear_model::cleanup()
+{
+	/*
+	*02-28-05
+	*	the cleanup replaces ~linear_model. Suitable for repetitive calling by p_gene_lm.py
+	*/
 	gsl_matrix_free(X);
 	gsl_matrix_free(cov);
 	gsl_vector_free(y);
@@ -94,5 +103,6 @@ BOOST_PYTHON_MODULE(linear_model)
 		.def("run", &linear_model::run)
 		.def("coefficients", &linear_model::coefficients)
 		.def("chisq_return", &linear_model::chisq_return)
+		.def("cleanup", &linear_model::cleanup)
 	;
 }
