@@ -62,7 +62,7 @@ class mcl_to_db:
 		try:
 			self.curs.execute("drop index splat_id_idx")
 		except psycopg.ProgrammingError, error:
-			conn.rollback()
+			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
 		self.curs.execute("truncate mcl_result")
 		self.curs.execute("alter sequence mcl_result_mcl_id_seq restart with 1")
