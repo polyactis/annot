@@ -21,25 +21,30 @@ Description:
 
 
 import sys, os, re, getopt
+from kjbuckets import *
 
 class graph_merge:
 	'''
+	02-26-05
+		use the kjDict to reduce the memory usage, but no effect.
 	'''
 	def __init__(self, support, dir, ofname):
 		self.support = int(support)
 		self.dir = dir
 		self.of = open(ofname, 'w')
+
+	
+	def dstruc_loadin(self, dir):
+		#output block put before edges
+		first_block = ''
 		#data structure to store the merged graph. key is the edge.
 		#value is the recurrence
-		self.graph_dict = {}
-		#output block put before edges
-		self.first_block = ''
-	
-	def dstruc_loadin(self):
-		files = os.listdir(self.dir)
+		graph_dict = kjDict()
+		
+		files = os.listdir(dir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		for f in files:
-			pathname = os.path.join(self.dir, f)
+			pathname = os.path.join(dir, f)
 			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 			file_no = files.index(f)+1
 			inf = open(pathname, 'r')
@@ -53,24 +58,27 @@ class graph_merge:
 						edge = (vertex1, vertex2)
 					else:
 						edge = (vertex2, vertex1)
-					if edge in self.graph_dict:
-						self.graph_dict[edge] += 1
+					if graph_dict.has_key(edge):
+						graph_dict[edge] += 1
 					else:
-						self.graph_dict[edge] = 1
+						graph_dict[edge] = 1
 				elif file_no == 1:
-					self.first_block += line
+					first_block += line
 			inf.close()
+		
+		return (first_block, graph_dict)
 
-	def output(self):
+	def output(self, first_block, graph_dict, support):
 		#output the preceding block first
-		self.of.write(self.first_block)
-		for (edge, recurrence) in self.graph_dict.iteritems():
-			if recurrence >= self.support:
+		self.of.write(first_block)
+		for edge in graph_dict.keys():
+			recurrence = graph_dict[edge]
+			if recurrence >= support:
 				self.of.write("e %d %d %d\n"%(edge[0], edge[1], recurrence))
 	
 	def run(self):
-		self.dstruc_loadin()
-		self.output()
+		(first_block, graph_dict) = self.dstruc_loadin(self.dir)
+		self.output(first_block, graph_dict, self.support)
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
