@@ -7,7 +7,7 @@ Option:
 	-k ..., --kMax_dir=...	the directory containing the kMax programs.
 		default is '~/bin/kMax/'
 	-p ..., --parameter=...	parameter passed to kMax, double quoted.
-	-m ..., --max_bound=...	max_bound of kMax, 15(default)
+	-m ..., --max_bound=...	max_bound of kMax, 10(default)
 	-h, --help              show this help
 	
 Examples:
@@ -92,6 +92,8 @@ class kMax_batch_run:
 					splat_id_line = kMax_block.readline()
 					#write the splat_id_line first
 					job_outf.write(splat_id_line)
+					#write the parameter second
+					job_outf.write('p %s %d\n'%(self.parameter, self.max_bound))
 					intermediate_if = open(self.intermediate_ifname, 'w')
 					intermediate_if.write(kMax_block.read())
 					job_f = open(job_fname, 'w')
@@ -132,7 +134,7 @@ if __name__ == '__main__':
 
 	kMax_dir = '~/bin/kMax'
 	parameter = '0.7 0.8 2'
-	max_bound = 15
+	max_bound = 10
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
