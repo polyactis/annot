@@ -44,34 +44,34 @@ class GO_no_parent_filter(GO_graphxml):
 			#throw away the first line
 			reader.next()
 			for row in reader:
-					probe_id = row[0]
-					#go term list is on the fourth column
-					if row[3] == '':
+				probe_id = row[0]
+				#go term list is on the fourth column
+				if row[3] == '':
+					continue
+				acc_list = row[3].split('|')
+				node_list = []
+				#transform the go term to termid,
+				for acc in acc_list:
+					#may not be obsolete, but still not exist
+					if acc in self.acc2id_dict:
+						node_list.append(self.acc2id_dict[acc])
+				#get the subgraph constituted by these nodes
+				go_subgraph = self.go_graph.subgraph_from_node_list(node_list)
+				#visualize it
+				if self.visualize==1:
+					dot = GraphDot.Dot(go_subgraph)
+					dot.display()
+					yes = raw_input("Continue? (y/n):\t")
+					if yes == 'y':
 						continue
-					acc_list = row[3].split('|')
-					node_list = []
-					#transform the go term to termid,
-					for acc in acc_list:
-						#may not be obsolete, but still not exist
-						if acc in self.acc2id_dict:
-							node_list.append(self.acc2id_dict[acc])
-					#get the subgraph constituted by these nodes
-					go_subgraph = self.go_graph.subgraph_from_node_list(node_list)
-					#visualize it
-					if self.visualize==1:
-						dot = GraphDot.Dot(go_subgraph)
-						dot.display()
-						yes = raw_input("Continue? (y/n):\t")
-						if yes == 'y':
-							continue
-						else:
-							sys.exit(2)
-					#get the terminal nodes
 					else:
-						for node in node_list:
-							#terminal node in this subgraph is the real GO annotation, output the third column to indicate obsolete or not
-							if go_subgraph.out_degree(node) == 0:
-								of.write('%s\t%s\t%d\t%d\n'%(probe_id, self.termid_dict[node].acc, node, self.termid_dict[node].is_obsolete))
+						sys.exit(2)
+				#get the terminal nodes
+				else:
+					for node in node_list:
+						#terminal node in this subgraph is the real GO annotation, output the third column to indicate obsolete or not
+						if go_subgraph.out_degree(node) == 0:
+							of.write('%s\t%s\t%d\t%d\n'%(probe_id, self.termid_dict[node].acc, node, self.termid_dict[node].is_obsolete))
 
 
 if __name__ == '__main__':
