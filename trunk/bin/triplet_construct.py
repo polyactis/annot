@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import pickle,sys,os,random
+import pickle,sys,os
 
 class triplet_construct:
 	def __init__(self):
@@ -54,39 +54,35 @@ class triplet_construct:
 			
 	def local_to_global(self, global_dict):
 		for triplet in self.local_triplet_dict:
-			if global_dict.has_key(triplet):
-				global_dict[triplet] += 1
+			if self.global_triplet_dict.has_key(triplet):
+				self.global_triplet_dict[triplet] += 1
 			else:
-				global_dict[triplet] = 1
+				self.global_triplet_dict[triplet] = 1
 	
 	def run(self, inf):
 		self.init()
 		self.parse(inf)
+		sys.stderr.write('\tparsing done\n')
 		self.local_triplet_dict_construct()
+		sys.stderr.write('\tlocal triplet done\n')
 		self.local_to_global()
+		sys.stderr.write('\tlocal to global transfer done\n')
 
 def triplet_batch(dir, ofname):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 	pickle_filename = os.path.join(os.path.expanduser('~'), ofname)
 	of = open(pickle_filename, 'w')
-	global_dict = {}
+	instance = triplet_construct()
 
 	for f in files:
-		instance = triplet_construct()
 		pathname = os.path.join(dir, f)
 		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 		inf = open(pathname, 'r')
-		instance.parse(inf)
-		sys.stderr.write('parsing done\n')
-		instance.local_triplet_dict_construct()
-		sys.stderr.write('local triplet done\n')
-		instance.local_to_global(global_dict)
-		sys.stderr.write('local to global transfer done\n')
+		instance.run(inf)
 		inf.close()
-		del instance
 		
-	pickle.dump(global_dict, of)
+	pickle.dump(instance.global_triplet_dict, of)
 	'''
 	# this block is for triplet output.
 	triplet_list = instance.global_triplet_dict.keys()
@@ -103,4 +99,4 @@ def triplet_batch(dir, ofname):
 if __name__ == '__main__':
 	triplet_batch(sys.argv[1], sys.argv[2])
 	# argv[1] specifies which directory contains results from graph construction
-	# argv[2] relative path for the file to store the resultant triplet dictionary, eg. 'pickle/yeast_triplet'.
+	# argv[2] the path,relative the user's home directory, for the file to store the resultant triplet dictionary, eg. 'pickle/yeast_triplet'.
