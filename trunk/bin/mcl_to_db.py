@@ -70,8 +70,7 @@ class mcl_to_db:
 							self.conn.rollback()
 							sys.exit(1)
 						no+=1
-					string = repr(no)
-					sys.stderr.write('%s%s'%('\x08'*(len(string)+1), string))
+					sys.stderr.write('%s%s'%('\x08'*80, no))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal clusters: %d\n'%no)

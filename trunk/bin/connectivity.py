@@ -49,11 +49,9 @@ class compute_connectivity:
 					self.mcl_atom_update(splat_id, edge_set)
 			
 			if self.table == 'splat':
-				string = repr(self.no_of_splat_records)
-				sys.stderr.write("%s%s"%("\x08"*(len(string)+1),string))
+				sys.stderr.write("%s%s"%("\x08"*80,self.no_of_splat_records))
 			elif self.table == 'mcl':
-				string = repr(self.no_of_mcl_records)
-				sys.stderr.write("%s%s"%("\x08"*(len(string)+1),string))
+				sys.stderr.write("%s%s"%("\x08"*80,self.no_of_mcl_records))
 			self.curs.execute("fetch 1000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
