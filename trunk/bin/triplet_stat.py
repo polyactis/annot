@@ -11,10 +11,11 @@ Examples:
 	triplet_stat.py -k ming2 gph_result/triplet_6
 
 Description:
-
+	Triplet never means triplet. Triplet can be any large(>3).
+	The name is history relics.
 """
 
-import pickle,sys,os,random,getopt,psycopg
+import pickle,sys,os,random,getopt,psycopg,csv
 
 
 class triplet_stat:
@@ -72,15 +73,11 @@ class triplet_stat:
 		
 	def recurrence_triplet_list_construct(self, triplet_fname):
 		inf = open(triplet_fname, 'r')
-		line = inf.readline()
-		while line:
-			vertex_list = line[:-1].split(',')
-			vertex_list[0] = int(vertex_list[0])
-			vertex_list[1] = int(vertex_list[1])
-			vertex_list[2] = int(vertex_list[2])
-			self.recurrence_triplet_list.append(vertex_list)
-			line = inf.readline()
-		inf.close()	
+		reader = csv.reader(inf)
+		for row in reader:
+			row = map(int, row)
+			self.recurrence_triplet_list.append(row)
+		inf.close()
 		
 	def recurrence_stat_list_construct(self):
 		no_of_triplets = len(self.recurrence_triplet_list)
@@ -111,16 +108,21 @@ class triplet_stat:
 		
 		
 	def is_homogenious(self, triplet, dict):
-		if triplet[0] not in dict or triplet[1] not in dict or triplet[2] not in dict:
-			return 0
-		list = dict[triplet[0]] + dict[triplet[1]] + dict[triplet[2]]
+		list = []
+		for vertex in triplet:
+			if vertex not in dict:
+			#for the transfac_dict, some known genes' trans-factors are unknown.
+				return 0
+			else:
+				list += dict[vertex]
+		no_of_vertices = len(triplet)
 		judge_dict = {}
 		for item in list:
 			if judge_dict.has_key(item):
 				judge_dict[item] += 1
 			else:
 				judge_dict[item] = 1
-			if judge_dict[item] == 3:
+			if judge_dict[item] == no_of_vertices:
 				return 1
 		return 0
 
