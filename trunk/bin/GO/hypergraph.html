@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>GeneOntology Hypergraph</title>
+</head>
+<body>
+<applet code="hypergraph.applications.hexplorer.HExplorerApplet" align="baseline" archive="hypergraph/hyperapplet.jar" width="900" height="500" >
+
+<param name="file" value="hypergraph/go.xml" >
+
+</applet >
+
+<FORM ACTION="/cgi_bin/go_hypergraph.cgi" METHOD="POST" ENCTYPE="multipart/form-data">
+	<TABLE WIDTH=605 BORDER=0 CELLPADDING=2 CELLSPACING=0>
+		<COL WIDTH=601>
+		<TR>
+			<TD WIDTH=601>
+				<P>Cut and paste GO accession numbers, one acc per line. Show common ancestry tree.<BR><TEXTAREA NAME="go_acc_list" ROWS=5 COLS=20></TEXTAREA> 
+				</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><BR><INPUT TYPE=SUBMIT VALUE="SUBMIT"> <INPUT TYPE=RESET VALUE="RESET">
+				</P>
+			</TD>
+		</TR>
+	</TABLE>
+</FORM>
+<FORM ACTION="/cgi_bin/go_hypergraph.cgi" METHOD="POST" ENCTYPE="multipart/form-data">
+	<TABLE WIDTH=605 BORDER=0 CELLPADDING=2 CELLSPACING=0>
+		<COL WIDTH=601>
+		<TR>
+			<TD WIDTH=601>
+				<P>GO ACC: <INPUT TYPE=TEXT NAME="go_acc" SIZE=10 MAXLENGTH=10> Backward: <INPUT TYPE="checkbox" NAME="backward">
+				</P>
+			</TD>
+		</TR>
+		<TR>
+			<TD WIDTH=601>
+				<P><BR><INPUT TYPE=SUBMIT VALUE="SUBMIT"> <INPUT TYPE=RESET VALUE="RESET">
+				</P>
+			</TD>
+		</TR>
+	</TABLE>
+</FORM>
+
+
+
+</body>
+</html>
