@@ -16,9 +16,9 @@ Option:
 	-x ..., --cluster_size_cut_off=...	20(default), maximum cluster size
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
+	-v, --dominant	Only assign the dominant function(s) to a gene.
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
-	-v, --dominant	Only assign the dominant function(s) to a gene.
 	-h, --help              show this help
 
 Examples:
@@ -57,8 +57,8 @@ class gene_prediction:
 
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
-		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
-		needcommit=0, gene_table='p_gene', dominant=0):
+		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, dominant=0, report=0, \
+		needcommit=0, gene_table='p_gene'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -451,7 +451,7 @@ if __name__ == '__main__':
 	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off,\
-			leave_one_out, wu, report, commit, gene_table, dominant)
+			leave_one_out, wu, dominant, report, commit, gene_table)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
