@@ -3,7 +3,7 @@
 Usage: db_to_mcl.py -k SCHEMA -s SIZE [OPTION] MCLINPUTDIR
 
 Option:
-	MCLINPUTDIR usually is patterns-splat, output of splat.
+	MCLINPUTDIR a directory to save the mcl input files.
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-s ..., --size=...	the number of splat records in one output file
