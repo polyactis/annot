@@ -1,71 +1,86 @@
 #!/usr/bin/env python
 """
-Usage: python stat_plot.py [options]
+Usage: stat_plot.py -d DATABASENAME -c CONNECTIVITY -l LIMIT -t TAG [options]
 
 Options:
-  -d ..., --dbname=...   use specified database name(required)
-  -h, --help              show this help
+  -d ..., --dbname=...		database to connect
+  -c ..., --connectivity=...	connectivity_cut_off
+  -l ..., --limit=...	max no. of clusters related to one gene
+  -t ..., --tag=...	just tag
+  -o ..., --output=...	output file name
+  -h, --help		show this help
 
 Examples:
-
+  stat_plot.py -d mdb -c 0.8 -l 10 -t sc_known
 """
 
-import sys, os, cStringIO, psycopg, getopt, pickle
-from gene_stat import gene_stat
+import sys, os, cStringIO, psycopg, getopt
 from rpy import r
 
 class stat_plot:
-	def __init__(self, dbname):
-		self.dbname = dbname
-		self.connectivity_list = [0.8,0.9]
-		self.limit_list = [5,10,15,20]
-		self.p_value_cut_off_list = [0.1, 0.01, 0.001, 0.0005, 0.0001, 0.00001]
+	def __init__(self, dbname, connectivity, limit, tag, ofname):
+		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to graph")
+		self.connectivity = float(connectivity)
+		self.limit = int(limit)
+		self.tag = tag
+		self.ofname = ofname
 		self.stat_data = []
-		self.no_of_plots = 0
-		
-	def run(self):
-		for connectivity in self.connectivity_list:
-			for limit in self.limit_list:
-				plot_data = []
-				for p_value_cut_off in self.p_value_cut_off_list:
-					instance = gene_stat(self.dbname, p_value_cut_off, limit, connectivity)
-					instance.dstruc_loadin()
-					instance.run()
-					self.stat_data.append([connectivity, limit, p_value_cut_off, \
-					 instance.tp, instance.tn, instance.fp, instance.fn])
-					plot_data.append([instance.tp, instance.tn, instance.fp, instance.fn])
-					del instance
-				self.plot(connectivity, limit, plot_data)
 				
-	def plot(self, connectivity, limit, plot_data):
-		r.pdf('%d.pdf'%self.no_of_plots)
+	def plot(self):
+		r.pdf('%s.pdf'%self.ofname)
 		sensitivity_list = []
 		positive_predictive_value_list = []
+		self.curs.execute("select tp,tn,fp,fn from stat_plot_data where\
+			connectivity=%f and limit_of_cluster=%d and tag='%s' order by p_value_cut_off"%\
+			(self.connectivity, self.limit, self.tag))
+		plot_data = self.curs.fetchall()
 		for entry in plot_data:
-			sensitivity_list.append(entry[0]/(entry[0]+entry[3]))
-			positive_predictive_value_list.append(entry[0]/(entry[0]+entry[2]))
-		
+			sensitivity_list.append(float(entry[0])/(entry[0]+entry[3]))
+			positive_predictive_value_list.append(float(entry[0])/(entry[0]+entry[2]))
+
 		r.plot(sensitivity_list, positive_predictive_value_list, type='o',pch='*',xlab='sensitivity', \
-			ylab='positive_predictive_value', main='Connectivity: %f  Limit: %d'%(connectivity,limit))
+			ylab='positive_predictive_value', main='Connectivity: %4.2f  Limit: %d'%(connectivity,limit))
 		r.dev_off()
-		self.no_of_plots += 1
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
-		
+		sys.exit(2)
+	
+	long_option_list = ["help", "dbname=", "connectivity=", "limit=", "tag=", "output="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:", ["help", "dbname="])
+		opts, args = getopt.getopt(sys.argv[1:], "hd:c:l:t:o:", long_option_list)
 	except:
 		print __doc__
 		sys.exit(2)
-		
+	
+	dbname = ''
+	connectivity = None
+	limit = None
+	tag = None
+	output =''
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
 		elif opt in ("-d", "--dbname"):
-			instance = stat_plot(arg)
-			instance.run()
-			pickle_fname = os.path.join(os.path.expanduser('~'),'pickle/stat_data')
-			pickle.dump(instance.stat_data,open(pickle_fname,'w'))
+			dbname = arg
+		elif opt in ("-c", "--connectivity"):
+			connectivity = float(arg)
+		elif opt in ("-l", "--limit"):
+			limit = int(arg)
+		elif opt in ("-t", "--tag"):
+			tag = arg
+		elif opt in ("-o", "--output"):
+			output = arg
+	
+	if dbname and connectivity and limit and tag:
+		if output=='':
+			output = '%s_%f_%d'%(tag,connectivity,limit)
+		instance = stat_plot(dbname, connectivity, limit, tag, output)
+		instance.plot()
+	else:
+		print __doc__
+		sys.exit(2)

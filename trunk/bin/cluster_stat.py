@@ -21,6 +21,7 @@ class cluster_stat:
 		for row in rows:
 			self.global_go_id_to_no_dict[row[0]] = row[1]
 			self.global_go_no_to_size_dict[row[1]] = row[2]
+		self.no_of_functions = len(self.global_go_no_to_size_dict)
 		self.curs.execute("select gene_no,go_functions from graph.sc_gene where known=TRUE")
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -56,7 +57,7 @@ class cluster_stat:
 		cluster_size = len(vertex_list)
 		for i in range(cluster_size):
 			vertex_list[i] = int(vertex_list[i])
-		p_value_vector = [1] * 83
+		p_value_vector = [1] * self.no_of_functions
 		self.local_go_no_dict_construct(vertex_list)
 		for gene_no in vertex_list:
 			self.go_no_dict_adjust(gene_no)
