@@ -432,6 +432,9 @@ class TestPGeneLm(unittest.TestCase):
 class TestPGeneAnalysis(unittest.TestCase):
 	"""
 	02-28-05
+	
+	03-06-05
+		add more testing functions
 	"""
 	def setUp(self):
 		from p_gene_analysis import p_gene_analysis
@@ -458,7 +461,101 @@ class TestPGeneAnalysis(unittest.TestCase):
 		print self.instance.general_lm_results
 		print self.instance.return_p_value_cut_off(56, 18, 2)
 		
-
+	def test_return_go_no_map(self):
+		"""
+		03-06-05
+		"""
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#1029 is father of 824, 824 is father of 1030
+		go_no_list = [824, 1029, 1030]
+		go_no_map = self.instance.return_go_no_map(go_no_list, curs, 'go.node_dist_sc_54')
+		print go_no_map
+	
+	def test_dict_map2group(self):
+		"""
+		03-06-05
+		"""
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#1029 is father of 824, 824 is father of 1030
+		go_no_list = [824, 1029, 1030]
+		go_no_map = self.instance.return_go_no_map(go_no_list, curs, 'go.node_dist_sc_54')
+		go_no_groups = self.instance.dict_map2group(go_no_map)
+		print go_no_groups
+	
+	def test_return_data_of_the_group(self):
+		"""
+		03-06-05
+		"""
+		from p_gene_analysis import prediction_space_attr
+		#setup a go_no2prediction_space
+		go_no2prediction_space = {}
+		go_no2prediction_space[1] = {}
+		go_no2prediction_space[1][(3,2)] = prediction_space_attr()
+		unit = go_no2prediction_space[1][(3,2)]
+		unit.correct_predictions = 2
+		unit.known_predictions = 3
+		unit.unknown_predictions = 5
+		unit.tuple_list.append([0.001, 1])
+		
+		go_no2prediction_space[2] = {}
+		go_no2prediction_space[2][(4,3)] = prediction_space_attr()
+		unit = go_no2prediction_space[2][(4,3)]
+		unit.correct_predictions = 3
+		unit.known_predictions = 4
+		unit.unknown_predictions = 6
+		unit.tuple_list.append([0.05, 0])
+		
+		go_no_list = [1,2]
+		new = self.instance.return_data_of_the_group(go_no_list, go_no2prediction_space)
+		
+		#output
+		writer = csv.writer(sys.stdout, delimiter='\t')
+		self.instance.table_output(writer, new)
+		#self.output_prediction_space2attr(new)
+		
+	def test_return_cumulative_prediction_space2attr(self):
+		"""
+		03-06-05
+		"""
+		from p_gene_analysis import prediction_space_attr
+		prediction_space2attr = {}
+		prediction_space2attr[(3,2)] = prediction_space_attr()
+		unit = prediction_space2attr[(3,2)]
+		unit.correct_predictions = 2
+		unit.known_predictions = 3
+		unit.unknown_predictions = 5
+		unit.tuple_list.append([0.001, 1])
+		
+		prediction_space2attr[(4,3)] = prediction_space_attr()
+		unit = prediction_space2attr[(4,3)]
+		unit.correct_predictions = 3
+		unit.known_predictions = 4
+		unit.unknown_predictions = 6
+		unit.tuple_list.append([0.05, 0])
+		
+		new = self.instance.return_cumulative_prediction_space2attr(prediction_space2attr)
+		#output
+		writer = csv.writer(sys.stdout, delimiter='\t')
+		self.instance.table_output(writer, new)
+		#self.output_prediction_space2attr(new)
+		
+	
+	def output_prediction_space2attr(self, prediction_space2attr):
+		"""
+		03-06-05
+			output a prediction_space2attr
+		"""
+		for (prediction_space,unit) in prediction_space2attr.iteritems():
+			print "prediction_space: %s"%repr(prediction_space)
+			print "\tcorrect_predictions: %s"%unit.correct_predictions
+			print "\tknown_predictions: %s"%unit.known_predictions
+			print "\tunknown_predictions: %s"%unit.unknown_predictions
+			print "\ttuple_list: %s"%repr(unit.tuple_list)
+		
+		
+		
 class TestGenePMapRedundancy(unittest.TestCase):
 	"""
 	02-28-05
