@@ -24,14 +24,15 @@ edge ind_min_cor(vf v1, vf v2)
 {
 	edge edge_data_to_return;
 	edge edge_data_tmp;
-	edge_data_to_return.value = 10.0;
+	edge_data_to_return.value = 1.1;
 	edge_data_to_return.degree = 0;
 	//03-02-05	significance flag default to 0
 	edge_data_to_return.significance = 0;
 	for(int i=0; i<v1.size(); i++)
 	{
 		edge_data_tmp = ind_cor(v1, v2, i);
-		if(abs(edge_data_tmp.value)<abs(edge_data_to_return.value))
+		if(abs(edge_data_tmp.value)<abs(edge_data_to_return.value) && (edge_data_tmp.degree+2)>=JK_CUT_OFF)
+			//04-02-05 if no_of_valids < JK_CUT_OFF, should not modify the value to return
 			edge_data_to_return = edge_data_tmp;
 	}
 	if((edge_data_to_return.degree+2)>=JK_CUT_OFF && \
