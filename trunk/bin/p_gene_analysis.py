@@ -40,8 +40,10 @@ Examples:
 
 Description:
 	02-28-05
-	this is the second part of gene_stat_plot.py, which works on p_gene table
-	the first part goes to gene_stat.py
+	This is the second part of gene_stat_plot.py, which works on p_gene table(overhauled)
+	The first part goes to gene_stat.py.
+	Input is p_gene table. Output includes a file include some stats and a gene_p table(if commit)
+	storing the good predictions under the judger_type and other factors(p-value or linear_model)
 	03-01-05
 		add a functionality to get p_value_cut_off from linear_model
 	03-01-05
@@ -252,6 +254,8 @@ class p_gene_analysis:
 			depend on whether self.p_value_cut_off==0
 		03-06-05
 			seperate the data of different function categories, into go_no2prediction_space
+		03-08-05
+			Take the floor of recurrence and connectivity
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -262,6 +266,11 @@ class p_gene_analysis:
 		connectivity = row[6]
 		depth_cut_off = row[7]
 		p_gene_id = row[8]
+		
+		#take the floor of the recurrence
+		recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
+		#take the floor of the connectivity *10
+		connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
 		
 		if self.p_value_cut_off == 0:
 			p_value_cut_off = self.return_p_value_cut_off(go_no, recurrence, connectivity)
@@ -331,6 +340,7 @@ class p_gene_analysis:
 			get some global statistics
 			--return_known_unknown_gene_sets()
 		'''
+		sys.stderr.write("Outputing overview stats...")
 		total_correct_predictions = 0.0	#0.0 means float, 0 means int. int/int is still an int.
 		total_known_predictions = 0.0
 		total_unknown_predictions = 0.0
@@ -371,6 +381,7 @@ class p_gene_analysis:
 		
 		self.stat_table_f.writerow(['known genes', no_of_known_genes])
 		self.stat_table_f.writerow(['unknown genes', no_of_unknown_genes])
+		sys.stderr.write("Done\n")		
 	
 	def return_known_unknown_gene_sets(self, prediction_pair_list):
 		known_gene_set = Set()
@@ -388,6 +399,7 @@ class p_gene_analysis:
 		"""
 		this function computes the prediction accuracy for each go function
 		"""
+		sys.stderr.write("Computing and outputing go_no accuracy...")
 		for prediction_pair in prediction_pair2attr:
 			go_no = prediction_pair[1]
 			is_correct = prediction_pair2attr[prediction_pair].is_correct
@@ -427,6 +439,7 @@ class p_gene_analysis:
 					values(%s, %f, %d, %d)"%(go_acc_table,\
 					go_no, unit.ratio, unit.known, unit.unknown))
 			"""
+		sys.stderr.write("Done\n")		
 
 	def table_output(self, stat_table_f, prediction_space2attr):
 		'''
@@ -476,8 +489,10 @@ class p_gene_analysis:
 		sys.stderr.write("done.\n")
 
 
-
-
+	#######03-07-05 a bunch of functions related to two posterior maneuvering of 
+	#go_no2prediction_space, grouping and accumulatiing.
+	#See log of 2005, section 'linear model overfitting' for detail.
+	###begin 
 
 	def return_go_no_group2prediction_space(self, go_no2prediction_space, curs, distance_table):
 		"""
@@ -598,8 +613,27 @@ class p_gene_analysis:
 						cumulative_unit.unknown_predictions += unit.unknown_predictions
 						cumulative_unit.tuple_list += unit.tuple_list
 		return cumulative_prediction_space2attr
-
-
+	
+	######end
+	#######################
+	
+	def prediction_space_split_output(self, stat_table_f, go_no2prediction_space, recurrence_gap_size=2, connectivity_gap_size=2):
+		"""
+		03-08-05
+			Input: go_no2prediction_space
+			Output the prediction_space accuracy information go_no by go_no
+		"""
+		sys.stderr.write("Outputing prediction_space accuracy information go_no by go_no...")
+		#make a blank line
+		stat_table_f.writerow([])
+		for (go_no, unit) in go_no2prediction_space.iteritems():
+			stat_table_f.writerow(['go_no:', go_no])
+			self.table_output(stat_table_f, unit)
+			#cumulative form
+			stat_table_f.writerow(["cumulative form"])
+			cumulative_unit = self.return_cumulative_prediction_space2attr(unit, recurrence_gap_size, connectivity_gap_size)
+			self.table_output(stat_table_f, cumulative_unit)
+		sys.stderr.write("Done.\n")
 
 	def run(self):
 		"""
@@ -625,18 +659,13 @@ class p_gene_analysis:
 			self.overview_stats(self.stat_table_f)
 			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
 			self.table_output(self.stat_table_f, self.prediction_space2attr)
-			
-
-			self.stat_table_f.writerow([])
+			#first grouping the data of parent-child go functions
 			distance_table = 'go.node_dist'
 			go_no_group2prediction_space = self.return_go_no_group2prediction_space(self.go_no2prediction_space, curs, distance_table)
-			for (go_no_group, unit) in go_no_group2prediction_space.iteritems():
-				self.stat_table_f.writerow(['go_no_group:', go_no_group])
-				self.table_output(self.stat_table_f, unit)
-				self.stat_table_f.writerow(["cumulative form"])
-				cumulative_unit = self.return_cumulative_prediction_space2attr(unit, self.recurrence_gap_size, self.connectivity_gap_size)
-				self.table_output(self.stat_table_f, cumulative_unit)
-				
+			#output the prediction_space go_no by go_no
+			self.prediction_space_split_output(self.stat_table_f, go_no_group2prediction_space, self.recurrence_gap_size, self.connectivity_gap_size)
+
+
 		if self.gene_p_table:
 			self.gene_p_table_submit(curs, self.gene_p_table, self.gene_p_list)
 		if self.needcommit:
