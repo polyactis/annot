@@ -303,7 +303,7 @@ class context_specific:
 		r.dev_off()
 		
 		r.pdf('distance_hist.pdf')
-		r.hist(self.distance_hist, breaks=range(max_distance+1), las =1, main='max distance histogram', xlab='max distance of the predicted functions of one gene')
+		r.hist(self.max_distance_list, breaks=range(max_distance+1), las =1, main='max distance histogram', xlab='max distance of the predicted functions of one gene')
 		r.dev_off()
 		
 if __name__ == '__main__':
