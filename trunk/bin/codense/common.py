@@ -169,3 +169,24 @@ def get_go_no2term_id(curs, schema=None, term_table='go.term'):
 		go_no2term_id[row[0]] = row[2]
 	sys.stderr.write("Done\n")
 	return go_no2term_id
+
+def get_gene_no2go_no(curs, schema=None, gene_table='gene'):
+	"""
+	03-09-05
+		get the gene_no2go_no
+	"""
+	sys.stderr.write("Getting gene_no2go_no...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	
+	gene_no2go_no = {}
+	
+	curs.execute("select gene_no,go_functions from gene")
+	rows = curs.fetchall()
+	for row in rows:
+		gene_no2go_no[row[0]] = []
+		go_functions_list = row[1][1:-1].split(',')
+		for go_no in go_functions_list:
+			gene_no2go_no[row[0]].append(int(go_no))
+	sys.stderr.write("Done\n")
+	return gene_no2go_no
