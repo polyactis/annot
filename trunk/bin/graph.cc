@@ -16,6 +16,12 @@ typedef vector<float> vf;
 //			arg3 is the name of the dataset(whatever you like).
 //			example: ./program_name dataset1 dataset1.gph dataset1
 
+/*
+ *02-17-05(earlier)
+ *	back to use 0.6 hardcoded correlation cutoff
+ */
+
+
 class graph_construct
 {
 	vector<vf> gene_array;
@@ -163,15 +169,21 @@ void graph_construct::edge_construct()
 			{
 				
 				if ( min_cor >= COR_CUT_OFF)
+				{
 					no_of_cor6++;
+					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+				}
 				if ( min_cor >= cor_array[(df-5)][0] )
+				{
 					no_of_05++;
+				}
 				if ( min_cor >= cor_array[(df-5)][1] )
+				{
 					no_of_025++;
+				}
 				if ( min_cor >= cor_array[(df-5)][2] )
 				{
 					no_of_01++;
-					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
 				}
 			}
 		}			
