@@ -5,12 +5,13 @@ Usage: go_node_distance.py -k SCHEMA [OPTIONS]
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database to get the node_list
+	-k ..., --schema=...	which schema in the database to get the node_list,
+		public(default), (IGNORE)
 	-t ..., --table=...	table to store the node distances, node_distance(default)
 	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
 	-e, --depth	compute the depth of nodes, default is pairwise distance
 	-a, --all	compute distances between all nodes in that branch,
-		instead of getting node_list from schema.go.
+		instead of getting node_list from schema.go. (IGNORE)
 	-n,	--new_table	table is new. (create it first)
 	-r, --report	report the progress(a number) IGNORE
 	-c, --commit	commit the database transaction
@@ -19,10 +20,10 @@ Option:
 
 Examples:
 	#compute pairwise distance
-	go_node_distance.py -k sc_38_all_no_info -a -t node_dist -n -c
+	go_node_distance.py -t node_dist -n -c
 	
 	#compute the depth
-	go_node_distance.py -z localhost -d graphdb -k sc_go_all -e -r -c -a
+	go_node_distance.py -z localhost -d graphdb -e -r -c
 	
 Description:
 	Program to compute three kinds of distances between two GO nodes and
@@ -53,15 +54,18 @@ class distance_of_2nodes:
 
 class go_node_distance:
 	'''
-	dstruc_loadin
+	03-05-05
+	run()
+		--dstruc_loadin
 		--go_index_setup
-	run
+		
+		
 		--node_depth
-			--
 		or
 		--node_pairwise_distance
 			--process_2indices
 			--submit
+		--create_indices
 		
 	In this class, go_id refers to the term id in tables of schema go.
 	the index for one go node is its path in tuple form
@@ -81,14 +85,13 @@ class go_node_distance:
 		self.log = int(log)
 		
 		#debugging flags
-		self.debug_process_2indices = 0
+		self.debug_process_2indices = int(log)
 		#mapping for the branches
 		self.branch_dict = {0:'molecular_function',
 			1:'biological_process',
 			2:'cellular_component'}
 		self.branch = self.branch_dict[int(branch)]
-		if self.log:
-			self.log_file = open('/tmp/go_node_distance.log','w')
+
 		#mapping between go term id and its index list
 		self.go_id2index = {}
 		#mapping between go_id and go_acc
@@ -97,12 +100,8 @@ class go_node_distance:
 		self.go_digraph = Graph.Graph()
 		#GO undirected Graph, to compute distance between two nodes
 		self.go_graph = Graph.Graph()
-		#the node_list contains the nodes to compute pairwise distances
-		self.node_list = Set()
 		#the list containing all indices
 		self.index_list = Set()
-		#key structure, mapping between a pair of go_id's and its associated distances
-		self.go_id2distance = {}
 		
 	def dstruc_loadin(self):
 		"""
@@ -110,6 +109,8 @@ class go_node_distance:
 			self.all decides where node_list comes.
 			move the block of getting node_dist from schema.go to
 			the case that self.all is not set.
+		03-05-05
+			self.all is deprecated
 		"""
 		sys.stderr.write("Loading Data STructure...")
 		
@@ -126,7 +127,7 @@ class go_node_distance:
 			t1.term_type='%s' and t2.term_type='%s' "%(self.branch, self.branch))
 		rows = self.curs.fetchall()
 		for row in rows:
-			#setup the go_digraph and go_graph structure
+			#setup the go_digraph and go_graph structure by term_id
 			self.go_digraph.add_edge(row[0], row[1])
 			self.go_graph.add_edge(row[0], row[1])
 			self.go_graph.add_edge(row[1], row[0])
@@ -134,22 +135,8 @@ class go_node_distance:
 		#find the root based on different branches
 		self.curs.execute("select id from go.term where name='%s'"%self.branch)
 		rows = self.curs.fetchall()
+		#it's also a term_id
 		self.root = rows[0][0]
-
-		#setup self.go_index2id and self.go_id2index
-		self.go_index_setup()
-
-		if self.all:
-			self.node_list = list(self.index_list)
-		else:
-			#setup the node list
-			#biological_process unknown is not included.
-			self.curs.execute("select t.id from go g, go.term t where g.go_id=t.acc and g.go_no!=0")
-			rows = self.curs.fetchall()
-			for row in rows:
-				self.node_list |= self.go_id2index[row[0]]
-			#convert the Set to list
-			self.node_list = list(self.node_list)
 			
 		sys.stderr.write("Done\n")
 		
@@ -158,7 +145,7 @@ class go_node_distance:
 		each index is in a tuple form
 		the indices of one node is in a Set form
 		'''
-		sys.stderr.write("Computing indices ...")
+		sys.stderr.write("Computing graph indices of all GO nodes...")
 		list_queue = [self.root]
 		#one go term id may have multiple indices
 		#',' is the trick, singleton tuple must have the trailing ','
@@ -187,12 +174,13 @@ class go_node_distance:
 					#because one node have multiple parents
 					list_queue.append(neighbor)
 		
-		sys.stderr.write("done")
+		sys.stderr.write("Done\n")
 
 	def node_depth(self):
 		'''
 		compute the depth of each node of GO tree from its index and put it into go.term.
 		'''
+		sys.stderr.write("Computing the depth of all GO nodes...")
 		for (go_id, index_tuple_set) in self.go_id2index.iteritems():
 			depth = 100
 			index_list = []
@@ -207,12 +195,18 @@ class go_node_distance:
 			#','.join(list) doesn't wrap "'" around the strings, which is good.
 			self.curs.execute("update go.term set depth=%d, index='%s' where id=%d"%\
 				(depth, ','.join(index_list), go_id) )
+		sys.stderr.write("Done\n")
 
-		if self.needcommit:
-			self.curs.execute("end")
 		
 	def node_pairwise_distance(self):
+		"""
+		03-05-05
+			lower the memory usage:
+			instead of using the a data structure to hold all distances and submit at last.
+			now compute one pair, submit one pair
+		"""
 		if self.new_table:
+			sys.stderr.write("Creating new table...")
 			#first create the target_table
 			try:
 				self.curs.execute("create table go.%s(\
@@ -226,13 +220,36 @@ class go_node_distance:
 			except:
 				sys.stderr.write("Error occurred when creating table %s\n"%self.table)
 				self.curs.execute("set search_path to %s"%schema)
-		
-		no_of_nodes = len(self.node_list)
+			sys.stderr.write("Done.\n")
+			
+		sys.stderr.write("Computing the pairwise distances of all GO nodes...")
+	
+		go_id_list = self.go_id2index.keys()
+		no_of_nodes = len(go_id_list)
 		for i in range(no_of_nodes):
 			for j in range(i+1, no_of_nodes):
-				go_index1 = self.node_list[i]
-				go_index2 = self.node_list[j]
-				self.process_2indices(go_index1, go_index2)
+				pairwise_unit = distance_of_2nodes()
+				go_id1 = go_id_list[i]
+				go_id2 = go_id_list[j]
+				if go_id1 < go_id2:
+					key = (go_id1, go_id2)
+				else:
+					key = (go_id2, go_id1)
+				index_set1 = self.go_id2index[go_id1]
+				index_set2 = self.go_id2index[go_id2]
+				for go_index1 in index_set1:
+					for go_index2 in index_set2:
+						self.process_2indices(go_index1, go_index2, pairwise_unit)
+				
+				if self.log:
+					print "key is %s"%repr(key)
+					print "raw_distance: %s"%pairwise_unit.raw_distance
+					print "lee_distance: %s"%pairwise_unit.lee_distance
+					print "jasmine_distance: %s"%pairwise_unit.jasmine_distance
+					print "lca: %s"%repr(pairwise_unit.common_ancestor_set)
+					raw_input("pause:")
+				
+				self.submit(key, pairwise_unit)
 				'''
 				#deprecated
 				lc_ancestors = self.lowest_common_ancestor(go_id1, go_id2)
@@ -240,24 +257,19 @@ class go_node_distance:
 				lee_dist = self.lee_distance(lc_ancestors)
 				jasmine_dist = self.jasmine_distance(go_id1, go_id2, lc_ancestors)
 				'''
-		if self.needcommit:
-			self.submit()
-		else:
-			print "not commited into database"
+		sys.stderr.write("Done\n")
 	
-	def run(self):
-		if self.depth:
-			self.node_depth()
-		else:
-			self.node_pairwise_distance()
-	
-	def process_2indices(self, index1, index2):
+	def process_2indices(self, index1, index2, pairwise_unit):
 		"""
 		(02-17-05)
 		an important bug appears in process_2indices(), if one index is parent of another index,
 		the function can't correctly pick the lowest_common_ancestor. It picks the one just above that one.
 		Now use the shorter index as fixed, and longer one as dynamic to be searched. Reverse
 		check from the end of the fixed_index whether there's a common one in dynamic_index.
+		03-05-05
+			drop the global data structure, self.go_node_distance
+			use the pairwise_unit instead
+		
 		"""
 		if self.debug_process_2indices:
 			print "\t\t##Enter process_2indices()"
@@ -270,13 +282,7 @@ class go_node_distance:
 		if self.debug_process_2indices:
 			print "index of %d: %s\n"%(go_id1, repr(index1)) 
 			print "index of %d: %s\n"%(go_id2, repr(index2))
-		if go_id1 < go_id2:
-			#arrange the key in ascending order
-			key = (go_id1, go_id2)
-		else:
-			key = (go_id2, go_id1)
-		if key not in self.go_id2distance:
-			self.go_id2distance[key] = distance_of_2nodes()
+
 		depth1 = len(index1)
 		depth2 = len(index2)
 		if depth1 <=  depth2:
@@ -303,8 +309,9 @@ class go_node_distance:
 				break
 		#i points to the first different column
 		lca = fixed_index[lca_fixed_index]
+		
 		#add the lca to the common_ancestor set of this pair
-		self.go_id2distance[key].common_ancestor_set.add(lca)
+		pairwise_unit.common_ancestor_set.add(lca)
 
 		distance1_from_lca = len(fixed_index) - (lca_fixed_index+1)
 		distance2_from_lca = len(dynamic_index) - (lca_dynamic_index+1)
@@ -312,16 +319,16 @@ class go_node_distance:
 		lee_distance = 15 - (min(lca_fixed_index, lca_dynamic_index) +1)
 		jasmine_distance = min(distance1_from_lca, distance2_from_lca)
 		
-		if raw_distance < self.go_id2distance[key].raw_distance:
-			self.go_id2distance[key].raw_distance = raw_distance
+		if raw_distance < pairwise_unit.raw_distance:
+			pairwise_unit.raw_distance = raw_distance
 			if self.debug_process_2indices:
 				print "raw_distance replaced"
-		if lee_distance < self.go_id2distance[key].lee_distance:
-			self.go_id2distance[key].lee_distance = lee_distance
+		if lee_distance < pairwise_unit.lee_distance:
+			pairwise_unit.lee_distance = lee_distance
 			if self.debug_process_2indices:
 				print "lee_distance replaced"
-		if jasmine_distance < self.go_id2distance[key].jasmine_distance:
-			self.go_id2distance[key].jasmine_distance = jasmine_distance
+		if jasmine_distance < pairwise_unit.jasmine_distance:
+			pairwise_unit.jasmine_distance = jasmine_distance
 			if self.debug_process_2indices:
 				print "jasmine_distance replaced"
 
@@ -331,35 +338,63 @@ class go_node_distance:
 			print "Corresponding GO acc: %s and %s:\n"%(self.go_id2acc[go_id1], self.go_id2acc[go_id2])
 			print "\tOne lowest common ancestor: %s(%s)\n"%(lca, self.go_id2acc[lca])
 			print "\t\t##Leave process_2indices()"
-			#raw_input("pause:")
-
-	def submit(self):
+		
+	def submit(self, key, pairwise_unit):
 		"""
 		03-02-05
 			create two indices on go_id1 and go_id2 at the end of submit()
+		03-05-05
+			the index-creating part was split to another function, create_indices()
+			now submit() is executed by one go_id pair after another.
 		"""
-		sys.stderr.write("Database transacting...")
-		for key,value in self.go_id2distance.iteritems():
-			go_id1 = key[0]
-			go_id2 = key[1]
-			raw_distance = value.raw_distance
-			lee_distance = value.lee_distance
-			jasmine_distance = value.jasmine_distance
-			common_ancestor_list = list(value.common_ancestor_set)
-			self.curs.execute("insert into go.%s(go_id1, go_id2, raw_distance, lee_distance, \
-				jasmine_distance, common_ancestor_list) values(%d, %d, %d, %d, %d, ARRAY%s)"%\
-				(self.table, go_id1, go_id2, raw_distance, lee_distance, jasmine_distance,\
-				repr(common_ancestor_list)) )
+		go_id1 = key[0]
+		go_id2 = key[1]
+		raw_distance = pairwise_unit.raw_distance
+		lee_distance = pairwise_unit.lee_distance
+		jasmine_distance = pairwise_unit.jasmine_distance
+		common_ancestor_list = list(pairwise_unit.common_ancestor_set)
+		self.curs.execute("insert into go.%s(go_id1, go_id2, raw_distance, lee_distance, \
+			jasmine_distance, common_ancestor_list) values(%d, %d, %d, %d, %d, ARRAY%s)"%\
+			(self.table, go_id1, go_id2, raw_distance, lee_distance, jasmine_distance,\
+			repr(common_ancestor_list)) )
+	
+	def create_indices(self):
+		"""
+		03-05-05
+			split from submit()
+			add an index for (go_id1, go_id2)
+		"""
+		sys.stderr.write("Creating three indices...")
 		#create indices
 		self.curs.execute("set search_path to go")
 		self.curs.execute("create index %s_go_id1_idx on go.%s(go_id1)"%\
 			(self.table, self.table))
 		self.curs.execute("create index %s_go_id2_idx on go.%s(go_id2)"%\
 			(self.table, self.table))
+		self.curs.execute("create index %s_go_id1_go_id2_idx on go.%s(go_id1, go_id2)"%\
+			(self.table, self.table))
+		sys.stderr.write("Done.\n")
+
+
+	def run(self):
+		"""
+		03-05-05
+		"""
+		self.dstruc_loadin()
+		#setup self.go_id2index
+		self.go_index_setup()
+		
+		if self.depth:
+			self.node_depth()
+		else:
+			self.node_pairwise_distance()
+			self.create_indices()
 		if self.needcommit:
 			self.curs.execute("end")
-		sys.stderr.write("done.\n")
-			
+		else:
+			print "not commited into database"
+
+
 	'''
 	code below is deprecated. It's doing the same thing via graph algorithm. But much slower.
 	Code above using the indices(actually the path tuples) is much faster.
@@ -427,7 +462,7 @@ if __name__ == '__main__':
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
-	schema = ''
+	schema = 'public'
 	table = 'node_distance'
 	branch = 1
 	depth = 0
@@ -466,7 +501,6 @@ if __name__ == '__main__':
 	if schema:
 		instance = go_node_distance(hostname, dbname, schema, table, branch, depth, all, new_table, report, \
 			commit, log)
-		instance.dstruc_loadin()
 		instance.run()
 	else:
 		print __doc__
