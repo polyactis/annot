@@ -458,6 +458,11 @@ class TestPGeneAnalysis(unittest.TestCase):
 class TestGenePMapRedundancy(unittest.TestCase):
 	"""
 	02-28-05
+
+	03-03-05:
+		modify the example in test__p_gene_map to show the bug
+	03-04-05
+		the source module changed a lot, change accordingly.
 	"""
 	def setUp(self):
 		from gene_p_map_redundancy import gene_p_map_redundancy
@@ -470,15 +475,17 @@ class TestGenePMapRedundancy(unittest.TestCase):
 		self.instance = gene_p_map_redundancy(hostname, dbname, schema,\
 			p_gene_table, gene_p_table)
 		#prepare a cursor
-		from codense.common import db_connect
+		from codense.common import db_connect, get_go_no2term_id
 		(conn, curs) = db_connect(hostname, dbname, schema)
-		self.instance.go_no2term_id = self.instance.get_go_no2term_id(curs, self.instance.term_table)
+		self.instance.go_no2term_id = get_go_no2term_id(curs, self.instance.schema, self.instance.term_table)
 	
 	def test__p_gene_map(self):
 		from codense.common import db_connect
 		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#set the debug flag first
+		self.instance.debug = 1
 		#1029 is father of 824, 824 is father of 1030
-		p_gene_id2go_no = {1:824, 2:1029, 3:1030}
+		p_gene_id2go_no = {1:[824,0.01], 2:[1029,0.001], 3:[1030,0.05], 4:[824,0.002], 5:[1029,0.003], 6:[1029,0.01]}
 		self.instance._p_gene_map(p_gene_id2go_no, self.instance.p_gene_id_map, curs,\
 			self.instance.distance_table, self.instance.go_no2distance, self.instance.go_no2term_id)
 		print self.instance.p_gene_id_map
@@ -494,11 +501,11 @@ class TestGenePMapRedundancy(unittest.TestCase):
 	def test_submit(self):
 		from codense.common import db_connect
 		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
-		p_gene_id_map = {33:32}
+		p_gene_id_map = {33:[32,0.01]}
 		self.instance.submit(curs, self.instance.gene_p_table, p_gene_id_map)
 	
 	def test_gene_no2p_gene_setup(self):
-		row = [2, 6661, 365]
+		row = [2, 6661, 365, 0.01]
 		self.instance.gene_no2p_gene_setup(row)
 		print self.instance.gene_no2p_gene
 	
