@@ -65,10 +65,12 @@ class mcl_to_db:
 						try:
 							self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter) \
 							values ('%s','%s','%s')"%(self.splat_id, string_vertex_set, self.parameter))
+						
 						except:
 							sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 							self.conn.rollback()
 							sys.exit(1)
+						
 						no+=1
 					sys.stderr.write('%s%s'%('\x08'*80, no))
 		if self.needcommit:
@@ -80,6 +82,7 @@ class mcl_to_db:
 		self.cluster_set = []
 		cluster_begin = 0
 		vertex_list = []
+		vertex_line = ''
 		while line:
 			if line.find('(splat_id') == 0:
 				self.splat_id = line[10:-3]
@@ -88,17 +91,18 @@ class mcl_to_db:
 			if cluster_begin and (line == ')\n'):
 				break;
 			elif cluster_begin:
-				vertex_list_part = line[1:].split()	#remove cluster no. or a space
-				if vertex_list_part[-1] == '$':
-					vertex_list_part.pop()
-					for i in range(len(vertex_list_part)):
-						vertex_list.append(int(vertex_list_part[i]))
+				if line[-2] == '$':
+					vertex_line += line
+					vertex_list = vertex_line.split()
+					vertex_list.pop(0)	#throw away the cluster no.
+					vertex_list.pop()	#throw away '$'
 					if len(vertex_list) >2:
+						for i in range(len(vertex_list)):
+							vertex_list[i] = int(vertex_list[i])
 						self.cluster_set.append(vertex_list)
-					vertex_list = []
+					vertex_line = ''
 				else:
-					for i in range(len(vertex_list_part)):
-						vertex_list.append(int(vertex_list_part[i]))
+					vertex_line += line
 			if line == 'begin\n':
 				cluster_begin = 1
 			line = inf.readline()
