@@ -278,3 +278,26 @@ def get_go_id2go_no(curs, schema=None, table='go'):
 		go_id2go_no[row[1]] = row[0]
 	sys.stderr.write("Done\n")
 	return go_id2go_no
+
+def get_prediction_pair2lca_list(curs, schema=None, p_gene_table=None):
+	"""
+	03-15-05
+		get prediction_pair2lca_list
+	"""
+	sys.stderr.write("Getting prediction_pair2lca_list...")
+	prediction_pair2lca_list = {}
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	curs.execute("select distinct gene_no, go_no, lca_list from %s where lca_list notnull"%p_gene_table)
+	rows = curs.fetchall()
+	for row in rows:
+		prediction_pair = (row[0], row[1])
+		lca_list = row[2][1:-1].split(',')
+		lca_list = map(int, lca_list)
+		if prediction_pair not in prediction_pair2lca_list:
+			prediction_pair2lca_list[prediction_pair] = lca_list
+		else:
+			sys.stderr.write("Error: same prediction_pair: %s appears twice with different lca_list.\n"%repr(prediction_pair))
+			sys.exit(3)
+	sys.stderr.write("Done\n")
+	return prediction_pair2lca_list
