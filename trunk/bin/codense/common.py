@@ -53,15 +53,18 @@ def dict_map(dict, ls):
 			new_list.append(value)
 	return new_list
 
-def db_connect(hostname, dbname, schema):
+def db_connect(hostname, dbname, schema=None):
 	"""
 	02-28-05
 		establish database connection, return (conn, curs).
 		copied from CrackSplat.py
+	03-08-05
+		parameter schema is optional
 	"""
 	conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 	curs = conn.cursor()
-	curs.execute("set search_path to %s"%schema)
+	if schema:
+		curs.execute("set search_path to %s"%schema)
 	return (conn, curs)
 
 def get_gene_no2direct_go(curs, schema=None, table='association'):
