@@ -174,9 +174,12 @@ class gene_stat_on_mcl_result:
 				if entry.p_functions_dict[go_no] < dominant_support:
 					del entry.p_functions_dict[go_no]
 		for gene_no in self.gene_prediction_dict:
+			#initialize three data structures
 			L0_dict = {}
 			L1_dict = {}
+			#L0 or L1 are all good known functions
 			good_k_functions_dict = {}
+			#each entry is a gene_prediction class
 			entry = self.gene_prediction_dict[gene_no]
 			p_functions_dict = entry.p_functions_dict.copy()
 			p_functions = p_functions_dict.keys()
@@ -185,6 +188,8 @@ class gene_stat_on_mcl_result:
 				continue
 			k_functions_list = self.known_genes_dict[gene_no]
 			self.no_of_p_known += 1
+			#compare the known go_no with the predicted go_no to see if they match
+			#L0 level or L1 level
 			for p_go_no in p_functions_dict:
 				for k_go_no in k_functions_list:
 					if self.is_L0(p_go_no, k_go_no):
@@ -193,6 +198,8 @@ class gene_stat_on_mcl_result:
 					elif self.is_L1(p_go_no, k_go_no):
 						L1_dict[p_go_no] = p_functions_dict[p_go_no]
 						good_k_functions_dict[k_go_no] = 1
+			#if one L1 is also counted as L0, remove it from L1_dict.
+			#this case happens when one known function has both L0 and L1 matches in the predicted functions
 			for go_no in L0_dict:
 				if go_no in L1_dict:
 					del L1_dict[go_no]
