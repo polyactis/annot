@@ -206,7 +206,7 @@ class gene_stat_new:
 					tp=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
 					(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,gene_no))
 			self.curs.execute("end")
-		sys.stderr.write('\n\tTotal genes: %d\n'%self.no_of_records)
+		sys.stderr.write('\n\tTotal genes: %d\n'%len(self.gene_prediction_dict))
 		sys.stderr.write('\tSensitvity: %f\n'%(self.tp/(self.tp+self.fn)))
 		sys.stderr.write('\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
 		sys.stderr.write('\tFalse Positive Ratio: %f\n'%(self.fp/(self.tp+self.fp)))
