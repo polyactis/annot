@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 import sys
-from rpy import *
-import numarray.ma as ma
-import numarray
 import math, os
 
 class graph_construct:
 	def __init__(self, arg1, debug=0):
+		import rpy
+		import numarray.ma as ma
+		import numarray
 		self.raw_dataset_source = arg1
 		self.dataset_source = os.tempnam('/tmp','annot')
 		self.gene_cut_off = 8
@@ -49,7 +49,7 @@ class graph_construct:
 
 		
 	def mask_array_construct(self):
-		data =with_mode(0, r.read_table)(self.dataset_source, row_names=1)
+		data = rpy.with_mode(0, rpy.r.read_table)(self.dataset_source, row_names=1)
 		'''
 		!Important!
 		if the dataset_source has too few data, conversion from R to python will be a problem.
@@ -67,10 +67,10 @@ class graph_construct:
 		
 		'''
 		#print r.as_matrix(data)
-		array = ma.masked_inside(r.as_matrix(data),  -1.0e20, 1.0e20)
+		array = ma.masked_inside(rpy.r.as_matrix(data),  -1.0e20, 1.0e20)
 		#all are set to be masked except nan. weird! So have to do a converse.
 		self.mask_array = ma.array(array, mask=ma.logical_not(ma.getmask(array)))
-		self.genelabels = r.rownames(data)
+		self.genelabels = rpy.r.rownames(data)
 		self.no_of_genes = len(self.genelabels)
 		self.no_of_cols = len(array[0])
 		self.mask_matrix=ma.identity(self.no_of_cols)
@@ -106,7 +106,7 @@ class graph_construct:
 						#less than jk_cor_cut_off, no correlation
 					v1 = ma.array(self.mask_array[i], mask=new_mask).compressed().tolist()
 					v2 = ma.array(self.mask_array[j], mask=new_mask).compressed().tolist()
-					cor = r.cor(v1,v2)
+					cor = rpy.r.cor(v1,v2)
 					self.cor_vector.append( cor)
 					nn_cor_vector.append(math.fabs(cor))
 					
@@ -124,7 +124,7 @@ class graph_construct:
 						#not simply the smallest, but the smallest absolute value
 	
 	def cleanup(self):
-		os.remove(	self.dataset_source)
+		os.remove(self.dataset_source)
 		del self.mask_array
 		
 	def output(self, out=sys.stdout):
@@ -174,24 +174,29 @@ class graph_reorganize:
 		self.graph_list_dict = {}
 		self.vertex_block = ''
 		
-	def parse(self, inf, outf):
+	def parse(self, inf):
 		self.init()
+
+		#loop below initilizes graph_list_dict.
 		line = inf.readline()
 		while line:
+			list = line[:-1].split('\t')
 			if line[0] == 't':
-				graph_label = line.split()[2]
+				graph_label = list[2]
 				no_of_graphs = len(self.graph_list_dict)
 				self.graph_list_dict[graph_label] = graph_attributes(no=no_of_graphs)
 			if line[0] == 'e':
-				list = line.split()
 				vertex1 = list[1]
 				vertex2 = list[2]
 				self.graph_list_dict[graph_label].graph_dict[(vertex1,vertex2)] = float(list[3])
 			line = inf.readline()
 		
+		#loop below initilizes vertex_list_dict.
 		for graph_label in self.graph_list_dict:
 			graph_attr = self.graph_list_dict[graph_label]
 			graph_attr.vertex_set_init()
+			#initlize vertex_set of each graph
+
 			for vertex in graph_attr.vertex_set:
 				if self.vertex_list_dict.has_key(vertex):
 					self.vertex_list_dict[vertex].inc_freq()
@@ -199,14 +204,15 @@ class graph_reorganize:
 					no_of_vertices = len(self.vertex_list_dict)
 					self.vertex_list_dict[vertex] = vertex_attributes(no=no_of_vertices)
 					self.vertex_block+='v %d %d\n'%(no_of_vertices,no_of_vertices,)
-		self.output(outf)
+		self.output()
 		
-	def output(self, outf):
+	def output(self):
 		import os
 		no_label_map_filename = os.path.join(os.path.expanduser('~'),'no_label_map')
 		map_fhandler = open(no_label_map_filename, 'w')
 		map_fhandler.write('>no_graphlabel_mapping\n')
 		for graph_label in self.graph_list_dict:
+			outf = open('splan_'+graph_label, 'w')
 			graph_attr = self.graph_list_dict[graph_label]
 			outf.write('t # %d\n'%graph_attr.no)
 			
@@ -217,7 +223,8 @@ class graph_reorganize:
 				vertex1_no = self.vertex_list_dict[edge[0]].no
 				vertex2_no = self.vertex_list_dict[edge[1]].no
 				outf.write('e %d %d %f\n'%(vertex1_no, vertex2_no, graph_attr.graph_dict[edge],))
-		
+			outf.close()
+
 		map_fhandler.write('>no_vertexlabel_mapping\n')
 		for vertex_label in self.vertex_list_dict:
 			vertex_attr = self.vertex_list_dict[vertex_label]
@@ -233,5 +240,4 @@ if __name__ == '__main__':
 	'''
 	instance = graph_reorganize()
 	inf = open(sys.argv[1], 'r')
-	outf = open(sys.argv[2], 'w')
-	instance.parse(inf, outf)
+	instance.parse(inf)
