@@ -25,6 +25,8 @@ Description:
 
 import sys, os, psycopg, getopt
 from rpy import *
+from graphlib import Graph
+from sets import Set
 
 class gene_prediction:
 	# class holding prediction information of a gene
@@ -57,14 +59,21 @@ class gene_stat_on_mcl_result:
 		self.fp = 0.0
 		self.fp_m =0.0
 		self.fn = 0.0
+		#mapping between gene_no and go_no list
 		self.known_genes_dict = {}
 		self.no_of_records = 0
 		self.log_file = open('/tmp/gene_stat_on_mcl_result.log','w')
 		self.gene_prediction_dict = {}
-		self.gono_goindex_dict = {}
+		#self.gono_goindex_dict = {}
 		self.no_of_p_known = 0
-		
+		#GO DAG
+		self.go_graph = Graph.Graph()
+		#mapping between go_no and go_id
+		self.go_no2go_id = {}
+				
 	def dstruc_loadin(self):
+		sys.stderr.write("Loading Data STructure...")
+		#setup self.known_genes_dict
 		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -73,15 +82,26 @@ class gene_stat_on_mcl_result:
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].append(int(go_no))
 		
+		#get the non-obsolete biological_process GO DAG		
 		self.curs.execute("select count(go_no) from go")
 		rows = self.curs.fetchall()
 		self.no_of_functions = rows[0][0]
-		
-		self.curs.execute("select go_no, go_index from go")
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
+			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
+			t1.term_type='biological_process' and t2.term_type='biological_process' ")
 		rows = self.curs.fetchall()
 		for row in rows:
-			go_index_list = row[1][2:-2].split('","')
-			self.gono_goindex_dict[row[0]] = go_index_list
+		#setup the go_graph structure
+			self.go_graph.add_edge(row[2], row[3])
+		
+		#setup self.go_no2go_id
+		self.curs.execute("select go_no, go_id from go")
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.go_no2go_id[row[0]] = row[1]
+
+		sys.stderr.write("Done\n")
 		
 	def run(self):
 		if self.limit != 0:
@@ -105,32 +125,8 @@ class gene_stat_on_mcl_result:
 		
 		self.final()
 		if self.needcommit:
-			self.curs.execute("select gene_no from gene")
-			rows = self.curs.fetchall()
-			for row in rows:
-				gene_no = row[0]
-				if gene_no in self.gene_prediction_dict:
-					entry = self.gene_prediction_dict[gene_no]
-					p_functions = entry.p_functions_dict.keys()
-					string_tp = self.list_stringlist(entry.tp.keys())
-					string_tp1 = self.list_stringlist(entry.tp1.keys())
-					string_fp = self.list_stringlist(entry.fp.keys())
-					string_fn = self.list_stringlist(entry.fn.keys())
-					if gene_no in self.known_genes_dict:
-						self.curs.execute("update gene set cluster_array=ARRAY%s,\
-							tp='%s',tp1='%s',tn=%d,fp='%s',fn='%s',p_functions=ARRAY%s where gene_no=%d"%\
-							(repr(entry.mcl_id_list),string_tp,string_tp1,entry.tn,string_fp,\
-							string_fn,repr(p_functions),gene_no))
-					else:
-						self.curs.execute("update gene set cluster_array=ARRAY%s,\
-							p_functions=ARRAY%s where gene_no=%d"%\
-							(repr(entry.mcl_id_list),repr(p_functions),gene_no))
-				else:
-				#cleanup for other genes predicted previously
-					self.curs.execute("update gene set cluster_array=null, tp=null, tp1=null, tn=null,\
-						fp=null, fn=null, p_functions=null where gene_no=%d"%gene_no)
-				
-			self.curs.execute("end")
+		#Database updating is too slow. Do it only if needcommit.
+			self.submit()
 		sys.stderr.write('\n\tp_value_cut_off:%f unknown_cut_off:%f connectivity_cut_off:%f\n'%(self.p_value_cut_off, self.unknown_cut_off, self.connectivity_cut_off))
 		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
 		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
@@ -208,37 +204,62 @@ class gene_stat_on_mcl_result:
 				entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
 	
 	def is_L0(self, p_go_no, k_go_no):
-		k_go_index_list = self.gono_goindex_dict[k_go_no]
-		p_go_index_list = self.gono_goindex_dict[p_go_no]
-		for k_index in k_go_index_list:
-			for p_index in p_go_index_list:
-				k_index_m = k_index + ','
-				p_index_m = p_index + ','
-				if p_index_m.find(k_index_m) == 0:
-					self.log_file.write('%d is L0 of %d:: %s %s\n'%(p_go_no, k_go_no, p_index_m, k_index_m))
-					return 1
-		return 0
+		k_go_id = self.go_no2go_id[k_go_no]
+		p_go_id = self.go_no2go_id[p_go_no]
+		k_go_family = Set(self.go_graph.forw_bfs(k_go_id))
+		if p_go_id in k_go_family:
+			self.log_file.write('%d is L0 of %d:: %s %s\n'%(p_go_no, k_go_no, p_go_id, k_go_id))
+			return 1
+		else:
+			return 0
 		
 	def is_L1(self, p_go_no, k_go_no):
-		k_go_index_list = self.gono_goindex_dict[k_go_no]
-		p_go_index_list = self.gono_goindex_dict[p_go_no]
-		for k_index in k_go_index_list:
-			for p_index in p_go_index_list:
-				pos = k_index.rfind(',')
-				k_index_m = k_index[:pos]
-				if k_index_m == p_index:
-					self.log_file.write("%d is direct parent of %d:: %s %s\n"%(p_go_no, k_go_no, p_index, k_index_m))
-					return 1
-				pos = p_index.rfind(',')
-				p_index_m = p_index[:pos]
-				if k_index_m == p_index_m:
-					self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_index_m, k_index_m))
-					return 1
+		k_go_id = self.go_no2go_id[k_go_no]
+		p_go_id = self.go_no2go_id[p_go_no]
+		k_go_inc_nbrs = Set(self.go_graph.inc_nbrs(k_go_id))
+		if p_go_id in k_go_inc_nbrs:
+			self.log_file.write("%d is direct parent of %d:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))	
+			return 1
+		for k_go_inc_nbr in k_go_inc_nbrs:
+			k_go_inc_nbr_out_nbrs = Set(self.go_graph.out_nbrs(k_go_inc_nbr))
+			if p_go_id in k_go_inc_nbr_out_nbrs:
+				self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))			
+				return 1
 		return 0
 	
 	def list_stringlist(self, list):
 		return '{' + repr(list)[1:-1] + '}'
 	
+	def submit(self):
+		sys.stderr.write("Database transacting...")
+		self.curs.execute("select gene_no from gene")
+		rows = self.curs.fetchall()
+		for row in rows:
+			gene_no = row[0]
+			if gene_no in self.gene_prediction_dict:
+				entry = self.gene_prediction_dict[gene_no]
+				p_functions = entry.p_functions_dict.keys()
+				string_tp = self.list_stringlist(entry.tp.keys())
+				string_tp1 = self.list_stringlist(entry.tp1.keys())
+				string_fp = self.list_stringlist(entry.fp.keys())
+				string_fn = self.list_stringlist(entry.fn.keys())
+				if gene_no in self.known_genes_dict:
+					self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						tp='%s',tp1='%s',tn=%d,fp='%s',fn='%s',p_functions=ARRAY%s where gene_no=%d"%\
+						(repr(entry.mcl_id_list),string_tp,string_tp1,entry.tn,string_fp,\
+						string_fn,repr(p_functions),gene_no))
+				else:
+					self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						p_functions=ARRAY%s where gene_no=%d"%\
+						(repr(entry.mcl_id_list),repr(p_functions),gene_no))
+			else:
+			#cleanup for other genes predicted previously
+				self.curs.execute("update gene set cluster_array=null, tp=null, tp1=null, tn=null,\
+					fp=null, fn=null, p_functions=null where gene_no=%d"%gene_no)
+		if self.needcommit:				
+			self.curs.execute("end")	
+		sys.stderr.write("done.\n")
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
