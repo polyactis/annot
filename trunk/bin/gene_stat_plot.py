@@ -96,6 +96,7 @@ class gene_stat:
 		log=0, judger_type=0, depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
+		self.schema = schema
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		self.mcl_table = mcl_table
@@ -200,7 +201,10 @@ class gene_stat:
 		self.fn = 0.0
 		#the overall prediction accuracy of each function
 		self.go_no2accuracy = {}
-
+		#for database reset
+		self.conn.rollback()
+		self.curs.execute("set search_path to %s"%self.schema)
+		
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
 		
@@ -411,7 +415,6 @@ class gene_stat:
 		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
 		recurrence = sum(recurrence_array)
-		sys.stderr.write('%s\n'%recurrence)
 		if recurrence < self.recurrence_cut_off or recurrence > (self.recurrence_cut_off+2):
 			#the recurrence is not enough
 			return
