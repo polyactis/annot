@@ -61,18 +61,7 @@ class cluster_stat:
 		if self.output:
 			#filename exists
 			self.outf = open(self.output, 'w')
-		try:
-			self.curs.execute("drop index %s_connectivity_idx"%(self.target_table))
-			self.curs.execute("drop index %s_mcl_id_idx"%(self.target_table))
-		except psycopg.ProgrammingError, error:
-			self.conn.rollback()
-			self.curs.execute("set search_path to %s"%schema)
-		try:
-			self.curs.execute("truncate %s"%self.target_table)
-		except:
-			sys.stderr.write("Warning: truncate failed.\n")
-			self.conn.rollback()
-			self.curs.execute("set search_path to %s"%schema)
+
 		self.bonferroni = int(bonferroni)
 		self.report = int(report)
 		self.log = int(log)
@@ -108,7 +97,7 @@ class cluster_stat:
 			sys.stderr.write("output and needcommit are two incompatible options.\n")
 			sys.exit(2)
 	
-		if self.target_table != 'cluster_stat':
+		if self.target_table != 'cluster_stat' and self.output == None:
 			try:
 				self.curs.execute("create table %s(\
 					cluster_stat_id	serial primary key,\
