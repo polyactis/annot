@@ -48,16 +48,22 @@ class find_unknown_genes:
 		self.unknown_genes_set = Set()
 	
 	def dstruc_loadin(self):
+		"""
+		03-05-05
+			self.organism is used.
+		"""
 		#select only those biological_process known genes form table raw_association
 		#also the associated go term is not obsolete.
 		self.curs.execute("select a.gene_id from graph.raw_association a, go.term t \
-			where a.go_id = t.acc and t.term_type='biological_process' and t.is_obsolete=0 and a.go_id!='GO:0000004'")
+			where a.go_id = t.acc and t.term_type='biological_process' and t.is_obsolete=0 \
+			and a.go_id!='GO:0000004' and a.organism='%s'"%self.organism)
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.known_genes_set.add(row[0])
 		
 		#select those biological_process unknown genes from table raw_association.
-		self.curs.execute("select gene_id from graph.raw_association where go_id='GO:0000004'")
+		self.curs.execute("select gene_id from graph.raw_association where go_id='GO:0000004'\
+			and organism='%s'"%self.organism)
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.unknown_genes_set.add(row[0])
