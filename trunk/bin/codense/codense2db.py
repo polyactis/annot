@@ -199,20 +199,23 @@ class codense2db:
 		"""
 		03-04-05
 			parser for codense results
+		03-18-05
+			previous codense results were processed by haiyan's
+			program. Modify to parse real codense results.
 		"""
 		gene_id2gene_no = argument
 		cluster = cluster_dstructure()
 		cluster.cluster_id = int(row[0])
 		no_of_nodes = int(row[1])
 		no_of_edges = int(row[2])
-		cluster.splat_connectivity = float(row[3])	#row[3] should be equal to the below one got from no_of_edges and no_of_nodes
+		cluster.splat_connectivity = 2*float(no_of_edges)/(no_of_nodes*(no_of_nodes-1))	#row[3] should be equal to the below one got from no_of_edges and no_of_nodes
 		cluster.connectivity = 2*float(no_of_edges)/(no_of_nodes*(no_of_nodes-1))
 		cluster.no_of_edges = no_of_edges
 		cluster.vertex_set = []
-		for i in range(4,len(row), 2):
+		for i in range(3,len(row)):
 			if row[i]:
 				#to avoid the last blank field
-				cluster.vertex_set.append(row[i])
+				cluster.vertex_set.append(int(row[i]))
 		cluster.vertex_set = dict_map(gene_id2gene_no, cluster.vertex_set)
 		cluster.edge_set = [[1,1]]	#dummy edge
 		cluster.recurrence_array = [1]	#dummy recurrence
@@ -252,24 +255,30 @@ class codense2db:
 		03-03-05
 			splat table's connectivity is the splat_connectivity, see doc above
 		"""
-		try:
-			#inserting into the splat_table
-			curs.execute("insert into %s(splat_id, no_of_edges, \
-						recurrence_array, edge_set, connectivity) values (%d, %d, ARRAY%s, ARRAY%s, %f)"%\
-						(table, cluster.cluster_id, cluster.no_of_edges, repr(cluster.recurrence_array),\
-						repr(cluster.edge_set), cluster.splat_connectivity))
-			#inserting into the mcl_table
-			curs.execute("insert into %s(mcl_id, splat_id, vertex_set, connectivity, recurrence_array)\
-							values (%d, %d, ARRAY%s, %f, ARRAY%s)"%\
-							(mcl_table, cluster.cluster_id, cluster.cluster_id, repr(cluster.vertex_set),\
-							cluster.connectivity, repr(cluster.recurrence_array)) )
+		#try:
+		#inserting into the splat_table
+		curs.execute("insert into %s(splat_id, no_of_edges, \
+					recurrence_array, edge_set, connectivity) values (%d, %d, ARRAY%s, ARRAY%s, %f)"%\
+					(table, cluster.cluster_id, cluster.no_of_edges, repr(cluster.recurrence_array),\
+					repr(cluster.edge_set), cluster.splat_connectivity))
+		#inserting into the mcl_table
+		curs.execute("insert into %s(mcl_id, splat_id, vertex_set, connectivity, recurrence_array)\
+						values (%d, %d, ARRAY%s, %f, ARRAY%s)"%\
+						(mcl_table, cluster.cluster_id, cluster.cluster_id, repr(cluster.vertex_set),\
+						cluster.connectivity, repr(cluster.recurrence_array)) )
+		"""
 		except:
 			sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
 			self.conn.rollback()
 			sys.exit(1)
+		"""
 
 	def run(self):
-		
+		"""
+		03-18-05
+			mapping_dict all changed to haiyan_no2gene_no
+			
+		"""
 
 		inf = csv.reader(open(self.infname, 'r'), delimiter='\t')
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
@@ -281,7 +290,7 @@ class codense2db:
 			haiyan_no2gene_no = {}	#a blank dictionary, 
 		gene_id2gene_no = get_gene_id2gene_no(curs)
 		mapping_dict = {1:haiyan_no2gene_no,
-			2:gene_id2gene_no}
+			2:haiyan_no2gene_no}
 		self.create_tables(curs, self.table, self.mcl_table)
 		no = 0
 		for row in inf:
