@@ -47,6 +47,13 @@ class compute_connectivity:
 					self.splat_atom_update(splat_id, edge_set)
 				elif self.table == 'mcl':
 					self.mcl_atom_update(splat_id, edge_set)
+			
+			if self.table == 'splat':
+				string = repr(self.no_of_splat_records)
+				sys.stderr.write("%s%s"%("\x08"*(len(string)+1),string))
+			elif self.table == 'mcl':
+				string = repr(self.no_of_mcl_records)
+				sys.stderr.write("%s%s"%("\x08"*(len(string)+1),string))
 			self.curs.execute("fetch 1000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
@@ -77,7 +84,6 @@ class compute_connectivity:
 					if self.edge_dict.has_key(tuple) or self.edge_dict.has_key(tuple):
 						no_of_edges += 1
 			connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
-			sys.stderr.write('.')
 			try:
 				self.curs.execute("update mcl_result set connectivity=%f where mcl_id='%s'"% \
 				(connectivity, mcl_id))
@@ -91,14 +97,13 @@ class compute_connectivity:
 		no_of_edges = len(self.edge_dict)
 		no_of_vertices = len(self.vertex_dict)
 		connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
-		sys.stderr.write('.')
 		try:
 			self.curs.execute("update splat_result set connectivity=%f where splat_id='%s'"% \
 			(connectivity, splat_id))
 		except:
 			sys.stderr.write('Error occurred while setting splat connectivity\n')
 			sys.exit(1)
-		self.no_of_splat_records += 1		
+		self.no_of_splat_records += 1
 	
 	def dstruc_from_edge_set(self, edge_set):
 		self.edge_dict = {}
@@ -114,8 +119,6 @@ class compute_connectivity:
 				self.vertex_dict[vertex1] = 1
 			if vertex2 not in self.vertex_dict:
 				self.vertex_dict[vertex2] = 1
-		#print self.edge_dict
-		#print self.vertex_dict
 		
 
 if __name__ == '__main__':
