@@ -53,12 +53,12 @@ class triplet_construct:
 						if self.local_duplet_dict.has_key((duplet[0], duplet[1])):
 							self.local_triplet_dict[tuple] = 1
 			
-	def local_to_global(self):
+	def local_to_global(self, global_dict):
 		for triplet in self.local_triplet_dict:
-			if self.global_triplet_dict.has_key(triplet):
-				self.global_triplet_dict[triplet] += 1
+			if global_dict.has_key(triplet):
+				global_dict[triplet] += 1
 			else:
-				self.global_triplet_dict[triplet] = 1
+				global_dict[triplet] = 1
 	
 	def run(self, inf):
 		self.init()
@@ -66,21 +66,28 @@ class triplet_construct:
 		self.local_triplet_dict_construct()
 		self.local_to_global()
 
-def triplet_batch(dir):
+def triplet_batch(dir, ofname):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	pickle_filename = os.path.join(os.path.expanduser('~'), 'pickle/yeast_triplet')
+	pickle_filename = os.path.join(os.path.expanduser('~'), ofname)
 	of = open(pickle_filename, 'w')
-	instance = triplet_construct()
-	
+	global_dict = {}
+
 	for f in files:
+		instance = triplet_construct()
 		pathname = os.path.join(dir, f)
 		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 		inf = open(pathname, 'r')
-		instance.run(inf)
+		instance.parse(inf)
+		sys.stderr.write('parsing done\n')
+		instance.local_triplet_dict_construct()
+		sys.stderr.write('local triplet done\n')
+		instance.local_to_global(global_dict)
+		sys.stderr.write('local to global transfer done\n')
 		inf.close()
+		del instance
 		
-	pickle.dump ( instance.global_triplet_dict, of )
+	pickle.dump(global_dict, of)
 	'''
 	# this block is for triplet output.
 	triplet_list = instance.global_triplet_dict.keys()
@@ -94,6 +101,6 @@ def triplet_batch(dir):
 	'''
 	
 if __name__ == '__main__':
-	triplet_batch(sys.argv[1])
+	triplet_batch(sys.argv[1], sys.argv[2])
 	# argv[1] specifies which directory contains results from graph construction
 	# the resultant triplet dictionary will be stored in '~/pickle/yeast_triplet'.
