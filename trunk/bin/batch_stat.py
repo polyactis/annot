@@ -16,7 +16,7 @@ Examples:
 """
 
 import sys, os, cStringIO, psycopg, getopt
-from gene_stat import gene_stat
+from gene_stat import gene_stat_new as gene_stat
 
 class batch_stat:
 	def __init__(self, dbname, schema, tag, wu=0, needcommit=0):
