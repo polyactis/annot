@@ -14,6 +14,8 @@ Option:
 	-n ..., --gene_p_table=...	the table to store p_gene_id:p_value_cut_off, which are real predictions
 	-p ..., --p_value_cut_off=...	p_value_cut_off. 0 means using the linear model from lm_table
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
+	-x ..., --recurrence_gap_size=...	2(default)
+	-y ..., --connectivity_gap_size=...	2(default)
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records down the go_no2accuracy.
 	-a ..., --accuracy_cut_off=...	the accuracy_cut_off to be based for p_value adjusting, 0(default)
@@ -24,7 +26,7 @@ Option:
 Examples:
 	#Use the p_value_cut_off
 		p_gene_analysis.py -k sc_54 -g p_gene_e5 -p 0.001 stat_table
-		p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table
+		p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table -n gene_p
 	
 	
 	#Don't use p_value_cut_off, get the linear model from table lm_p_gene_repos_2_e5_v40
@@ -95,6 +97,8 @@ class p_gene_analysis:
 		_p_gene_analysis(): add a functionality to get p_value_cut_off from linear_model
 	03-02-05
 		submit(): gene_p table enlarged, p_gene_id_src is for gene_p_map_redundancy.py
+	03-08-05
+		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 	run()
 		--init()
 		--db_connect()
@@ -108,7 +112,8 @@ class p_gene_analysis:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
 		table=None, mcl_table=None, p_value_cut_off=None, report=0, \
 		judger_type=0, needcommit=0, gene_table='p_gene', lm_table=None, \
-		stat_table_fname=None, debug=0, accuracy_cut_off=0, gene_p_table=None):
+		stat_table_fname=None, debug=0, accuracy_cut_off=0, gene_p_table=None,\
+		recurrence_gap_size=2, connectivity_gap_size=2):
 		
 		self.hostname = hostname
 		self.dbname = dbname
@@ -126,7 +131,10 @@ class p_gene_analysis:
 		self.debug = int(debug)
 		self.accuracy_cut_off = float(accuracy_cut_off)
 		self.gene_p_table = gene_p_table
-	
+		#the gap between two recurrences
+		self.recurrence_gap_size = int(recurrence_gap_size)
+		self.connectivity_gap_size = int(connectivity_gap_size)
+		
 	def init(self):	
 		#open a file
 		if self.stat_table_fname:
@@ -615,9 +623,7 @@ class p_gene_analysis:
 			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
 			self.table_output(self.stat_table_f, self.prediction_space2attr)
 			
-			#the gap between two recurrences
-			self.recurrence_gap_size = 2
-			self.connectivity_gap_size = 2
+
 			self.stat_table_f.writerow([])
 			distance_table = 'go.node_dist'
 			go_no_group2prediction_space = self.return_go_no_group2prediction_space(self.go_no2prediction_space, curs, distance_table)
@@ -640,9 +646,9 @@ if __name__ == '__main__':
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
 		"judger_type=", "report", "commit", "gene_table=", "lm_table=", "debug", "accuracy_cut_off=",\
-		"gene_p_table="]
+		"gene_p_table=",  "recurrence_gap_size=", "connectivity_gap_size="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:j:rcg:l:ba:n:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:j:rcg:l:ba:n:x:y:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -662,6 +668,8 @@ if __name__ == '__main__':
 	accuracy_cut_off = 0
 	stat_table_fname = None
 	gene_p_table = None
+	recurrence_gap_size = 2
+	connectivity_gap_size = 2
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -694,13 +702,18 @@ if __name__ == '__main__':
 			accuracy_cut_off = float(arg)
 		elif opt in ("-n", "--gene_p_table="):
 			gene_p_table = arg
+		elif opt in ("-x", "--recurrence_gap_size"):
+			recurrence_gap_size = int(arg)
+		elif opt in ("-y", "--connectivity_gap_size"):
+			connectivity_gap_size = int(arg)
+	
 	if len(args) == 1:
 		stat_table_fname = args[0]
 			
 	if schema and p_value_cut_off!=None and stat_table_fname:
 		instance = p_gene_analysis(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			report, judger_type, commit, gene_table, lm_table, stat_table_fname, debug, \
-			accuracy_cut_off, gene_p_table)
+			accuracy_cut_off, gene_p_table, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__

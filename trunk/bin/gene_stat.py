@@ -11,6 +11,8 @@ Option:
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-e ..., --depth_cut_off=...	the minimum depth for a go node to be valid, 3(default)
 	-f ..., --dir_files=...	the directory containing all the files outputed by cluster_stat.py
+	-x ..., --recurrence_gap_size=...	2(default)
+	-y ..., --connectivity_gap_size=...	2(default)
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
@@ -47,10 +49,13 @@ class gene_stat:
 				--L1_match()
 				--common_ancestor_deep_enough()
 		--submit()
+	
+	03-08-05
+		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 	"""
 	def __init__(self, hostname, dbname, schema, table, mcl_table, leave_one_out, wu, report=0,\
 		depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene',\
-		subgraph_cut_off=0.8, debug=0):
+		subgraph_cut_off=0.8, debug=0, recurrence_gap_size=2, connectivity_gap_size=2):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.schema = schema
@@ -72,8 +77,8 @@ class gene_stat:
 		self.debug_L1_match = 0
 		self.debug_common_ancestor_deep_enough = 0
 		#the gap between two recurrences
-		self.recurrence_gap_size = 2
-		self.connectivity_gap_size = 2
+		self.recurrence_gap_size = int(recurrence_gap_size)
+		self.connectivity_gap_size = int(connectivity_gap_size)
 		
 		#mapping between gene_no and go_no set
 		self.known_genes_dict = {}
@@ -464,9 +469,9 @@ if __name__ == '__main__':
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", \
 		"depth_cut_off=", "dir_files=", "leave_one_out", "wu", "report", "commit", "gene_table=", \
-		"subgraph_cut_off=", "debug"]
+		"subgraph_cut_off=", "debug", "recurrence_gap_size=", "connectivity_gap_size="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:e:f:lwrcg:q:b", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:e:f:x:y:lwrcg:q:b", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -485,6 +490,8 @@ if __name__ == '__main__':
 	gene_table = 'p_gene'
 	subgraph_cut_off = 0
 	debug = 0
+	recurrence_gap_size = 2
+	connectivity_gap_size = 2
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -517,11 +524,15 @@ if __name__ == '__main__':
 			subgraph_cut_off = float(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
+		elif opt in ("-x", "--recurrence_gap_size"):
+			recurrence_gap_size = int(arg)
+		elif opt in ("-y", "--connectivity_gap_size"):
+			connectivity_gap_size = int(arg)
 
 	if schema:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, \
 			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table, \
-			subgraph_cut_off, debug)
+			subgraph_cut_off, debug, recurrence_gap_size, connectivity_gap_size)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
