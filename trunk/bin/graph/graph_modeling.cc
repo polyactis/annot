@@ -392,7 +392,7 @@ void print_usage(FILE* stream,int exit_code)
 		"\t-o --output filename	Write output to file, gph_output(default)\n"\
 		"\t-n --name datasetname	Same as output_filename(default)\n"\
 		"\t-p --p_value_cut_off	p_value significance cutoff,0.01(default)\n"\
-		"\t-c --cor_cut_off cor	correlation cutoff, 0.6(default)\n"\
+		"\t-c --cor_cut_off	correlation cutoff, 0.6(default)\n"\
 		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n");
 	exit(3);
 }
