@@ -52,7 +52,7 @@ class triplet_construct:
 						if self.local_duplet_dict.has_key((duplet[0], duplet[1])):
 							self.local_triplet_dict[tuple] = 1
 			
-	def local_to_global(self, global_dict):
+	def local_to_global(self):
 		for triplet in self.local_triplet_dict:
 			if self.global_triplet_dict.has_key(triplet):
 				self.global_triplet_dict[triplet] += 1
