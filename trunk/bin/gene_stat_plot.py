@@ -631,15 +631,15 @@ class gene_stat:
 			#first output only the known genes
 			if gene_no in self.known_genes_dict:
 				unit = self.gene_prediction_dict[gene_no].p_functions_struc_dict
-				self._table_output(gene_no, unit)
+				self._table_output(self.stat_table_f, gene_no, unit)
 		
 		for gene_no in self.gene_prediction_dict:
 			#second, output the unknown genes
 			if gene_no not in self.known_genes_dict:
 				unit = self.gene_prediction_dict[gene_no].p_functions_struc_dict
-				self._table_output(gene_no, unit)			
+				self._table_output(self.stat_table_f, gene_no, unit)			
 
-	def _table_output(self, gene_no, unit):
+	def _table_output(self, f_handler, gene_no, unit):
 		#indicator for the number of functions associated with this gene
 		for go_no in unit:
 			row = []
@@ -673,7 +673,7 @@ class gene_stat:
 					context_list.append('%s(%2.1f%%)'%(self.gene_no2gene_id[member], (percentage*100) ))
 			row.append(';'.join(context_list))
 			#write the row into the stat_table_fname
-			self.stat_table_f.writerow(row)
+			f_handler.writerow(row)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
