@@ -43,7 +43,7 @@ class stat_plot:
 		positive_predictive_value_list = []
 		for entry in plot_data:
 			sensitivity_list.append(entry[0]/(entry[0]+entry[3]))
-			positive_predictive_value_list.append(entry[2]/(entry[1]+entry[2]))
+			positive_predictive_value_list.append(entry[0]/(entry[0]+entry[2]))
 		
 		r.plot(sensitivity_list, positive_predictive_value_list, type='o',pch='*',xlab='sensitivity', \
 			ylab='positive_predictive_value', main='Connectivity: %f  Limit: %d'%(connectivity,limit))
