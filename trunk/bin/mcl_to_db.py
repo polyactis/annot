@@ -1,5 +1,32 @@
 #!/usr/bin/env python
-import sys,os,psycopg
+import sys,os,psycopg,cStringIO
+
+
+class mcl_result_iterator:
+	'''looping over a mcl result file, generate a block of clusters related to one splat pattern'''
+	def __init__(self, inf):
+		self.inf = inf
+		self.mcl_cluster_block = ''
+	def __iter__(self):
+		return self		
+	def next(self):
+		self.read()
+		return cStringIO.StringIO(self.mcl_cluster_block)
+	def read(self):
+		self.mcl_cluster_block = ''
+		mcl_begin = 0
+		line = self.inf.readline()
+		while line != '\n':
+			if line == '':
+				raise StopIteration
+				break
+			if line.find('(splat_id') == 0:
+				mcl_begin = 1
+				self.mcl_cluster_block += line
+			if mcl_begin == 1:
+				self.mcl_cluster_block += line
+			line = self.inf.readline()
+		self.mcl_cluster_block += line
 
 class mcl_to_db:
 	def __init__(self, dir, dbname, needcommit=0):
@@ -8,7 +35,6 @@ class mcl_to_db:
 		self.needcommit = int(needcommit)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to graph")
-		self.mcl_id = ''
 		self.splat_id = ''
 		self.cluster_set = []
 		self.parameter = ''
@@ -18,36 +44,40 @@ class mcl_to_db:
 		no = 0
 		for fname in f_list:
 			if fname.find('out') == 0:
-				fname_list = fname.split('.')
-				self.splat_id = fname_list[1]
-				self.parameter = fname_list[2]
 				path = os.path.join(self.dir, fname)
 				inf = open(path, 'r')
-				self.cluster_set_construct(inf)
-				for i in range(len(self.cluster_set)):
-					#try:
-					vertex_set = self.cluster_set[i]
-					self.mcl_id = '%s_%s_%d'%(self.splat_id,self.parameter,(i+1))
-					string_vertex_set = repr(vertex_set)
-					string_vertex_set = string_vertex_set.replace('[','{')
-					string_vertex_set = string_vertex_set.replace(']','}')
-					self.curs.execute("insert into mcl_result(mcl_id, splat_id, vertex_set, parameter) \
-						values ('%s','%s','%s','%s')"%(self.mcl_id, self.splat_id, string_vertex_set, self.parameter))
-					#except:
-						#sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
-						#self.conn.rollback()
-						#sys.exit(1)
-					no+=1
-					sys.stderr.write('.')
+				iter = mcl_result_iterator(inf)
+				for mcl_cluster_block in iter:
+					self.parse(mcl_cluster_block)
+					for i in range(len(self.cluster_set)):
+
+						vertex_set = self.cluster_set[i]
+						self.mcl_id = '%s_%s_%d'%(self.splat_id,self.parameter,(i+1))
+						string_vertex_set = repr(vertex_set)
+						string_vertex_set = string_vertex_set.replace('[','{')
+						string_vertex_set = string_vertex_set.replace(']','}')
+						try:
+							self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter) \
+							values ('%s','%s','%s')"%(self.splat_id, string_vertex_set, self.parameter))
+						except:
+							sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
+							self.conn.rollback()
+							sys.exit(1)
+						no+=1
+						sys.stderr.write('.')
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal clusters: %d\n'%no)
 
-	def cluster_set_construct(self,inf):
+	def parse(self,inf):
 		line = inf.readline()
 		self.cluster_set = []
 		cluster_begin = 0
 		while line:
+			if line.find('(splat_id') == 0:
+				self.splat_id = line[10:-2]
+			if line.find('(parameter') == 0:
+				self.parameter = line[11:-2]
 			if line == 'begin\n':
 				cluster_begin = 1
 			if cluster_begin and (line == ')\n'):

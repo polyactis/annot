@@ -57,17 +57,18 @@ class db_to_mcl:
 			else:
 				self.vertex_dict[vertex2] = [vertex1]
 		dim = len(self.vertex_dict)
-		outf.write('(mclheader\n')
-		outf.write('mcltype matrix\n')
-		outf.write('dimensions %dx%d\n)\n'%(dim,dim,))
-		outf.write('(mcldoms\n')
+		out_block = '(mclheader\n'		# here it is '=' not '+='
+		out_block += 'mcltype matrix\n'
+		out_block += 'dimensions %dx%d\n)\n'%(dim,dim)
+		out_block += '(mcldoms\n'
 		vertex_list = self.vertex_dict.keys()
-		outf.write('%s $\n)\n'%' '.join(vertex_list))
-		outf.write('(mclmatrix\nbegin\n')
+		out_block += '%s $\n)\n'%' '.join(vertex_list)
+		out_block += '(mclmatrix\nbegin\n'
 		for vertex in self.vertex_dict:
-			outf.write('%s '%vertex)
-			outf.write('%s $\n'%' '.join(self.vertex_dict[vertex]))
-		outf.write(')\n')
+			out_block += '%s '%vertex
+			out_block += '%s $\n'%' '.join(self.vertex_dict[vertex])
+		out_block += ')\n'
+		outf.write(out_block)
 		
 if __name__ == '__main__':
 	def helper():

@@ -24,13 +24,23 @@ class mcl_batch:
 		for i in range(self.no_of_jobs):
 			job_fname = os.path.join(self.jobdir, 'mcl'+repr(i+1)+'.sh')
 			job_f = open(job_fname, 'w')
-			job_f.write('#!/bin/sh\n')
-			job_f.write('cd %s\n'%self.dir)
+			out_block = '#!/bin/sh\n'		#this is '=' not '+='
+			out_block += 'cd %s\n'%self.dir
+			job_outfname = 'out%d'%i
+			out_block += 'touch %s\n'%job_outfname
 			for j in range(files_per_job):
 				index = i*files_per_job + j
 				if index == no_of_files:
 					break
-				job_f.write('mcl %s %s\n'%(self.f_list[index], self.parameter,))
+				mcl_outfname = 'mcl_%s'%self.f_list[index]
+				parameter = ' -o %s '%mcl_outfname		#this is for directing mcl's output.
+				parameter += self.parameter				#adding up the user_passed parameter
+				out_block += 'echo "(splat_id %s )"  >>%s\n'%(self.f_list[index], job_outfname)
+				out_block += 'echo "(parameter %s )"  >>%s\n'%(self.parameter, job_outfname)
+				out_block += 'mcl %s %s\n'%(self.f_list[index], parameter)
+				out_block += 'cat %s >>%s\n'%(mcl_outfname, job_outfname)
+				out_block += 'rm %s\n'%mcl_outfname
+			job_f.write(out_block)
 			job_f.close()
 			wl = ['qsub', job_fname]
 			os.spawnvp(os.P_WAIT, 'qsub', wl)
@@ -40,7 +50,7 @@ if __name__ == '__main__':
 		sys.stderr.write('\
 		argv[1] is directory containing mcl input files.\n\
 		argv[2] is the no_of_jobs you want to submit.\n\
-		argv[3] is the parameter passed to mcl. You can ignore it.\n')
+		argv[3] is the parameter passed to mcl. Default is none. Parameter should be double quoted("").\n')
 		
 	if len(sys.argv) == 4:
 		instance = mcl_batch(sys.argv[1], sys.argv[2], sys.argv[3])
