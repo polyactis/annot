@@ -23,6 +23,8 @@ Examples:
 	6: unittest for p_gene_lm
 03-01-05
 	7: unittest for p_gene_analysis
+03-01-05
+	8: unittest for gene_p_map_redundancy
 """
 import unittest, os, sys, getopt
 
@@ -450,7 +452,55 @@ class TestPGeneAnalysis(unittest.TestCase):
 		print self.instance.general_lm_results
 		print self.instance.return_p_value_cut_off(56, 18, 2)
 		
+
+class TestGenePMapRedundancy(unittest.TestCase):
+	"""
+	02-28-05
+	"""
+	def setUp(self):
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		p_gene_table = 'p_gene_repos_2_e5'
+		gene_p_table = 'gene_p_repos_2_e5'
 		
+		self.instance = gene_p_map_redundancy(hostname, dbname, schema,\
+			p_gene_table, gene_p_table)
+		#prepare a cursor
+		from codense.common import db_connect
+		(conn, curs) = db_connect(hostname, dbname, schema)
+		self.instance.go_no2term_id = self.instance.get_go_no2term_id(curs, self.instance.term_table)
+	
+	def test__p_gene_map(self):
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#1029 is father of 824, 824 is father of 1030
+		p_gene_id2go_no = {1:824, 2:1029, 3:1030}
+		self.instance._p_gene_map(p_gene_id2go_no, self.instance.p_gene_id_map, curs,\
+			self.instance.distance_table, self.instance.go_no2distance, self.instance.go_no2term_id)
+		print self.instance.p_gene_id_map
+	
+	def test_get_distance(self):
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		#1029 is parent of 824
+		jasmine_distance = self.instance.get_distance(curs, 824, 1029, self.instance.distance_table,\
+			self.instance.go_no2distance, self.instance.go_no2term_id)
+		self.assertEqual(jasmine_distance, 0)
+	
+	def test_submit(self):
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		p_gene_id_map = {33:32}
+		self.instance.submit(curs, self.instance.gene_p_table, p_gene_id_map)
+	
+	def test_gene_no2p_gene_setup(self):
+		row = [2, 6661, 365]
+		self.instance.gene_no2p_gene_setup(row)
+		print self.instance.gene_no2p_gene
+	
+	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -469,7 +519,8 @@ if __name__ == '__main__':
 		4: TestCrackSplat,
 		5: TestLinearModel,
 		6: TestPGeneLm,
-		7: TestPGeneAnalysis}
+		7: TestPGeneAnalysis,
+		8: TestGenePMapRedundancy}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
