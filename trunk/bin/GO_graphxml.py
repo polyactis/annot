@@ -5,18 +5,20 @@ Usage: GO_graphxml.py [OPTION] Outputfile
 Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, go(default)
+	-g ..., --organism=...	two letter organism abbreviation, sc(default)
 	-t ..., --type=...	which branch of GO, 0, 1(default) or 2
 	-h, --help              show this help
 
 Examples:
-	GO_graphxml.py -d GO go.xml
-	GO_graphxml.py -d graphdb  go.xml
+	GO_graphxml.py -d GO -g sc go.xml
+	GO_graphxml.py -d graphdb -g hs go.xml
 	GO_graphxml.py -d GO -k go -t 0 molecular_function.xml
 
 Description:
 	This class builds a big GO graph from GO database(two tables, term and term2term).
 	And given a GO term, it can output either its parent subgraph or child subgraph
 	in GraphXML format, which is readable by hypergraph to visualize.
+	Organism information is used to show the associated genes.
 	type illustration:
 	0:	molecular_function
 	1:	biological_process
@@ -26,20 +28,24 @@ Description:
 import sys, os, psycopg, getopt
 from xml.dom.minidom import getDOMImplementation
 from graphlib import Graph
+from sets import Set
 
 class termid_attr:
 	def __init__(self, acc, name, is_obsolete):
 		self.acc = acc
 		self.name = name
 		self.is_obsolete = is_obsolete
-
+		self.individual = Set()
+		self.family = Set()
+		
 class GO_graphxml:
 	'''
 	This class builds a big GO graph from GO database(two tables, term and term2term).
 	And given a GO term, it can output either its parent subgraph or child subgraph
 	in GraphXML format, which is readable by hypergraph to visualize.
 	'''
-	def __init__(self, dbname, schema, type, output):
+	#orgn ='sc' is for interface compliance. as this class is inherited by Go_no_parent_filter.
+	def __init__(self, dbname, schema, type, output, orgn='sc'):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -47,7 +53,20 @@ class GO_graphxml:
 		self.type_dict = {0:'molecular_function', 1:'biological_process', 2:'cellular_component'}
 		self.type = self.type_dict[int(type)]
 		self.ofname = output
-		
+		self.org_short2long = {'at':'Arabidopsis thaliana',
+			'ce':'Caenorhabditis elegans',
+			'dm':'Drosophila melanogaster',
+			'hs':'Homo sapiens',
+			'mm':'Mus musculus',
+			'sc':'Saccharomyces cerevisiae',
+			'Arabidopsis thaliana':'Arabidopsis thaliana',
+			'Caenorhabditis elegans':'Caenorhabditis elegans',
+			'Drosophila melanogaster':'Drosophila melanogaster',
+			'Homo sapiens':'Homo sapiens',
+			'Mus musculus':'Mus musculus',
+			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
+			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
+		self.organism = self.org_short2long[orgn]		
 		self.termid_dict = {}
 		self.acc2id_dict = {}
 		self.go_graph = Graph.Graph()
@@ -66,12 +85,33 @@ class GO_graphxml:
 			self.termid_dict[row[0]] = termid_attr(row[1], row[2], row[3])
 			self.acc2id_dict[row[1]] = row[0]
 		
+		#construct the graph
 		self.curs.execute("select term1_id, term2_id, relationship_type_id from term2term")
 		rows = self.curs.fetchall()
 		for row in rows:
 			#we don't want edge to contain obsolete term
 			#if self.termid_dict[row[0]].is_obsolete == 0 and self.termid_dict[row[1]].is_obsolete ==0:
-				self.go_graph.add_edge(row[0], row[1])
+			self.go_graph.add_edge(row[0], row[1])
+		
+		#for each termid, loads in its associated genes
+		self.curs.execute("select t.id, a.gene_id from graph.association a, graph.gene_id_to_no g, go.term t\
+			where a.gene_id = g.gene_id and a.go_id=t.acc and g.organism='%s'"%self.organism)
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.termid_dict[row[0]].individual.add(row[1])
+		
+		#collect the associated genes from descendent terms		
+		for termid in self.termid_dict:
+			#assign its own associated genes
+			self.termid_dict[termid].family |= self.termid_dict[termid].individual
+			#from descendents
+			if termid not in self.go_graph.nodes:
+				continue
+			descendents = self.go_graph.forw_bfs(termid)
+			for descendent in descendents:
+				#sets.Set is different from kjSet in the union operation.
+				self.termid_dict[termid].family |= self.termid_dict[descendent].individual
+		
 		sys.stderr.write("Done\n")
 		
 	def subgraph_to_graphxml(self, subgraph):
@@ -96,7 +136,8 @@ class GO_graphxml:
 			node.setAttribute('name', '%d'%go_node)
 			
 			label = doc.createElement('label')
-			text = doc.createTextNode(self.termid_dict[go_node].acc)
+			text = doc.createTextNode("%s %d(%d)"%(self.termid_dict[go_node].acc,\
+				len(self.termid_dict[go_node].individual), len(self.termid_dict[go_node].family)) )
 			label.appendChild(text)
 			
 			dataref = doc.createElement('dataref')
@@ -153,15 +194,16 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 
-	long_options_list = ["help", "dbname=", "schema=", "type="]
+	long_options_list = ["help", "dbname=", "schema=", "type=", "organism="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	dbname = 'graphdb'
 	schema = 'go'
+	organism = 'sc'
 	type = 1
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -173,9 +215,11 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-t", "--type"):
 			type = int(arg)
+		elif opt in ("-g", "--organism"):
+			organism = arg
 
 	if len(args) == 1:
-		instance = GO_graphxml(dbname, schema, type, args[0])
+		instance = GO_graphxml(dbname, schema, type, args[0], organism)
 		instance.run()
 	else:
 		print __doc__
