@@ -5,6 +5,7 @@ Usage: graph_reorganize.py -k SCHEMA [OPTION] DATADIR NEWDIR
 Option:
 	DATADIR is the directory of the graph construction results.
 	NEWDIR is the directory to store the filtered results.
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --type=...	0(default, only known), 1(known+unknown) or 2(all)
@@ -140,8 +141,8 @@ class graph_reorganize:
 	Collect labels.
 	Transform graph.cc results into gspan input.
 	'''
-	def __init__(self, dbname, schema, type, orgn):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, type, orgn):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.type = int(type)
@@ -200,6 +201,7 @@ class graph_reorganize:
 		'''
 		This method loads in the data structures from database.
 		'''
+		sys.stderr.write("Loading Data STructure...")
 		if self.type == 0:
 			self.curs.execute("select gene_id, gene_no from gene where known=TRUE order by gene_no")
 		if self.type == 1:
@@ -212,6 +214,7 @@ class graph_reorganize:
 		for row in rows:
 			self.global_vertex_dict[row[0]] = row[1]
 			self.vertex_block += 'v %d %s\n'%(row[1], row[0])
+		sys.stderr.write("Done\n")
 		return 0
 		
 	def transform(self, inf, outf):
@@ -248,7 +251,7 @@ class graph_reorganize:
 		sys.stderr.write("\tedges: %d(before), %d(after)\n"%(self.no_of_edges_before, self.no_of_edges_after))
 		sys.stderr.write("\tvertices: %d(before), %d(after)\n"%(len(self.global_vertex_dict_before), len(self.global_vertex_dict_after)) )
 	
-def transform_batch(dbname, schema, type, orgn, dir, output_dir):
+def transform_batch(hostname, dbname, schema, type, orgn, dir, output_dir):
 	'''
 	See comments of graph_reorganize.transform().
 	'''
@@ -257,7 +260,7 @@ def transform_batch(dbname, schema, type, orgn, dir, output_dir):
 	if not os.path.isdir(output_dir):
 		os.makedirs(output_dir)
 	
-	instance = graph_reorganize(dbname, schema, type, orgn)
+	instance = graph_reorganize(hostname, dbname, schema, type, orgn)
 	data_not_loaded = instance.dstruc_loadin()
 	if data_not_loaded:
 		return
@@ -302,11 +305,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:", ["help", "dbname=", "schema=", "type=", "organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:", ["help", "hostname=", "dbname=", "schema=", "type=", "organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	type = 0
@@ -315,6 +319,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -328,7 +334,7 @@ if __name__ == '__main__':
 		if type == 2 and organism == '':
 			print __doc__
 			sys.exit(2)
-		transform_batch(dbname, schema, type, organism, args[0], args[1])
+		transform_batch(hostname, dbname, schema, type, organism, args[0], args[1])
 	else:
 		print __doc__
 		sys.exit(2)

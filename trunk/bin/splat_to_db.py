@@ -4,6 +4,7 @@ Usage: splat_to_db.py -k SCHEMA [OPTION] DATAFILE
 
 Option:
 	DATAFILE usually is patterns-splat, output of splat.
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-c ..., --commit=...	0(default) or 1 specifies commit or not
@@ -46,7 +47,7 @@ class splat_result_iterator:
 class splat_to_db:
 	'''
 	'''
-	def __init__(self, infname, dbname, schema, prefix, report, needcommit=0):
+	def __init__(self, infname, hostname, dbname, schema, prefix, report, needcommit=0):
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
 		self.recurrence_array = []
@@ -55,7 +56,7 @@ class splat_to_db:
 		self.inf = open(infname, 'r')
 		self.report = int(report)
 		self.needcommit = int(needcommit)
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.prefix = prefix
@@ -114,11 +115,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:p:c:", ["help", "report", "dbname=", "schema=", "prefix=", "commit="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:p:c:", ["help", "report", "hostname=", "dbname=", "schema=", "prefix=", "commit="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	commit = 0
@@ -128,6 +130,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -139,7 +143,7 @@ if __name__ == '__main__':
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and len(args)==1:
-		instance = splat_to_db(args[0], dbname, schema, prefix, report, commit)
+		instance = splat_to_db(args[0], hostname, dbname, schema, prefix, report, commit)
 		instance.run()
 	else:
 		print __doc__
