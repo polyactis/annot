@@ -54,8 +54,11 @@ class stat_plot:
 		self.option_num_dict = {}
 		self.stat_data = []
 		self.no_of_curves = 0
+		# a list of varying values, for legend
+		self.varying_list = []
 	
 	def option_parsing(self):
+		#in option_num_dict, 0,1,2 are the fixed parameters. 3 is the varying parameter.
 		for i in range(len(self.fixed_label)):
 			label = self.option_label_dict[self.fixed_label[i]]
 			self.option_num_dict[i] = option_attr(label, self.fixed_value_list[i])
@@ -72,11 +75,16 @@ class stat_plot:
 		rows = self.curs.fetchall()
 		r.png('%s'%self.ofname)
 		for row in rows:
+			#position 0,1,2 are fixed values, 3 is varying value, 4 is the tag value.
 			self.plot(row)
+		#add the legend
+		r.legend(self.x_range[1], self.y_range[1], self.varying_list, col=range(1, self.no_of_curves+1), lty=1, pch='*', xjust=1)
 		r.dev_off()
 		
 	def plot(self, row):
 		self.no_of_curves += 1
+		#position 3 in row is the varying value
+		self.varying_list.append(row[3])
 		x_list = []
 		y_list = []
 		self.curs.execute("select tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn from stat_plot_data where\
