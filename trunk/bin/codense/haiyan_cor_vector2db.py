@@ -60,6 +60,7 @@ class haiyan_cor_vector2db:
 				self.conn.rollback()
 				sys.exit(1)
 		if self.needcommit:
+			self.curs.execute("create index %s_edge_name_idx on %s(edge_name)"%(self.table, self.table))
 			self.conn.commit()
 
 if __name__ == '__main__':
