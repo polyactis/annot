@@ -10,6 +10,7 @@ Options:
 	-t ..., --tag=...	just tag
 	-x ..., --xlim=...	the range for the x axis, 0.0-1000(default)
 	-y ..., --ylim=...	the range for the y axis, 0.0-1.0(default)
+	-p ..., --type=...	the type of running, 0(defaut), 1, 2
 	-c, --based_on_clusters	default is based_on_functions
 	-l, --l1	L1(sibling) is counted as true positive.
 	-h, --help		show this help
@@ -21,10 +22,13 @@ Description:
 	unrsp: u denotes unknown_cut_off, n denotes connectivity_cut_off
 		r denotes recurrence_cut_off, s denotes cluster_size_cut_off
 		p denotes p_value_cut_off
-		
+	type of running:
+		0:	two varying parameters, plotting
+		1:	one varying parameter, plotting
+		2:	table_output, preparation for R
 """
 
-import sys, os, psycopg, getopt
+import sys, os, psycopg, getopt, csv
 from rpy import r
 
 class option_attr:
@@ -33,7 +37,7 @@ class option_attr:
 		self.value = value
 
 class stat_plot:
-	def __init__(self, hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, l1, ofname):
+	def __init__(self, hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, type, l1, ofname):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to graph")
@@ -46,6 +50,7 @@ class stat_plot:
 		self.y_range = ylim.split('-')
 		self.y_range = map(float, self.y_range)
 		self.based_on_clusters = int(based_on_clusters)
+		self.type = int(type)
 		self.l1 = int(l1)
 		self.ofname = ofname
 		self.option_label_dict = {'u': 'unknown_cut_off',
@@ -67,10 +72,55 @@ class stat_plot:
 		self.option_num_dict[4] = option_attr(self.option_label_dict[self.var])
 
 	def run(self):
-		self.option_parsing()
-		self.single_plot()
+		if self.type == 0:
+			self.option_parsing()
+			self.plot()
+		elif self.type == 1:
+			self.option_parsing()
+			self.single_plot()
+		elif self.type == 2:
+			self.table_output()
 	
-	
+	def table_output(self):
+		'''
+		Output a three-column table for 3D plotting via R's wireframe from lattice.
+		The three columns are recurrence_cut_off, connectivity_cut_off, accuracy.
+		'''
+		writer = csv.writer(open(self.ofname,'w'), delimiter='\t')
+		self.curs.execute("select  tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn, recurrence_cut_off, \
+			connectivity_cut_off from stat_plot_data where tag='%s' order by recurrence_cut_off,\
+			connectivity_cut_off"%(self.tag))
+		plot_data = self.curs.fetchall()
+		for entry in plot_data:
+			tn = entry[4]
+			fn = entry[7]
+			recurrence_cut_off = entry[8]
+			connectivity_cut_off = entry[9]
+			
+			if self.based_on_clusters:
+				#using the tp_m, tp1_m and fp_m
+				tp = entry[1]
+				tp1 = entry[3]
+				fp = entry[6]
+			else:
+				#using the tp, tp1, fp
+				tp = entry[0]
+				tp1 = entry[2]
+				fp = entry[5]
+			if self.l1:
+				#tp1 is counted as true positive
+				tp += tp1
+			else:
+				#tp1 is counted as false positive
+				fp += tp1
+			if (tp+fp) != 0:
+				accuracy = float(tp)/(tp+fp)
+			else:
+				#skip those unavailable data
+				continue
+			writer.writerow([recurrence_cut_off, connectivity_cut_off, accuracy])
+		del writer		
+		
 	def single_plot(self):
 		#this function deals with 4 fixed parameters and 1 varying parameter
 		r.png('%s'%self.ofname)
@@ -171,9 +221,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_option_list = ["help", "hostname=", "dbname=", "fixed=", "var=", "tag=", "xlim=", "ylim=", "based_on_clusters", "l1"]
+	long_option_list = ["help", "hostname=", "dbname=", "fixed=", "var=", "tag=", "xlim=", "ylim=", "based_on_clusters", "type=", "l1"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:f:v:t:x:y:cl", long_option_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:f:v:t:x:y:p:cl", long_option_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -186,6 +236,7 @@ if __name__ == '__main__':
 	xlim = '0.0-1000'
 	ylim = '0.0-1.0'
 	based_on_clusters = 0
+	type = 0
 	l1 = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -207,11 +258,13 @@ if __name__ == '__main__':
 			ylim = arg
 		elif opt in ("-c", "--based_on_clusters"):
 			based_on_clusters = 1
+		elif opt in ("-p", "--type"):
+			type = int(arg)
 		elif opt in ("-l", "--l1"):
 			l1 = 1
 	
 	if fixed and var and tag and len(args)==1:
-		instance = stat_plot(hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, l1, args[0])
+		instance = stat_plot(hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, type, l1, args[0])
 		instance.run()
 	else:
 		print __doc__
