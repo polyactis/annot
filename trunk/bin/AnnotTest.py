@@ -947,7 +947,7 @@ class TestGraphModelingGraphCC(unittest.TestCase):
 		self.dbname = 'graphdb'
 		self.schema = 'sc_54_6661'
 		homedir = os.path.expanduser('~')
-		self.input_file = os.path.join(homedir, 'bin/hhu_clustering/data/input/sc_54_6661_7')
+		self.input_file = os.path.join(homedir, 'bin/hhu_clustering/data/input/sc_54_6661_5')
 	
 	def test_compare_edge_weights(self):
 		"""
