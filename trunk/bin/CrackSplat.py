@@ -121,14 +121,19 @@ class CrackSplat:
 			--clustering_test_instance.reformat
 			--call_modes
 			--parse_modes_results
-		
+		02-25-05
+			check the exit code of modes
 		#argument1 and argument2 are for future purpose
 		
 		"""
 		(index2no, graph) = self.graph_dict2graph(graph_dict)
 		clustering_test_instance = argument1
 		clustering_test_instance.reformat(graph, infname, len(index2no))
-		self.call_modes(infname, outfname, len(index2no), parameter_a, parameter_b)
+		return_code = self.call_modes(infname, outfname, len(index2no), parameter_a, parameter_b)
+		if return_code!=1:
+			#modes' normal exit code is 1
+			print 'call modes failed'
+			sys.exit(1)
 		codense2db_instance = argument2
 		curs = argument3
 		return self.parse_modes_results(splat_id, outfname, index2no, graph, codense2db_instance, curs)
@@ -182,6 +187,7 @@ class CrackSplat:
 		###!!!, the argument list must comprise of all strings, not integer, or float.
 		wl = ['modes', infname, repr(no_of_genes), outfname, repr(parameter_b), '1', repr(int(parameter_a*10)), '80']
 		return os.spawnvp(os.P_WAIT, modes_path, wl)
+
 	
 	def parse_modes_results(self, splat_id, outfname, index2no, graph, codense2db_instance, curs):
 		"""
@@ -262,6 +268,7 @@ class CrackSplat:
 			--splat2graph_dict
 			--crack_dict
 			--submit
+		
 		"""
 		#some additional initialization
 		self.init()
@@ -294,7 +301,11 @@ class CrackSplat:
 			rows = curs.fetchall()
 		if self.needcommit:
 			curs.execute("end")
-			
+		#02-25-05 cleanup the temp stuff
+		os.remove(self.tmpinfname)
+		os.remove(self.tmpoutfname)
+		os.rmdir(self.dir_files)
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
