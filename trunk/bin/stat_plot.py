@@ -3,7 +3,7 @@
 Usage: python stat_plot.py [options]
 
 Options:
-  -d ..., --dbname=...   use specified database name
+  -d ..., --dbname=...   use specified database name(required)
   -h, --help              show this help
 
 Examples:
@@ -40,13 +40,13 @@ class stat_plot:
 	def plot(self, connectivity, limit, plot_data):
 		r.pdf('%d.pdf'%self.no_of_plots)
 		sensitivity_list = []
-		false_positive_ratio_list = []
+		positive_predictive_value_list = []
 		for entry in plot_data:
 			sensitivity_list.append(entry[0]/(entry[0]+entry[3]))
-			false_positive_ratio_list.append(entry[2]/(entry[1]+entry[2]))
+			positive_predictive_value_list.append(entry[2]/(entry[1]+entry[2]))
 		
-		r.plot(sensitivity_list, false_positive_ratio_list, type='o',pch='*',xlab='sensitivity', \
-			ylab='false_positive_ratio', main='Connectivity: %f  Limit: %d'%(connectivity,limit))
+		r.plot(sensitivity_list, positive_predictive_value_list, type='o',pch='*',xlab='sensitivity', \
+			ylab='positive_predictive_value', main='Connectivity: %f  Limit: %d'%(connectivity,limit))
 		r.dev_off()
 		self.no_of_plots += 1
 	
