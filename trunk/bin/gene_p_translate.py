@@ -10,6 +10,7 @@ Option:
 	-n ..., --gene_p_table=...	update the gene_p table, needed if needcommit
 	-m ..., --mcl_table=...	the mcl_table
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
+	-y ..., --output_type=...	0(default), 1(for haiyan's ISMB2005)
 	-c, --commit	commit this database transaction (IGNORE)
 	-r, --report	report flag
 	-u, --debug debug flag
@@ -56,7 +57,8 @@ class gene_p_translate:
 				--output_function_group()
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, p_gene_table=None, \
-		gene_p_table=None, mcl_table=None, judger_type=0, needcommit=0, report=0, debug=0):
+		gene_p_table=None, mcl_table=None, judger_type=0, output_type=0, needcommit=0, \
+		report=0, debug=0):
 		
 		self.hostname = hostname
 		self.dbname = dbname
@@ -65,6 +67,7 @@ class gene_p_translate:
 		self.gene_p_table = gene_p_table
 		self.mcl_table = mcl_table
 		self.judger_type = int(judger_type)
+		self.output_type = int(output_type)
 		self.needcommit = int(needcommit)
 		self.report = int(report)		
 		self.debug = int(debug)
@@ -76,6 +79,8 @@ class gene_p_translate:
 		self.is_correct_dict = {0: 'is_correct',
 			1: 'is_correct_L1',
 			2: 'is_correct_lca'}
+		self.output_dict = {0: self.output,
+			1: self.output1}
 	
 	def data_fetch(self, curs, p_gene_table, gene_p_table, mcl_table):
 		"""
@@ -199,6 +204,9 @@ class gene_p_translate:
 			loop over gene_no2p_gene_id_src and p_gene_id_src_map
 		03-13-05
 			add a column, #clusters in the output file
+			
+			--output_one_gene()
+			--output_function_group()
 		"""
 		#three dictionaries
 		gene_no2gene_id = get_gene_no2gene_id(curs)
@@ -275,6 +283,104 @@ class gene_p_translate:
 		#a blank line
 		writer.writerow([])
 	
+	#####following three functions is output format for haiyan's ISMB2005
+	def output1(self, curs, outf, known_gene_no2p_gene_id_src, unknown_gene_no2p_gene_id_src, p_gene_id_src_map):
+		"""
+		03-15-05
+			copied from output()
+		"""
+		#three dictionaries
+		gene_no2gene_id = get_gene_no2gene_id(curs)
+		gene_no2direct_go = get_gene_no2direct_go(curs)
+		go_no2go_id = get_go_no2go_id(curs)
+		go_no2name = get_go_no2name(curs)
+		go_no2accuracy, go_no2accuracy_pair = self.get_go_no2accuracy(curs, self.p_gene_table, self.gene_p_table)
+		from codense.common import get_prediction_pair2lca_list
+		prediction_pair2lca_list = get_prediction_pair2lca_list(curs,p_gene_table=self.p_gene_table)
+		
+		sys.stderr.write("Outputing prediction table...")
+		writer = csv.writer(outf, delimiter='\t')
+		#first output the known genes
+		for (gene_no, p_gene_id_src_list) in known_gene_no2p_gene_id_src.iteritems():
+			self.output_one_gene1(curs, writer, gene_no, gene_no2gene_id, gene_no2direct_go)
+			row = ['go_id', 'go_name', 'is_correct_lca', 'lca_list', 'p_value_list', '#clusters',\
+				'e_acc']
+			writer.writerow(row)
+			for p_gene_id_src in p_gene_id_src_list:
+				#NOTE: the arguments passed to this function is different between known and unknown genes.
+				self.output_function_group1(curs, writer, p_gene_id_src_map[p_gene_id_src], gene_no2gene_id,\
+					go_no2go_id, go_no2name, go_no2accuracy, go_no2accuracy_pair, prediction_pair2lca_list, gene_no)
+			writer.writerow([])
+		#second output the unknown genes
+		for (gene_no, p_gene_id_src_list) in unknown_gene_no2p_gene_id_src.iteritems():
+			self.output_one_gene1(curs, writer, gene_no, gene_no2gene_id, gene_no2direct_go)
+			row = ['go_id', 'go_name', 'p_value_list', '#clusters', 'e_acc']
+			writer.writerow(row)
+			for p_gene_id_src in p_gene_id_src_list:
+				self.output_function_group1(curs, writer, p_gene_id_src_map[p_gene_id_src], gene_no2gene_id,\
+					go_no2go_id, go_no2name, go_no2accuracy, go_no2accuracy_pair)
+			writer.writerow([])
+		del writer
+		sys.stderr.write("Done\n")
+
+	def output_one_gene1(self, curs, writer, gene_no, gene_no2gene_id, gene_no2direct_go):
+		"""
+		03-15-05
+			copied from output_one_gene().
+		"""
+		row = ['gene_id', 'direct functions', 'all functions']
+		writer.writerow(row)
+		row = [gene_no2gene_id[gene_no]]
+		direct_go_id_list = gene_no2direct_go.get(gene_no)
+		if direct_go_id_list:
+			row.append(';'.join(direct_go_id_list))
+		else:
+			row.append('')
+		
+		curs.execute("select g.gene_no,go.go_id from gene g, go where go.go_no=any(g.go_functions) and g.gene_no=%d"%(gene_no))
+		rows = curs.fetchall()
+		go_functions_list = []
+		for sub_row in rows:
+			go_functions_list.append(sub_row[1])
+		row.append(';'.join(go_functions_list))
+		writer.writerow(row)
+	
+	def output_function_group1(self, curs, writer, function_struc_dict, gene_no2gene_id, go_no2go_id, go_no2name, go_no2accuracy, \
+		go_no2accuracy_pair, prediction_pair2lca_list=None, gene_no=None):
+		"""
+		03-15-05
+			copied from output_function_group()
+		"""
+		for (go_no, function_struc) in function_struc_dict.iteritems():
+			#transform to character type
+			p_value_list = map(repr, function_struc.p_value_list)
+			mcl_id_list = map(repr, function_struc.cluster_array)
+			if prediction_pair2lca_list:
+				#use prediction_pair2lca_list to judge whether it's for known genes or unknown
+				if function_struc.is_correct_lca==1:
+					lca_list = prediction_pair2lca_list.get((gene_no,go_no))
+					if lca_list:
+						former_length = len(lca_list)
+						lca_list = dict_map(go_no2go_id, lca_list)
+						if len(lca_list)!=former_length:
+							sys.stderr.write("Warning: some go_nos in lca_list have no go_ids for gene: %s and go_no: %s.\n\tList shrinked from %s to %s\n"%\
+								(gene_no, go_no, former_length, len(lca_list)))
+					else:
+						sys.stderr.write("Error: prediction pair gene=%s, go_no=%s is correct by lca, but no lca_list.\n"%\
+							(gene_no, go_no))
+						sys.exit(2)
+				else:
+					lca_list = []
+				row = [go_no2go_id[go_no], go_no2name[go_no], function_struc.is_correct_lca, ';'.join(lca_list), \
+					';'.join(p_value_list), len(mcl_id_list), go_no2accuracy_pair[go_no].ratio]
+			else:
+				row = [go_no2go_id[go_no], go_no2name[go_no], \
+					';'.join(p_value_list), len(mcl_id_list), go_no2accuracy_pair[go_no].ratio]
+				
+			writer.writerow(row)
+		
+	##########
+	
 	def stat_output(self, outf, known_gene_no2p_gene_id_src, unknown_gene_no2p_gene_id_src):
 		"""
 		03-09-05
@@ -315,7 +421,7 @@ class gene_p_translate:
 		curs.execute("begin")	#because of cursor usage
 		
 		self.data_fetch(curs, self.p_gene_table, self.gene_p_table, self.mcl_table)
-		self.output(curs, sys.stdout, self.known_gene_no2p_gene_id_src, self.unknown_gene_no2p_gene_id_src, self.p_gene_id_src_map)
+		self.output_dict[self.output_type](curs, sys.stdout, self.known_gene_no2p_gene_id_src, self.unknown_gene_no2p_gene_id_src, self.p_gene_id_src_map)
 		self.stat_output(sys.stdout, self.known_gene_no2p_gene_id_src, self.unknown_gene_no2p_gene_id_src)
 	
 
@@ -324,9 +430,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)	
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:n:m:j:cru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:n:m:j:y:cru", ["help", "hostname=", \
 			"dbname=", "schema=", "p_gene_table=", "gene_p_table=", \
-			"mcl_table=", "judger_type=", "commit", "report", "debug"])
+			"mcl_table=", "judger_type=", "output_type=", "commit", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -338,6 +444,7 @@ if __name__ == '__main__':
 	gene_p_table = None
 	mcl_table = None
 	judger_type = 0
+	output_type = 0
 	commit = 0
 	report = 0
 	debug = 0
@@ -359,6 +466,8 @@ if __name__ == '__main__':
 			mcl_table = arg
 		elif opt in ("-j", "--judger_type"):
 			judger_type = int(arg)
+		elif opt in ("-y", "--output_type"):
+			output_type = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
@@ -367,7 +476,7 @@ if __name__ == '__main__':
 			debug = 1
 	if schema and p_gene_table and gene_p_table and mcl_table:
 		instance = gene_p_translate(hostname, dbname, schema, p_gene_table, gene_p_table,\
-			mcl_table, judger_type, commit, report, debug)
+			mcl_table, judger_type, output_type, commit, report, debug)
 		instance.run()
 	else:
 		print __doc__
