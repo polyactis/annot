@@ -20,10 +20,10 @@ class mcl_result_iterator:
 			if line == '':
 				raise StopIteration
 				break
+			if mcl_begin == 1:
+				self.mcl_cluster_block += line
 			if line.find('(splat_id') == 0:
 				mcl_begin = 1
-				self.mcl_cluster_block += line
-			if mcl_begin == 1:
 				self.mcl_cluster_block += line
 			line = self.inf.readline()
 		self.mcl_cluster_block += line
