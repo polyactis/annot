@@ -391,12 +391,21 @@ class gene_stat:
 		return flag
 	
 	def common_ancestor_deep_enough(self, p_go_no, k_functions_set):
+		"""
+		03-10-05
+			add three lines in the beginning to check if p_go_no is deep enough.
+			find a bug, in case of k_go_no==p_go_no, the function should return 1.
+		"""
 		if self.debug_common_ancestor_deep_enough:
 			print "\t\t ### Enter common_ancestor_deep_enough() "
+		if self.go_no2depth[p_go_no] < self.depth_cut_off:
+			#not good 
+			return 0
 		ancestor_set = Set()
 		for k_go_no in k_functions_set:
 			if k_go_no == p_go_no:
-				continue
+				#bug here corrected.
+				return 1
 			elif k_go_no < p_go_no:
 				key = (k_go_no, p_go_no)
 			elif k_go_no > p_go_no:
