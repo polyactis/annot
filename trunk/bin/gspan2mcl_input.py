@@ -45,7 +45,7 @@ class gspan2mcl_input:
 				else:
 					self.vertex_dict[vertex2] = [vertex1]
 		dim = len(self.vertex_dict)
-		out_block = '(splat_id %s )\n'%self.infname		# here it is '=' not '+='
+		out_block = '(splat_id %s )\n'%os.path.basename(self.infname)		# here it is '=' not '+='
 		out_block += '(mclheader\n'
 		out_block += 'mcltype matrix\n'
 		out_block += 'dimensions %dx%d\n)\n'%(dim,dim)
