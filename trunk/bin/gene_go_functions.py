@@ -25,7 +25,7 @@ class gene_go_functions:
 	'''
 	Initialize the go_functions column in table schema.gene
 	'''
-	def __init__(self, hostname. dbname, schema, orgn, needcommit=0):
+	def __init__(self, hostname, dbname, schema, orgn, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
