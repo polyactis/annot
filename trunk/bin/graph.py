@@ -24,13 +24,14 @@ class graph_construct:
 		#self.mask_matrix, used to leave-one-out in correlation calculation
 		
 		#the variables commented will be initiated later.
+		self.preprocess()
 
 	def preprocess(self):
 		fd = open(self.raw_dataset_source, 'r')
 		fd_new = open(self.dataset_source, 'w')
 		line = fd.readline()
 		while line:
-			if line[0] == '#' or line =='':
+			if line[0] == '#' or line =='\n':
 				pass
 			elif line[0] == '\t':
 				self.no_of_cols = len( line.split())
@@ -44,7 +45,7 @@ class graph_construct:
 			line=fd.readline()
 		fd.close()
 		fd_new.close()
-		print 'preprocessing done'
+
 		
 	def mask_array_construct(self):
 		data =with_mode(0, r.read_table)(self.dataset_source)
@@ -80,7 +81,7 @@ class graph_construct:
 			'''
 			if self.no_of_cols - ma.sum(self.mask_array[i].mask()) <self.gene_cut_off:
 				if self.debug:
-					print 'jump_out level 0\t' + self.genelabels[i]
+					sys.stderr.write( 'jump_out level 0\t' + self.genelabels[i])
 				continue
 				#less than 8 valid data spots
 			'''
@@ -88,7 +89,7 @@ class graph_construct:
 				'''
 				if self.no_of_cols - ma.sum(self.mask_array[j].mask()) <self.gene_cut_off:
 					if self.debug:
-						print 'jump_out level 1\t' + self.genelabels[j]
+						sys.stderr.write(print 'jump_out level 1\t' + self.genelabels[j])
 					continue
 					#less than 8 valid data spots
 				'''
@@ -99,7 +100,7 @@ class graph_construct:
 					new_mask = ma.mask_or(joint_mask, self.mask_matrix[k])		#leave k out
 					if self.no_of_cols - ma.sum(new_mask) < self.jk_cor_cut_off:
 						#if self.debug:
-						#	print 'jump_out level 2\t%s v.s %s at %d'%(self.genelabels[i], self.genelabels[j], k,)
+						#	sys.stderr.write( 'jump_out level 2\t%s v.s %s at %d\n'%(self.genelabels[i], self.genelabels[j], k,))
 						continue
 						#less than jk_cor_cut_off, no correlation
 					v1 = ma.array(self.mask_array[i], mask=new_mask).compressed().tolist()
@@ -117,18 +118,22 @@ class graph_construct:
 					min_cor = min(nn_cor_vector)		#minimum in the non-negative version of cor_vector
 					if min_cor >= self.cor_cut_off:
 						#if self.debug:
-						#	print 'cor vector of %s v.s. %s: %s'%(self.genelabels[i], self.genelabels[j],self.cor_vector,)
+						#	sys.stderr.write('cor vector of %s v.s. %s: %s\n'%(self.genelabels[i], self.genelabels[j],self.cor_vector,))
 						self.graph_dict[(self.genelabels[i],self.genelabels[j])] = self.cor_vector[nn_cor_vector.index(min_cor)]
 						#not simply the smallest, but the smallest absolute value
 	
 	def cleanup(self):
 		os.remove(	self.dataset_source)
+		del self.mask_array
+		
+	def output(self, out=sys.stdout):
+		out.write( 't\t#\t%s\n'%os.path.basename(self.raw_dataset_source))
+		for i in  self.graph_dict:
+			out.write( 'e\t%s\t%s\t%f\n'%(i[0], i[1] , self.graph_dict[i],))
 		
 if __name__ == '__main__':
 	instance = graph_construct(sys.argv[1])
-	instance.preprocess()
 	instance.mask_array_construct()
 	instance.edge_construct()
 	instance.cleanup()
-	for i in  instance.graph_dict:
-		print '%s\t:%f'%(i,instance.graph_dict[i],)
+	instance.output()
