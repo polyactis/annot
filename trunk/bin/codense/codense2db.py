@@ -11,6 +11,7 @@ Option:
 	-m ..., -mcl_table=...	the mcl_result table (vertex_set)
 	-p ..., --mapping_file=...	the file to get the mapping between haiyan's index and my gene_no
 	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0.6(default)
+		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
@@ -111,7 +112,10 @@ class codense2db:
 		recurrence_array = []
 		for i in range(y_dimension):
 			#regard the correlations >= self.cor_cut_off to be 1, others 0
-			edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], self.cor_cut_off)
+			if self.cor_cut_off>0:
+				edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], self.cor_cut_off)
+			else:
+				edge_cor_in_one_dataset = cor_array[:,i]
 			recurrence_array.append(sum(edge_cor_in_one_dataset)/float(no_of_edges))
 		#handle this in gene_stat_plot.py
 		#recurrence_array = numarray.greater_equal(recurrence_array, self.subgraph_cut_off)
