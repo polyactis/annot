@@ -112,10 +112,6 @@ class yeast_one_way_filter:
 				#vertex counts from 1.
 				if (vertex1 in self.dict) and (vertex2 in self.dict):
 					outf.write(line)
-			elif line[0] == 'v':
-				vertex = list[2]
-				if vertex in self.dict:
-					outf.write(line)
 			else:
 				outf.write(line)
 			line = inf.readline()
