@@ -11,10 +11,11 @@ Option:
 	-t ..., --table=...	cluster_stat(default), IGNORE
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table. IGNORE
 	-g ..., --gene_table=...	table storing the stat results, p_gene(default)
+	-n ..., --node_dist_table=...	the node_distance table, node_dist(default)
 	-s ..., --contrast=...	the contrast differential ratio for two contexts to be different, 0.3(default)
 	-r, --report	report the progress(a number) IGNORE
 	-c, --commit	commit the database transaction, records in table gene. IGNORE
-	-l, --log	record down some stuff in the logfile(cluster_stat.log)
+	-l, --log	record down some stuff in the logfile(context_specific.log)
 	-h, --help              show this help
 
 Examples:
@@ -22,11 +23,16 @@ Examples:
 	context_specific.py -k sc_yh60 -g p_gene -s 0.4
 
 Description:
+	This program inspects the cluster contexts of the functions predicted for one gene.
+	The depth of the predicted function on the GO tree is drawn as
+	a histogram in 'depth_hist.pdf'.
+	The max_raw_distance, max_lee_distance, max_jasmine_distance
+	among the predicted functions for one gene
+	are drawn as a histogram in files with those names respectively.
 	
 """
 
 import sys, os, psycopg, getopt, csv
-from graphlib import Graph, GraphAlgo
 from sets import Set
 from rpy import r
 
@@ -58,13 +64,14 @@ class accuracy_struc:
 		self.ratio = 0
 
 class context_specific:
-	def __init__(self, hostname, dbname, schema, table, mcl_table, contrast=0.3, report=0, \
+	def __init__(self, hostname, dbname, schema, table, mcl_table, node_dist_table, contrast=0.3, report=0, \
 		needcommit=0, log=0, gene_table='p_gene', stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		self.mcl_table = mcl_table
+		self.node_dist_table = node_dist_table
 		self.contrast = float(contrast)
 		self.report = int(report)
 		self.needcommit = int(needcommit)
@@ -91,12 +98,18 @@ class context_specific:
 		self.gene_no2gene_id = {}
 		#the overall prediction accuracy of each function
 		self.go_no2accuracy = {}
-		#GO DAG
-		self.go_graph = Graph.Graph()
+		#mapping each go_no to its depth
+		self.go_no2depth = {}
 		#a list of the depths of all the predicted functions, for histogram
 		self.depth_list=[]
-		#a list storing the maximum distance between the predicted functions for one gene.
-		self.max_distance_list = []
+		#a list storing the three kinds of maximum distances between the predicted functions for one gene.
+		self.max_raw_distance_list = []
+		self.max_lee_distance_list = []
+		self.max_jasmine_distance_list = []
+		#mapping between a pair of go_no's and its associated distances
+		self.go_no2distance = {}
+		#mapping go term id and go_no
+		self.go_term_id2go_no = {}
 		
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -109,17 +122,19 @@ class context_specific:
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].append(int(go_no))
 		
-		#setup self.go_no2go_id
-		self.curs.execute("select go_no, go_id from go")
+		#setup self.go_no2go_id and self.go_no2depth
+		self.curs.execute("select go_no, go_id, depth from go")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.go_no2go_id[row[0]] = row[1]
+			self.go_no2depth[row[0]] = row[2]
 		
-		#setup self.go_no2go_name
-		self.curs.execute("select g.go_no,t.name from go g, go.term t where g.go_id=t.acc")
+		#setup self.go_no2go_name and self.go_term_id2go_no
+		self.curs.execute("select g.go_no,t.name, t.id from go g, go.term t where g.go_id=t.acc")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.go_no2go_name[row[0]] = row[1]
+			self.go_term_id2go_no[row[2]] = row[0]
 				
 		#setup self.gene_no2gene_id
 		self.curs.execute("select gene_no, gene_id from gene")
@@ -147,21 +162,21 @@ class context_specific:
 		
 		#setup self.no_of_predicted_genes
 		self.no_of_predicted_genes = len(self.gene_prediction_dict)
-		
-		#get the non-obsolete biological_process GO DAG		
-		self.curs.execute("select count(go_no) from go")
-		rows = self.curs.fetchall()
-		self.no_of_functions = rows[0][0]
-		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
-			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
-			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
-			t1.term_type='biological_process' and t2.term_type='biological_process' ")
+	
+		#setup self.go_no2distance
+		self.curs.execute("select go_id1, go_id2, raw_distance, lee_distance, jasmine_distance\
+			from go.%s"%self.node_dist_table)
 		rows = self.curs.fetchall()
 		for row in rows:
-		#setup the go_graph structure
-			self.go_graph.add_edge(row[2], row[3])
-			self.go_graph.add_edge(row[3], row[2])
-	
+			go_no1 = self.go_term_id2go_no.get(row[0])
+			go_no2 = self.go_term_id2go_no.get(row[1])
+			if go_no1 and go_no2:
+				#key tuple in ascending order
+				if go_no1<go_no2:
+					self.go_no2distance[(go_no1, go_no2)] = (row[2], row[3], row[4])
+				else:
+					self.go_no2distance[(go_no2, go_no1)] = (row[2], row[3], row[4])
+				
 		sys.stderr.write("Done\n")
 
 	def cluster_context2dict(self, cluster_context):
@@ -172,9 +187,6 @@ class context_specific:
 			context_dict[gene_no] = support
 		return context_dict
 	
-	def depth_of_one_node(self, go_no):
-		go_id = self.go_no2go_id[go_no]
-		return len(GraphAlgo.shortest_path(self.go_graph, 'GO:0008150', go_id))
 
 	def run(self):
 		if self.stat_table_fname != 'null':
@@ -184,6 +196,7 @@ class context_specific:
 			unit = self.gene_prediction_dict[gene_no]
 
 			if len(unit.p_functions_struc_dict) > 1:
+				#the gene has more than one functions predicted
 				self.list_no_of_functions_each_gene.append(len(unit.p_functions_struc_dict))
 				#rearrange the context_dict into a go_no:Set structure
 				self.go_merge_dict = {}
@@ -193,35 +206,60 @@ class context_specific:
 					#function_struc.context_dict will be a Set data structure to store context genes
 					#function_struc.cluster_array will store the go terms to be merged
 					go_no_list.append(go_no)
-					depth = self.depth_of_one_node(go_no)
-					if self.log:
-						self.log_file.write("Depth of %s: %d\n"%(self.go_no2go_id[go_no], depth))
+					depth = self.go_no2depth[go_no]
 					self.depth_list.append(depth)
 					
 					item = function_struc()
 					item.context_dict = Set(unit.p_functions_struc_dict[go_no].context_dict.keys())
 					self.go_merge_dict[go_no] = item
-				max_distance = 0
+				
+				max_raw_distance = 0
+				max_lee_distance = 0
+				max_jasmine_distance = 0
 			
 				for i in range(len(go_no_list)):
 					for j in range(i+1, len(go_no_list)):
-						go_id1 = self.go_no2go_id[go_no_list[i]]
-						go_id2 = self.go_no2go_id[go_no_list[j]]
-						distance = len(GraphAlgo.shortest_path(self.go_graph, go_id1, go_id2))-1
-						if self.log:
-							self.log_file.write("Distance between %s and %s: %d\n"%(go_id1, go_id2, distance))
-						if distance > max_distance:
-							max_distance = distance
+						go_no1 = go_no_list[i]
+						go_no2 = go_no_list[j]
+						if go_no1 < go_no2:
+							key = (go_no1, go_no2)
+						else:
+							key = (go_no2, go_no1)
+						raw_distance, lee_distance, jasmine_distance = self.go_no2distance[key]
+						if raw_distance > max_raw_distance:
+							max_raw_distance = raw_distance
+						if lee_distance > max_lee_distance:
+							max_lee_distance = lee_distance
+						if jasmine_distance > max_jasmine_distance:
+							max_jasmine_distance = jasmine_distance
 				
-				self.max_distance_list.append(max_distance)
+				self.max_raw_distance_list.append(max_raw_distance)
+				self.max_lee_distance_list.append(max_lee_distance)
+				self.max_jasmine_distance_list.append(max_jasmine_distance)
+				if self.log:
+					self.log_file.write('%d\t%s\t%d\t%d\t%d\n'%(gene_no, repr(go_no_list), max_raw_distance,\
+						max_lee_distance, max_jasmine_distance))
+				
+				#compute the distinct contexts, work on self.go_merge_dict
 				self.distinct_contexts()
 				if len(self.go_merge_dict) > 1:
 					self.list_no_of_contexts_each_gene.append(len(self.go_merge_dict))
 				if self.stat_table_fname != 'null':
-					self.table_output(gene_no, self.go_merge_dict)
+					self.table_output(gene_no, self.go_merge_dict, max_raw_distance, max_lee_distance, max_jasmine_distance)
+			else:
+				#the gene has only one function predicted, its depth is still needed to be put in the list.
+				for go_no in unit.p_functions_struc_dict:
+					depth = self.go_no2depth[go_no]
+					self.depth_list.append(depth)
 
 		self.stat_output()
-		self.plot()
+		self.plot('depth_hist.pdf', self.depth_list, 'depth histogram', 'depth of predicted function')
+		self.plot('max_raw_distance_hist.pdf', self.max_raw_distance_list, 'max_raw_distance histogram', \
+			'max_raw_distance of predicted functions of one gene')
+		self.plot('max_lee_distance_hist.pdf', self.max_lee_distance_list, 'max_lee_distance histogram', \
+			'max_lee_distance of predicted functions of one gene')
+		self.plot('max_jasmine_distance_hist.pdf', self.max_jasmine_distance_list, 'max_jasmine_distance histogram', \
+			'max_jasmine_distance of predicted functions of one gene')
 
 	def distinct_contexts(self):
 		go_no_list = self.go_merge_dict.keys()
@@ -265,14 +303,19 @@ class context_specific:
 			diff_result = 0
 		return diff_result
 
-	def table_output(self, gene_no, go_merge_dict):
+	
+	def table_output(self, gene_no, go_merge_dict, max_raw_distance, max_lee_distance, max_jasmine_distance):
 		gene_id = self.gene_no2gene_id[gene_no]
-
+		row = ['gene_id', 'similar predicted functions based on context comparison', 'max_raw_distance',\
+			'max_lee_distance', 'max_jasmine_distance', 'is_correct', 'context']
+		self.stat_table_f.writerow(row)
+		
 		for go_no in go_merge_dict:
 			#row is for output
 			row = []
 			row.append(gene_id)
 			unit = go_merge_dict[go_no]
+			#the go_no's merged + itself
 			go_no_list = unit.cluster_array
 			go_no_list.append(go_no)
 			
@@ -282,6 +325,10 @@ class context_specific:
 			
 			#row.append('%s'%('/'.join(map(repr,go_no_list) )))
 			row.append('%s'%('/'.join(go_name_list)))
+			#append the three kinds of maximum distances
+			row.append(max_raw_distance)
+			row.append(max_lee_distance)
+			row.append(max_jasmine_distance)
 			row.append('%d'%unit.is_correct)
 			context_gene_id_list = []
 			for gene_no in unit.context_dict:
@@ -303,15 +350,10 @@ class context_specific:
 		sys.stdout.write('\taverage contexts per gene: %f.\n'%(avg_contexts_per_gene))
 
 	
-	def plot(self):
-		max_depth = max(self.depth_list)
-		max_distance = max(self.max_distance_list)
-		r.pdf('depth_hist.pdf')
-		r.hist(self.depth_list, breaks=range(max_depth+1), las=1, main='depth histogram', xlab='depth of predicted function' )
-		r.dev_off()
-		
-		r.pdf('distance_hist.pdf')
-		r.hist(self.max_distance_list, breaks=range(max_distance+1), las =1, main='max distance histogram', xlab='max distance of the predicted functions of one gene')
+	def plot(self, filename, list_to_plot, main_lab, xlab):
+		max_length = max(list_to_plot)
+		r.pdf(filename)
+		r.hist(list_to_plot, breaks=range(max_length+1), las=1, main=main_lab, xlab=xlab)
 		r.dev_off()
 		
 if __name__ == '__main__':
@@ -320,9 +362,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", \
-		"contrast=", "report", "commit", "log", "gene_table="]
+		"contrast=", "node_dist_table=", "report", "commit", "log", "gene_table="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:s:rclg:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:n:s:rclg:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -332,6 +374,7 @@ if __name__ == '__main__':
 	schema = ''
 	table = 'cluster_stat'
 	mcl_table = 'mcl_result'
+	node_dist_table = 'node_dist'
 	contrast = 0.3
 	report = 0
 	commit = 0
@@ -351,6 +394,8 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
+		elif opt in ("-n", "--node_dist_table"):
+			node_dist_table = arg
 		elif opt in ("-s", "--contrast"):
 			contrast = float(arg)
 		elif opt in ("-r", "--report"):
@@ -367,7 +412,7 @@ if __name__ == '__main__':
 		stat_table_fname = 'null'
 			
 	if schema and gene_table:
-		instance = context_specific(hostname, dbname, schema, table, mcl_table, contrast, report, \
+		instance = context_specific(hostname, dbname, schema, table, mcl_table, node_dist_table, contrast, report, \
 			commit, log, gene_table, stat_table_fname)
 		instance.dstruc_loadin()
 		instance.run()
