@@ -4,15 +4,22 @@ Usage: complete_cor_vector.py  -i INPUT_FILE -o OUTPUT_FILE [OPTION] DATADIR
 
 Option:
 	DATADIR is the directory of the datasets to be choosen
+	-z ..., --hostname=...	the hostname, zhoudb(default)
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	the splat_result table (edge_set)
 	-i ..., --input_file=...	gspan format(by graph_merge.py)
 	-o ..., --output_file=...	the edge correlation vector file, for CODENSE and COPATH
 	-b ..., --label=...	use gene 1(index, default) or 2(no) or 3(id) to label
-	-f ..., --dir_files=...	the directory to store the temporary files
+	-f ..., --dir_files=...	the directory to store the temporary files, /tmp/yh(default)
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
+	#create a file to dump into database by haiyan_cor_vector2db.py
 	complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector ~/datasets/sc_54
+	#output cor_vector from database
+	complete_cor_vector.py -k sc_54 -i sc_merge_gspan -o /tmp/cor_vector
 
 Description:
 	given a summary graph, get all the edges, find the correlations in all
@@ -22,12 +29,24 @@ Description:
 
 """
 
-import sys, os, getopt, csv, re, math
+import sys, os, getopt, csv, re, math, psycopg
 import graph_modeling
+
+	
+def string_convert_to_three_int(str):
+	'''
+	a function to convert a string to a float, then get the first three digits after the point
+	'''	
+	return int(math.modf(float(str)*1000)[1])
 
 class complete_cor_vector:
 	'''
-	run	--dstruc_loadin
+	run
+		--cor_vector_from_db
+		or
+		--cor_vector_from_files
+	cor_vector_from_files
+		--dstruc_loadin
 		--edge_tuple_list_output
 		--files_sort
 		(loop begins)
@@ -36,20 +55,40 @@ class complete_cor_vector:
 			--python_call
 			--file_combine
 	'''
-	def __init__(self, input_file, output_file, label, dir_files, report, dir):
+	def __init__(self, hostname, dbname, schema, table, input_file, output_file, label, dir_files, report, dir):
+		"""
+		run	--dstruc_loadin
+			--edge_tuple_list_output
+			--files_sort
+			(loop)
+				gene_index2expr_array_setup
+				cor_calculate
+				file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
+		"""
+		self.table = table
 		self.input_file = input_file
 		self.output_file = output_file
 		self.label = int(label)
 		self.dir_files = dir_files
 		self.dir = dir
-		self.files = os.listdir(self.dir)
-		
-		#check if the temporary directory already exists
-		if not os.path.isdir(self.dir_files):
-			os.makedirs(self.dir_files)
+		if schema:
+			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
+			self.curs = self.conn.cursor()
+			self.schema = schema
+			self.curs.execute("set search_path to %s"%schema)
 		else:
-			sys.stderr.write("Warning, directory %s already exists.\n"%(self.dir_files))
-	
+			if self.dir == None:
+				sys.stderr.write("Either schema or data directory should be specified\n")
+				sys.exit(2)
+			else:
+				self.files = os.listdir(self.dir)
+		
+			#check if the temporary directory already exists
+			if not os.path.isdir(self.dir_files):
+				os.makedirs(self.dir_files)
+			else:
+				sys.stderr.write("Warning, directory %s already exists.\n"%(self.dir_files))
+
 		self.tmp_file1 = os.path.join(self.dir_files, 'tmp_complete_cor_vector1')
 		self.tmp_file2 = os.path.join(self.dir_files, 'tmp_complete_cor_vector2')
 		#mapping between gene_no and gene_id
@@ -181,9 +220,43 @@ class complete_cor_vector:
 			of.write("%s\n"%(int(math.modf(y.value*1000)[1]) ) )
 		of.close()
 	
+	def cor_vector_from_db(self, output_file):
+		writer = csv.writer(open(output_file, 'w'), delimiter='\t')
+		#start from 0, one step by 2
+		for i in range(0, len(self.edge_tuple_list), 2):
+			gene_index1 = self.edge_tuple_list[i]
+			gene_index2 = self.edge_tuple_list[i+1]
+			gene_no1 = self.gene_index2no[gene_index1]
+			gene_no2 = self.gene_index2no[gene_index2]
+			if gene_no1 < gene_no2:
+				edge_string = '{%d,%d}'%(gene_no1, gene_no2)
+			else:
+				edge_string = '{%d,%d}'%(gene_no2, gene_no1)
+			self.curs.execute("select cor_vector from %s where edge_name='%s'"%(self.table,edge_string))
+			rows = self.curs.fetchall()
+			if len(rows) == 0:
+				sys.stderr.write('%s not found in edge_cor_vector\n'%edge_string)
+				sys.exit(1)
+			cor_vector = rows[0][0][1:-1].split(',')
+			cor_vector = map(string_convert_to_three_int, cor_vector)
+			#haiyan's format requires the first index should be larger than the second index
+			if gene_index1> gene_index2:
+				row = [gene_index1, gene_index2]
+			else:
+				row = [gene_index2, gene_index1]
+			row += cor_vector
+			writer.writerow(row)
+		del writer
+
+	
 	def run(self):
 		self.dstruc_loadin()
-		
+		if self.schema:
+			self.cor_vector_from_db(self.output_file)
+		else:
+			self.cor_vector_from_files()
+
+	def cor_vector_from_files(self):
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
 		self.edge_tuple_list_output(self.output_file)
 		#sort all the files based on the dataset number, to order the columns of the outputed edge correlation vector
@@ -212,11 +285,16 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hi:o:b:f:r", ["help", "input_file=", "output_file=", "label=", "dir_files=", "report"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:b:f:r", ["help",  "hostname=", "dbname=", "schema=", "table=", \
+			"input_file=", "output_file=", "label=", "dir_files=", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
 
+	hostname = 'zhoudb'
+	dbname = 'graphdb'
+	schema = ''
+	table = 'edge_cor_vector'
 	input_file = None
 	output_file = None
 	label = 1
@@ -226,6 +304,14 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-i", "--input_file"):
 			input_file = arg
 		elif opt in ("-o", "--output_file"):
@@ -235,9 +321,15 @@ if __name__ == '__main__':
 		elif opt in ("-f", "--dir_files"):
 			dir_files = arg
 		elif opt in ("-r", "--report"):
-			report = 1	
-	if input_file and output_file and len(args) == 1:
-		instance = complete_cor_vector(input_file, output_file, label, dir_files, report, args[0])
+			report = 1
+			
+	if len(args) == 1:
+		data_dir = args[0]
+	else:
+		data_dir = None
+	if input_file and output_file:
+		instance = complete_cor_vector(hostname, dbname, schema, table, \
+			input_file, output_file, label, dir_files, report, data_dir)
 		instance.run()
 	else:
 		print __doc__
