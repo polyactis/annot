@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Usage: stat_plot.py -d DATABASENAME -c CONNECTIVITY -l LIMIT -t TAG [options]
+Usage: stat_plot.py -c CONNECTIVITY -l LIMIT -t TAG [options]
 
 Options:
-  -d ..., --dbname=...		database to connect
+  -d ..., --dbname=...		database to connect, graphdb(default)
   -c ..., --connectivity=...	connectivity_cut_off
   -l ..., --limit=...	max no. of clusters related to one gene
   -t ..., --tag=...	just tag
@@ -11,9 +11,9 @@ Options:
   -h, --help		show this help
 
 Examples:
-  stat_plot.py -d mdb -c 0.8 -l 10 -t sc_known
-  stat_plot.py -d mdb -c 0.8-0.9 -l 10 -t sc_known
-  stat_plot.py -d mdb -c 0.8-0.9 -l 5-10 -t sc_known
+  stat_plot.py -c 0.8 -l 10 -t sc_known
+  stat_plot.py -c 0.8-0.9 -l 10 -t sc_known
+  stat_plot.py -c 0.8-0.9 -l 5-10 -t sc_known
 """
 
 import sys, os, cStringIO, psycopg, getopt
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	dbname = ''
+	dbname = 'graphdb'
 	connectivity = None
 	limit = None
 	tag = None
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 		elif opt in ("-o", "--output"):
 			output = arg
 	
-	if dbname and connectivity and limit and tag:
+	if connectivity and limit and tag:
 		if output=='':
 			output = '%s_%s_%s'%(tag,connectivity,limit)
 		instance = stat_plot(dbname, connectivity, limit, tag, output)
