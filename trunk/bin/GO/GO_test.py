@@ -23,6 +23,7 @@ class TestGoNodeDistance(unittest.TestCase):
 	
 	def testprocess_2indices(self):
 		self.instance.debug_process_2indices = 1
+		#all numbers are term ids
 		#a plain example
 		index_set1 = self.instance.go_id2index[14240]
 		index_set2 = self.instance.go_id2index[14265]
@@ -37,8 +38,8 @@ class TestGoNodeDistance(unittest.TestCase):
 				self.instance.process_2indices(index1, index2)
 		#1532(GO:0046173) is two steps away from GO:0006066.
 		#203(GO:0005996) is one step away from GO:0006066.
-		index_set1 = self.instance.go_id2index[1532]
-		index_set2 = self.instance.go_id2index[203]
+		index_set1 = self.instance.go_id2index[11717]
+		index_set2 = self.instance.go_id2index[11821]
 		for index1 in index_set1:
 			for index2 in index_set2:
 				self.instance.process_2indices(index1, index2)
