@@ -74,15 +74,15 @@ class triplet_stat:
 		for j in xrange(100):
 			functional_homo = 0
 			transcriptional_homo = 0
-			index_list = random.sample(xrange(no_of_triplets),100)
-			for k in xrange(100):
+			index_list = random.sample(xrange(no_of_triplets),1000)
+			for k in xrange(1000):
 				triplet = self.recurrence_triplet_list[index_list[k]]
 				if self.is_homogenious(triplet, self.known_genes_dict):
 					functional_homo += 1
 				if self.is_homogenious(triplet, self.transfac_dict):
 					transcriptional_homo += 1
-			functional_homo_ratio = functional_homo/100.00
-			transcriptional_homo_ratio = transcriptional_homo/100.00
+			functional_homo_ratio = functional_homo/1000.00
+			transcriptional_homo_ratio = transcriptional_homo/1000.00
 			sys.stderr.write('%f\t%f\n'%\
 				(functional_homo_ratio,transcriptional_homo_ratio))
 			self.recurrence_stat_func_list.append(functional_homo_ratio)
