@@ -7,7 +7,7 @@ Option:
 		graph construction. Those files should be gspan format.
 	FILE is the file to store the resultant triplets or quadruplets.
 	-q, --quadruplets	search for the quadruplets, default is triplets
-	-z, --gzip	FILE will be gzipped(to save space)
+	-z, --gzipped	FILE will be gzipped(to save space)
 	-h, --help              show this help
 	
 Examples:
@@ -102,10 +102,10 @@ class triplet_construct:
 		else:
 			self.local_triplet_construct_to_file()
 
-def triplet_batch(dir, ofname, quadruplets, gzip):
+def triplet_batch(dir, ofname, quadruplets, gzipped):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	if gzip == 1:
+	if gzipped == 1:
 		of = gzip.open(ofname, 'w')
 	else:
 		of = open(ofname, 'w')
@@ -126,12 +126,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hqz", ["help", "quadruplets", "gzip"])
+		opts, args = getopt.getopt(sys.argv[1:], "hqz", ["help", "quadruplets", "gzipped"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
-	gzip = 0
+	gzipped = 0
 	quadruplets = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -139,12 +139,12 @@ if __name__ == '__main__':
 			sys.exit(2)
 		elif opt in ("-q", "--quadruplets"):
 			quadruplets = 1
-		elif opt in ("-z", "--gzip"):
-			gzip = 1
+		elif opt in ("-z", "--gzipped"):
+			gzipped = 1
 
 
 	if len(args) == 2:
-		triplet_batch(args[0], args[1], quadruplets, gzip)
+		triplet_batch(args[0], args[1], quadruplets, gzipped)
 	else:
 		print __doc__
 		sys.exit(2)
