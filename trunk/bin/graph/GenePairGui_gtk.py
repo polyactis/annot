@@ -16,7 +16,11 @@ class GenePairGui:
 		xml.signal_autoconnect(self)
 		self.window1 = xml.get_widget("window1")
 		self.window1.connect("destroy", self.destroy)
-		
+		#to get gene_ids input by user
+		self.textview1 = xml.get_widget("textview1")
+		#to draw the plot
+		self.textview2 = xml.get_widget("textview2")
+		#to get gene_ids input by user
 		self.treeview1 = xml.get_widget("treeview1")
 		# create the TreeViewColumn to display the data
 		self.tvcolumn = gtk.TreeViewColumn('Gene Id')
@@ -34,9 +38,13 @@ class GenePairGui:
 		#setting the selection mode
 		self.treeselection = self.treeview1.get_selection()
 		
+		#the backend module, non-initilized
+		self.GenePair_instance = None
+		
 	def file_ok_sel(self, w):
 		filename = self.filew.get_filename()
 		self.filew.destroy()
+		self.window1.set_title(filename)
 		self.liststore_gene_fill(filename)
 	
 	def liststore_gene_fill(self, filename):
@@ -75,20 +83,46 @@ class GenePairGui:
 		self.filew.show()
 	
 	def on_button2_clicked(self, button):
+		'''
+		gene selected
+		'''
 		pathlist = []
+		gene_id_list = []
 		self.treeselection.selected_foreach(foreach_cb, pathlist)
-		if len(pathlist) !=2:
-			sys.stderr.write("Did you select two genes?\n")
+		if len(pathlist) >0:
+			for i in range(len(pathlist)):
+				gene_id_list.append(self.liststore[pathlist[i][0]][0])
+			filename = self.GenePair_instance.gene_pair_analyze(gene_id_list)
+			if filename:
+				self.show_plot(filename)
 		else:
-			gene_id1 = self.liststore[pathlist[0][0]][0]
-			gene_id2 = self.liststore[pathlist[1][0]][0]
-			print gene_id1
-			print gene_id2
-			self.GenePair_instance.gene_pair_analyze(gene_id1, gene_id2)
+			sys.stderr.write("Have you selected genes?\n")
 
 	def on_button3_clicked(self, button):
 		gtk.main_quit()
+		
+	def on_button4_clicked(self, button):
+		'''
+		input gene_ids done
+		'''
+		textbuffer = self.textview1.get_buffer()
+		startiter, enditer = textbuffer.get_bounds()
+		text  = textbuffer.get_text(startiter, enditer)
+		gene_id_list = text.split("\n")
+		if self.GenePair_instance:
+			if len(gene_id_list) >0:
+				filename = self.GenePair_instance.gene_pair_analyze(gene_id_list)
+				if filename:
+					self.show_plot(filename)
+		else:
+			sys.stderr.write("Have you selected a dataset?\n")
 
+	def show_plot(self, filename):
+		textbuffer = self.textview2.get_buffer()
+		pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
+		startiter = textbuffer.get_start_iter()
+		textbuffer.insert_pixbuf(startiter, pixbuf)
+		
 	def destroy(self, widget):
 		gtk.main_quit()
 	
