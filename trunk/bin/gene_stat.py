@@ -227,6 +227,11 @@ class gene_stat:
 		pass
 	
 	def _gene_stat_leave_one_out(self, row):
+		"""
+		03-08-05
+			set a default(1.0) for min_p_value
+			fix a bug, alter >self.depth_cut_off to >= self.depth_cut_off
+		"""
 		mcl_id = row[0]
 		gene_no = row[1]
 		p_value_vector = row[2][1:-1].split(',')
@@ -249,6 +254,9 @@ class gene_stat:
 		if prediction_tuple not in self.prediction_tuple2list:
 			self.prediction_tuple2list[prediction_tuple] = []
 		
+		#default min_p_value is 1.0
+		min_p_value = 1.0
+		
 		#transform into float type
 		p_value_index_tuple_list = self.index_tuple(p_value_vector)
 		for (p_value, index) in p_value_index_tuple_list:
@@ -258,7 +266,7 @@ class gene_stat:
 			else:
 				#index 0 corresponds to go_no 1
 				go_no = index+1
-			if self.go_no2depth[go_no] > self.depth_cut_off:
+			if self.go_no2depth[go_no] >= self.depth_cut_off:
 				min_p_value = p_value
 				break
 
