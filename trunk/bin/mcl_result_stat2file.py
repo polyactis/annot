@@ -89,6 +89,9 @@ class mcl_result_stat2file:
 	def _cluster_stat(self, mcl_id, vertex_set):
 		vertex_list = vertex_set[1:-1].split(',')
 		vertex_list = map(int, vertex_list)
+		vertex_list_gene_symbol = []
+		for vertex in vertex_list:
+			vertex_list_gene_symbol.append(self.gene_no2gene_id[vertex])
 		cluster_size = len(vertex_list)
 		self.local_go_no_dict_construct(vertex_list)
 		
@@ -108,9 +111,9 @@ class mcl_result_stat2file:
 				p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)*len(self.local_go_no_dict)
 			else:
 				p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
-			self.logfile.write('%d\t%s\t%d\t%d\t%d\t%d\t%f\t%s\n'%(mcl_id,\
+			self.logfile.write('%d\t%s\t%d\t%d\t%d\t%d\t%f\t%s\t%s\n'%(mcl_id,\
 				self.global_go_no2go_name[go_no], x, k, m, self.no_of_genes,\
-				p_value, repr(self.local_go_no_dict[go_no])))
+				p_value, repr(self.local_go_no_dict[go_no]),repr(vertex_list_gene_symbol)))
 
 		self.no_of_records += 1
 		
