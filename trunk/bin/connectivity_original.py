@@ -132,15 +132,10 @@ class connectivity_original:
 				if self.debug:
 					print "edge %s in internal dictionary but with weight %s<%s"%(repr(edge), weight,min_weight)
 				return None
-		else:		#check database
-			curs.execute("select sig_vector from %s where edge_name='{%s,%s}'"%(edge_table, edge[0], edge[1]))
-			rows = curs.fetchall()
-			if len(rows)>0:
-				#edge is present
-				edge_data = rows[0][0][1:-1]
-				edge_data = edge_data.split(',')
-				edge_data = map(int, edge_data)
-				weight = sum(edge_data)
+		else:		
+			#check database
+			weight = self._get_edge(curs, edge, edge_table)
+			if weight:
 				if len(self.edge_dict)>=self.dict_threshold:
 					#over the threshold, throw away the first item.
 					self.edge_dict.popitem()
@@ -159,6 +154,23 @@ class connectivity_original:
 				if self.debug:
 					print "edge %s not found"%(repr(edge))
 				return None
+	
+	def _get_edge(self, curs, edge, edge_table='edge_cor_vector'):
+		"""
+		04-03-05
+			split from get_edge(), to be class independent
+		"""
+		curs.execute("select sig_vector from %s where edge_name='{%s,%s}'"%(edge_table, edge[0], edge[1]))
+		rows = curs.fetchall()
+		if len(rows)>0:
+			#edge is present
+			edge_data = rows[0][0][1:-1]
+			edge_data = edge_data.split(',')
+			edge_data = map(int, edge_data)
+			weight = sum(edge_data)
+		else:
+			weight = None
+		return weight
 	
 	def alter_table(self, curs, table):
 		"""
