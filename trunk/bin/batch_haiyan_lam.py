@@ -63,6 +63,10 @@ class batch_haiyan_lam:
 		are like ~/qjob/batch_haiyan_lam#.sh and these files call lam_sub.py(a mpipython program)
 		to submit jobs separately. The drawback of mpipython program is that it exits
 		once one job stops abnormally.
+	03-19-05
+		Drop the use of lam_sub.py because LAM has an internal limit of open file
+		descriptors(71). So use ssh nodexx command to directly run program on specified
+		node.
 	"""
 	def __init__(self, run_mode='0', genenum='6661', svnum='805939', sv_length='54',\
 		ttablefile='ttableFromMatlabt1p-3.txt', cut_loop_num_list=['2'], min_graph_size_list=['5'], \
@@ -193,8 +197,6 @@ class batch_haiyan_lam:
 		#hour:minute, minute is current_minute + 2, if time is like 11:61, it's fine.
 		time_tuple = time.localtime()
 		time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
-		#the path of lam_sub.py
-		lam_sub_path = '~/script/annot/bin/lam_sub.py'
 		
 		"""
 		testing
@@ -219,14 +221,14 @@ class batch_haiyan_lam:
 			for parameter in node_rank2parameter_setting[node_rank]:
 				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/batch_haiyan_lam%s.sh'%job_number)
 				job_f = open(job_fname, 'w')
-				writer = csv.writer(job_f, delimiter=' ')
+				job_f.write('date\n')	#the beginning time
 				#change to the ouput directory first, because copath and coden output to the current directory
-				writer.writerow(['cd', self.od, ' '])	#the endline is attached to self.od and cd says an error
-				jobrow = ['mpirun', 'n%s'%node_rank, lam_sub_path] + parameter
-				writer.writerow(['echo']+jobrow)	#print the commandline
-				writer.writerow(jobrow)
+				jobrow = ['ssh', 'node%s'%node_rank, '"', 'cd', self.od, ';']	#the " before cd is used to concatenate two commands in shell
+				jobrow = jobrow + parameter + ['"']	#the ending " corresponds to the " before cd above
+				job_f.write('echo %s\n'%' '.join(jobrow))	#print the commandline
+				job_f.write("%s\n"%' '.join(jobrow))	#command here
+				job_f.write('date\n')	#the ending time
 				#close the file
-				del writer
 				job_f.close()
 				
 				print "node: %s, at %s, parameter: %s"%(node_rank, time_to_run_jobs, repr(parameter))
