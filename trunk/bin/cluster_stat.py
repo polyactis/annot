@@ -148,7 +148,10 @@ class cluster_stat:
 					p_value_vector[go_no] = p_value
 				else:
 					p_value_vector[go_no-1] = p_value
-			_cluster_memory[gene_no] = p_value_vector
+			#for the unknown class(only wu's strategy), use the ratio instead of p_value, in accordance with mcl_result_stat.py
+			if self.wu:
+				p_value_vector[0] = self._local_go_no_dict[0]/float(cluster_size)
+			_cluster_memory[gene_no] = p_value_vector				
 			if self.needcommit:
 				self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
 				values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
