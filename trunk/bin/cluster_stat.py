@@ -37,7 +37,7 @@ class cluster_stat:
 		try:
 			self.curs.execute("drop index connectivity_idx")
 		except psycopg.ProgrammingError, error:
-			conn.rollback()
+			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
 		self.curs.execute("truncate cluster_stat")
 		self.curs.execute("alter sequence cluster_stat_cluster_stat_id_seq restart with 1")
