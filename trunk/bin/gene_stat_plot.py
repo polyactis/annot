@@ -17,6 +17,7 @@ Option:
 	-y ..., --recurrence_cut_off=...	5(default), minimum recurrences
 	-x ..., --cluster_size_cut_off=...	1000(default), maximum cluster size
 	-e ..., --depth_cut_off=...	the minimum depth for a go node to be valid, 3(default)
+	-f ..., --dir_files=...	the directory containing all the files outputed by cluster_stat.py
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
@@ -46,9 +47,10 @@ Description:
 	The column names of the table are stored in variable header of table_output().
 	Most modifications only apply to the leave_one_out approach.
 	
+	If read cluster_stat.py results from files, mcl_table is still needed, but table(cluster_stat) is unnecessary.
 """
 
-import sys, os, psycopg, getopt, csv
+import sys, os, psycopg, getopt, csv, fileinput
 from graphlib import Graph, GraphAlgo
 from sets import Set
 from rpy import r
@@ -83,7 +85,7 @@ class accuracy_struc:
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
-		depth_cut_off =3, needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
+		depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -98,6 +100,7 @@ class gene_stat:
 		self.wu = int(wu)
 		self.report = int(report)
 		self.depth_cut_off = int(depth_cut_off)
+		self.dir_files = dir_files
 		self.needcommit = int(needcommit)
 		self.gene_table = gene_table
 		self.dominant = int(dominant)
@@ -117,7 +120,6 @@ class gene_stat:
 		self.no_of_records = 0
 		self.log_file = open('/tmp/gene_stat_on_mcl_result.log','w')
 		self.gene_prediction_dict = {}
-		#self.gono_goindex_dict = {}
 		self.no_of_p_known = 0
 		#GO DAG
 		self.go_graph = Graph.Graph()
@@ -129,6 +131,8 @@ class gene_stat:
 		self.gene_no2gene_id = {}
 		#the overall prediction accuracy of each function
 		self.go_no2accuracy = {}
+		#mapping each go_no to its depth
+		self.go_no2depth = {}
 		#data structures for plotting, key is go_no and value is a Set of genes of clusters
 		self.go_no2gene = {}
 		self.go_no2gene_fp = {}
@@ -156,10 +160,7 @@ class gene_stat:
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].append(int(go_no))
 		
-		#get the non-obsolete biological_process GO DAG		
-		self.curs.execute("select count(go_no) from go")
-		rows = self.curs.fetchall()
-		self.no_of_functions = rows[0][0]
+		#get the non-obsolete biological_process GO DAG
 		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
 			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
 			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
@@ -170,10 +171,11 @@ class gene_stat:
 			self.go_graph.add_edge(row[2], row[3])
 		
 		#setup self.go_no2go_id
-		self.curs.execute("select go_no, go_id from go")
+		self.curs.execute("select go_no, go_id, depth from go")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.go_no2go_id[row[0]] = row[1]
+			self.go_no2depth[row[0]] = row[2]
 		
 		#setup self.go_no2go_name
 		self.curs.execute("select g.go_no,t.name from go g, go.term t where g.go_id=t.acc")
@@ -195,15 +197,42 @@ class gene_stat:
 		rows = self.curs.fetchall()
 		self.no_of_functions = rows[0][0]
 		sys.stderr.write("Done\n")
-		
+
+	def core_from_files(self):
+		#following codes are attaching directory path to each file in the list
+		file_list = os.listdir(self.dir_files)
+		file_path_list = []
+		for filename in file_list:
+			file_path_list.append(os.path.join(self.dir_files, filename))
+		#multiple files constitute the source of data
+		self.files = fileinput.input(file_path_list)
+		#wrap it with a reader
+		self.reader = csv.reader(self.files, delimiter='\t')
+		for row in self.reader:
+			row[0] = int(row[0])
+			row[1] = int(row[1])
+			row[3] = float(row[3])
+			self.curs.execute("select recurrence_array, vertex_set from %s where mcl_id=%d"%(self.mcl_table, int(row[0])) )
+			rows = self.curs.fetchall()
+			#first append the recurrence_array
+			row.append(rows[0][0])
+			#second append the vertex_set
+			row.append(rows[0][1])
+			#only leave_one_out
+			self._gene_stat_leave_one_out(row)
+
+			if self.report and self.no_of_records%2000==0:
+				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+		if self.report:
+			sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+
 	def core(self):
 		#the central function of the class
 		if self.leave_one_out:
 			#leave_one_out method gets data from both cluster_stat-like and mcl_result-like table
 			self.curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.leave_one_out, c.p_value_vector, \
-				m.recurrence_array, m.vertex_set from %s c, %s m where c.mcl_id=m.mcl_id and c.connectivity>=%f and\
-				array_upper(m.recurrence_array, 1)>=%d and array_upper(m.vertex_set, 1)<=%d"\
-				%(self.table, self.mcl_table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
+				 c.connectivity, m.recurrence_array, m.vertex_set from %s c, %s m where c.mcl_id=m.mcl_id"\
+				%(self.table, self.mcl_table))
 		else:
 			#no leave_one_out method gets data only from mcl_result-like table
 			self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio, \
@@ -227,8 +256,13 @@ class gene_stat:
 			rows = self.curs.fetchall()
 
 	def run(self):
-	
-		self.core()		
+		if self.dir_files and self.leave_one_out==0:
+			sys.stderr.write("working on files of cluster_stat.py results, it must be leave_one_out.\n")
+			sys.exit(2)
+		if self.dir_files:
+			self.core_from_files()
+		else:
+			self.core()
 		#before self.final(), self.gene_prediction_dict has been filled.
 		self.final()
 		
@@ -270,22 +304,24 @@ class gene_stat:
 		new_list.sort()
 		return new_list
 
-	def is_specific(self, go_no):
-		go_id = self.go_no2go_id[go_no]
-		depth = len(GraphAlgo.shortest_path(self.go_graph, 'GO:0008150', go_id))
-		#shortest_path() return a list from GO:0008150(biological_process) to go_id.
-		#so the depth from GeneOntology root to go_id is exactly the length of the list
-		if depth < self.depth_cut_off:
-			return 0
-		else:
-			return 1
-
 	def _gene_stat_leave_one_out(self, row):
+		mcl_id = row[0]
+		gene_no = row[1]
 		p_value_vector = row[2][1:-1].split(',')
-		recurrence_array = row[3][1:-1].split(',')
+		connectivity = float(row[3])
+		recurrence_array = row[4][1:-1].split(',')
 		recurrence_array = map(int, recurrence_array)
-		vertex_set = row[4][1:-1].split(',')
+		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
+		if len(recurrence_array) < self.recurrence_cut_off:
+			#the recurrence is not enough
+			return
+		if len(vertex_set) > self.cluster_size_cut_off:
+			#the cluster is too big
+			return
+		if connectivity < self.connectivity_cut_off:
+			#the cluster is not dense enough
+			return
 		#transform into float type
 		p_value_index_tuple_list = self.index_tuple(p_value_vector)
 		for (p_value, index) in p_value_index_tuple_list:
@@ -294,8 +330,8 @@ class gene_stat:
 				go_no = index
 			else:
 			#index 0 corresponds to go_no 1
-				go_no = index+1	
-			if self.is_specific(go_no):
+				go_no = index+1
+			if self.go_no2depth[go_no] > self.depth_cut_off:
 				min_p_value = p_value
 				break
 
@@ -309,8 +345,6 @@ class gene_stat:
 		#The cluster is an eligible cluster. Passing all the cut_offs.
 		#
 		self.no_of_records += 1
-		mcl_id = row[0]
-		gene_no = row[1]
 		if gene_no not in self.gene_prediction_dict:
 			item = gene_prediction()
 			self.gene_prediction_dict[gene_no] = item
@@ -463,7 +497,7 @@ class gene_stat:
 			p_functions = p_functions_dict.keys()
 			if gene_no not in self.known_genes_dict:
 				#unknown genes are not validatable. Ignore.
-				self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
+				#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
 				continue
 			k_functions_list = self.known_genes_dict[gene_no]
 			self.no_of_p_known += 1
@@ -500,15 +534,15 @@ class gene_stat:
 			self.fp += len(entry.fp)
 			self.fp_m += sum(entry.fp.values())
 			self.fn += sum(entry.fn.values())
-			self.log_file.write('known: %d %s %s %d %s %s %s %s\n'%(gene_no, repr(entry.tp),repr(entry.tp1),\
-				entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
+			#self.log_file.write('known: %d %s %s %d %s %s %s %s\n'%(gene_no, repr(entry.tp),repr(entry.tp1),\
+			#	entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
 	
 	def is_L0(self, p_go_no, k_go_no):
 		k_go_id = self.go_no2go_id[k_go_no]
 		p_go_id = self.go_no2go_id[p_go_no]
 		k_go_family = Set(self.go_graph.forw_bfs(k_go_id))
 		if p_go_id in k_go_family:
-			self.log_file.write('%d is L0 of %d:: %s %s\n'%(p_go_no, k_go_no, p_go_id, k_go_id))
+			#self.log_file.write('%d is L0 of %d:: %s %s\n'%(p_go_no, k_go_no, p_go_id, k_go_id))
 			return 1
 		else:
 			return 0
@@ -518,12 +552,12 @@ class gene_stat:
 		p_go_id = self.go_no2go_id[p_go_no]
 		k_go_inc_nbrs = Set(self.go_graph.inc_nbrs(k_go_id))
 		if p_go_id in k_go_inc_nbrs:
-			self.log_file.write("%d is direct parent of %d:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))	
+			#self.log_file.write("%d is direct parent of %d:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))	
 			return 1
 		for k_go_inc_nbr in k_go_inc_nbrs:
 			k_go_inc_nbr_out_nbrs = Set(self.go_graph.out_nbrs(k_go_inc_nbr))
 			if p_go_id in k_go_inc_nbr_out_nbrs:
-				self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))			
+				#self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))			
 				return 1
 		return 0
 	
@@ -548,7 +582,8 @@ class gene_stat:
 				recurrence_cut_off      integer,\
 				connectivity_cut_off    float,\
 				cluster_size_cut_off    integer,\
-				unknown_cut_off      float\
+				unknown_cut_off      float,\
+				depth_cut_off integer\
 				)"%self.gene_table)
 
 		for gene_no in self.gene_prediction_dict:
@@ -571,12 +606,12 @@ class gene_stat:
 					e_accuracy = self.go_no2accuracy[go_no].ratio
 				self.curs.execute("insert into %s(gene_no, go_no, is_correct, avg_p_value, e_accuracy,\
 					no_of_clusters, cluster_context, cluster_array, p_value_cut_off, recurrence_cut_off,\
-					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off)\
-					values(%d, %d, %d, %f, %f, %d, '%s', ARRAY%s, %f, %d, %f, %d, %f)"%\
+					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off)\
+					values(%d, %d, %d, %f, %f, %d, '%s', ARRAY%s, %f, %d, %f, %d, %f, %d)"%\
 					(self.gene_table, gene_no, go_no, unit[go_no].is_correct, sum(unit[go_no].p_value_list)/no_of_clusters,\
 					e_accuracy, no_of_clusters, ';'.join(context_list),\
 					repr(unit[go_no].cluster_array), self.p_value_cut_off, self.recurrence_cut_off,\
-					self.connectivity_cut_off, self.cluster_size_cut_off, self.unknown_cut_off))
+					self.connectivity_cut_off, self.cluster_size_cut_off, self.unknown_cut_off, self.depth_cut_off))
 		
 		if self.needcommit:				
 			self.curs.execute("end")	
@@ -717,9 +752,9 @@ if __name__ == '__main__':
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
 		"unknown_cut_off=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "depth_cut_off=",\
-		"leave_one_out", "wu", "report", "commit", "gene_table=", "dominant", "plottype"]
+		"dir_files=", "leave_one_out", "wu", "report", "commit", "gene_table=", "dominant", "plottype"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:e:lwrcg:vs:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:e:f:lwrcg:vs:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -734,6 +769,7 @@ if __name__ == '__main__':
 	recurrence_cut_off = 5
 	cluster_size_cut_off = 1000
 	depth_cut_off = 3
+	dir_files = None
 	leave_one_out = 0
 	wu = 0
 	report = 0
@@ -768,6 +804,8 @@ if __name__ == '__main__':
 			cluster_size_cut_off = int(arg)
 		elif opt in ("-e", "--depth_cut_off"):
 			depth_cut_off = int(arg)
+		elif opt in ("-f", "--dir_files"):
+			dir_files = arg
 		elif opt in ("-l", "--leave_one_out"):
 			leave_one_out = 1
 		elif opt in ("-w", "--wu"):
@@ -790,7 +828,7 @@ if __name__ == '__main__':
 	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off,\
-			leave_one_out, wu, report, depth_cut_off, commit, gene_table, dominant, plottype, stat_table_fname)
+			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table, dominant, plottype, stat_table_fname)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
