@@ -5,6 +5,7 @@ Usage: batch_qsub.py -c PROGRAM_TO_BE_INVOKED -i INIT_NUM -n NO_OF_JOBS -o OUTPU
 Option:
 	DATADIR is the directory containing all the files to be qsubbed.
 	-c ..., --call=... Call the program. FULL PATH please.
+	-j ..., --job_prefix=...	the prefix of all the jobs, default is the name of the program called.
 	-i ..., --initnum=...	The initial number for all the jobs.
 	-n ..., --no_of_jobs=...	specify how many jobs you want to submit
 	-p ..., --parameter=...	parameters to be passed to the program invoked, DOUBLE QUOTE IT
@@ -16,7 +17,7 @@ Examples:
 	
 	batch_qsub.py -c ~/script/annot/bin/triplet_construct.py -i 0 -n 10 -p "-q -z" -o sc_quadruplets gph_result/sc_yh60_type0
 		:submit 10 quadruplet construction jobs
-	batch_qsub.py -c ~/script/annot/bin/graph.bin -i 0 -n 10 -o gph_sc_dataset -f datasets/yeast_data
+	batch_qsub.py -c ~/script/annot/bin/graph.bin -j graph_construct -i 0 -n 10 -o gph_sc_dataset -f datasets/yeast_data
 		:submit 10 graph construction jobs, in file form. This is a bad example. Don't use it.
 	
 Description:
@@ -36,9 +37,12 @@ class batch_qsub:
 	'''
 	Partition a big job into several small jobs
 	'''
-	def __init__(self, dir, call, initnum, no_of_jobs, parameter, oprefix, file_form):
+	def __init__(self, dir, call, job_prefix, initnum, no_of_jobs, parameter, oprefix, file_form):
 		self.dir = os.path.abspath(dir)
 		self.program = os.path.abspath(call)
+		if job_prefix == '':
+			job_prefix = os.path.basename(call)
+		self.job_prefix = job_prefix
 		self.initnum = int(initnum)
 		self.no_of_jobs = int(no_of_jobs)
 		self.parameter = parameter
@@ -60,7 +64,7 @@ class batch_qsub:
 		files_per_job = int( math.ceil(no_of_files/float(self.no_of_jobs)) )
 
 		for i in range(self.no_of_jobs):
-			job_fname = os.path.join(self.jobdir, 'batch_qsub_'+repr(self.initnum+i)+'.sh')
+			job_fname = os.path.join(self.jobdir, '%s%d.sh'%(self.job_prefix, self.initnum+i))
 			out_block = '#!/bin/sh\n'		#this is '=' not '+='
 			out_block += 'date\n'
 			if not self.file_form:
@@ -108,12 +112,13 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hc:i:n:p:o:f", ["help", "call=", "initnum=", "no_of_jobs=", "parameter=", "oprefix=", "file_form"])
+		opts, args = getopt.getopt(sys.argv[1:], "hc:j:i:n:p:o:f", ["help", "call=", "job_prefix=", "initnum=", "no_of_jobs=", "parameter=", "oprefix=", "file_form"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	call = None
+	job_prefix = ''
 	initnum = None
 	no_of_jobs = None
 	parameter = ''
@@ -125,6 +130,8 @@ if __name__ == '__main__':
 			sys.exit(2)
 		elif opt in ("-c", "--call"):
 			call = arg
+		elif opt in ("-j", "--job_prefix"):
+			job_prefix = arg
 		elif opt in ("-i", "--initnum"):
 			initnum = arg
 			#will be integered in the class
@@ -139,7 +146,7 @@ if __name__ == '__main__':
 
 
 	if call and initnum and no_of_jobs and oprefix and len(args) == 1:
-		instance = batch_qsub(args[0], call, initnum, no_of_jobs, parameter, oprefix, file_form)
+		instance = batch_qsub(args[0], call, job_prefix, initnum, no_of_jobs, parameter, oprefix, file_form)
 		instance.submit()
 	else:
 		print __doc__
