@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-Usage: gene_stat.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION] STAT_TABLE_FILE
+Usage: gene_stat.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION] [STAT_TABLE_FILE]
 
 Option:
 	STAT_TABLE_FILE is the file to store the function table of all predicted genes.
+		If it's not given, no table will be outputed.
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
@@ -20,7 +21,7 @@ Option:
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
 	-v, --dominant	Only assign the dominant function(s) to a gene.
-	-s ..., plottype	0, 1 (default), 2, 3. 0 is false positive. 1 is true positive. 2 is all. 3 is no plot.
+	-s ..., plottype	0, 1, 2, 3(default). 0 is false positive. 1 is true positive. 2 is all. 3 is no plot.
 	-h, --help              show this help
 
 Examples:
@@ -68,6 +69,7 @@ class function_struc:
 	def __init__(self):
 		self.is_correct = 0
 		self.p_value_list = []
+		self.cluster_array = []
 		self.context_dict = {}
 
 class accuracy_struc:
@@ -80,7 +82,7 @@ class accuracy_struc:
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
-		needcommit=0, gene_table='p_gene', dominant=0, plottype=2, stat_table_fname='p_table_file'):
+		needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -98,7 +100,7 @@ class gene_stat:
 		self.gene_table = gene_table
 		self.dominant = int(dominant)
 		self.plottype = int(plottype)
-		self.stat_table_f = csv.writer(open(stat_table_fname, 'w'), delimiter='\t')
+		self.stat_table_fname = stat_table_fname
 		
 		self.tp = 0.0
 		self.tp_m = 0.0
@@ -227,15 +229,18 @@ class gene_stat:
 		self.core()		
 		#before self.final(), self.gene_prediction_dict has been filled.
 		self.final()
-		if self.needcommit:
-		#Database updating is too slow. Do it only if needcommit.
-			self.submit()
+		
 		self.stat_output()
 		
-		if self.leave_one_out:
-			#only for leave_one_out approach
+		if self.leave_one_out and self.stat_table_fname != 'null':
+			#only for leave_one_out approach and when stat_table_fname is not 'null'
+			self.stat_table_f = csv.writer(open(self.stat_table_fname, 'w'), delimiter='\t')
 			self.go_no_accuracy()
 			self.table_output()
+			if self.needcommit:
+			#Database updating is too slow. Do it only if needcommit.
+				self.submit()
+
 		if self.plottype != 3:
 			self.hist_plot(self.go_no2cluster, 'go_no2cluster.png', 'go_no', 'number of clusters')
 			self.hist_plot(self.go_no2gene, 'go_no2gene.png', 'go_no', 'number of genes')
@@ -316,6 +321,8 @@ class gene_stat:
 					self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no].is_correct = 1
 				#push in the min_p_value
 				self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no].p_value_list.append(min_p_value)
+				#push in the mcl_id
+				self.gene_prediction_dict[gene_no].p_functions_struc_dict[go_no].cluster_array.append(mcl_id)
 				#push in the surrounding vertices of gene_no
 				for vertex in vertex_set:
 					if vertex != gene_no:
@@ -495,35 +502,48 @@ class gene_stat:
 		if self.gene_table!='p_gene':
 			#create the table if it's not 'p_gene'
 			self.curs.execute("create table %s(\
+				p_gene_id       serial,\
 				gene_no integer,\
-				cluster_array integer[],\
-				tp integer[],\
-				tp1 integer[],\
-				tn integer,\
-				fp integer[],\
-				fn integer[],\
-				p_functions integer[]\
+				go_no   integer,\
+				is_correct      integer,\
+				avg_p_value     float,\
+				e_accuracy      float,\
+				no_of_clusters  integer,\
+				cluster_context varchar,\
+				cluster_array   integer[],\
+				p_value_cut_off float,\
+				recurrence_cut_off      integer,\
+				connectivity_cut_off    float,\
+				cluster_size_cut_off    integer,\
+				unknown_cut_off      float\
 				)"%self.gene_table)
-		self.curs.execute("select gene_no from gene")
-		rows = self.curs.fetchall()
-		for row in rows:
-			gene_no = row[0]
-			if gene_no in self.gene_prediction_dict:
-				entry = self.gene_prediction_dict[gene_no]
-				p_functions = entry.p_functions_dict.keys()
-				string_tp = self.list_stringlist(entry.tp.keys())
-				string_tp1 = self.list_stringlist(entry.tp1.keys())
-				string_fp = self.list_stringlist(entry.fp.keys())
-				string_fn = self.list_stringlist(entry.fn.keys())
-				if gene_no in self.known_genes_dict:
-					self.curs.execute("insert into %s(gene_no, cluster_array, tp, tp1, tn, fp, fn, p_functions)\
-						values(%d, ARRAY%s, '%s', '%s', %d, '%s', '%s', ARRAY%s)"%\
-						(self.gene_table, gene_no, repr(entry.mcl_id_list),string_tp,string_tp1,\
-						entry.tn, string_fp, string_fn,repr(p_functions)))
+
+		for gene_no in self.gene_prediction_dict:
+			unit = self.gene_prediction_dict[gene_no].p_functions_struc_dict
+			for go_no in unit:
+				no_of_clusters = len(unit[go_no].cluster_array)
+				#convert the context_dict into a human-readable list.
+				context_list = []
+				for member in unit[go_no].context_dict:
+					percentage = unit[go_no].context_dict[member]/float(no_of_clusters)
+					if percentage >= 0.3:
+						context_list.append('%s(%2.1f%%)'%(self.gene_no2gene_id[member], (percentage*100) ))
+				if go_no not in self.go_no2accuracy:
+				#There's possibility that one function can not be validated.
+				#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
+				#
+					e_accuracy = -1.0
 				else:
-					self.curs.execute("insert into %s(gene_no, cluster_array, p_functions)\
-						values(%d, ARRAY%s, ARRAY%s)"%\
-						(self.gene_table, gene_no, repr(entry.mcl_id_list),repr(p_functions)))
+					e_accuracy = self.go_no2accuracy[go_no].ratio
+				self.curs.execute("insert into %s(gene_no, go_no, is_correct, avg_p_value, e_accuracy,\
+					no_of_clusters, cluster_context, cluster_array, p_value_cut_off, recurrence_cut_off,\
+					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off)\
+					values(%d, %d, %d, %f, %f, %d, '%s', ARRAY%s, %f, %d, %f, %d, %f)"%\
+					(self.gene_table, gene_no, go_no, unit[go_no].is_correct, sum(unit[go_no].p_value_list)/no_of_clusters,\
+					e_accuracy, no_of_clusters, ';'.join(context_list),\
+					repr(unit[go_no].cluster_array), self.p_value_cut_off, self.recurrence_cut_off,\
+					self.connectivity_cut_off, self.cluster_size_cut_off, self.unknown_cut_off))
+		
 		if self.needcommit:				
 			self.curs.execute("end")	
 		sys.stderr.write("done.\n")
@@ -621,34 +641,35 @@ class gene_stat:
 
 	def _table_output(self, gene_no, unit):
 		#indicator for the number of functions associated with this gene
-		i = 0
 		for go_no in unit:
 			row = []
-			if i == 0:
-				#the starting row shows the gene_id and function_known
-				row.append(self.gene_no2gene_id[gene_no])
-				if gene_no in self.known_genes_dict:
-					function_known_list = []
-					for go_known in self.known_genes_dict[gene_no]:
-						function_known_list.append(self.go_no2go_name[go_known])
-					row.append(';'.join(function_known_list))
-				else:
-					row.append('')
+			row.append(self.gene_no2gene_id[gene_no])
+			#function_known might not be available
+			if gene_no in self.known_genes_dict:
+				function_known_list = []
+				for go_known in self.known_genes_dict[gene_no]:
+					function_known_list.append(self.go_no2go_name[go_known])
+				row.append(';'.join(function_known_list))
 			else:
-				#the succeeding rows don't show that.
 				row.append('')
-				row.append('')
-			i += 1
+
 			row.append(self.go_no2go_name[go_no])
 			row.append(unit[go_no].is_correct)
 			no_of_clusters = len(unit[go_no].p_value_list)
 			row.append(sum(unit[go_no].p_value_list)/float(no_of_clusters))
-			row.append('%2.2f%%'%(self.go_no2accuracy[go_no].ratio*100))
+			if go_no in self.go_no2accuracy:
+				#There's possibility that one function can not be validated.
+				#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
+				#
+				row.append('%2.2f%%'%(self.go_no2accuracy[go_no].ratio*100))
+			else:
+				row.append('NULL')
 			row.append(no_of_clusters)
+			#convert the context_dict into a human-readable list.
 			context_list = []
 			for member in unit[go_no].context_dict:
 				percentage = unit[go_no].context_dict[member]/float(no_of_clusters)
-				if percentage >= 0.5:
+				if percentage >= 0.3:
 					context_list.append('%s(%2.1f%%)'%(self.gene_no2gene_id[member], (percentage*100) ))
 			row.append(';'.join(context_list))
 			#write the row into the stat_table_fname
@@ -684,7 +705,7 @@ if __name__ == '__main__':
 	unknown_cut_off = 1
 	gene_table = 'p_gene'
 	dominant = 0
-	plottype = 1
+	plottype = 3
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -723,11 +744,15 @@ if __name__ == '__main__':
 			dominant = 1
 		elif opt in ("-s", "--plottype"):
 			plottype = int(arg)
+	if len(args) == 1:
+		stat_table_fname = args[0]
+	else:
+		stat_table_fname = 'null'
 			
-	if schema and p_value_cut_off and len(args)==1:
+	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off,\
-			leave_one_out, wu, report, commit, gene_table, dominant, plottype, args[0])
+			leave_one_out, wu, report, commit, gene_table, dominant, plottype, stat_table_fname)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
