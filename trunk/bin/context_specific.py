@@ -322,7 +322,7 @@ class context_specific:
 			
 			go_name_list = []
 			for term_no in go_no_list:
-				go_name_list.append(self.go_no2go_name[term_no])
+				go_name_list.append('%s(%s)'%(self.go_no2go_name[term_no], self.go_no2go_id[term_no]) )
 			
 			#row.append('%s'%('/'.join(map(repr,go_no_list) )))
 			row.append('%s'%('/'.join(go_name_list)))
