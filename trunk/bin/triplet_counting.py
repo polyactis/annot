@@ -79,7 +79,7 @@ class triplet_counting:
 			target_f = open(target, 'w')
 		line = source_f.readline()
 		while line:
-			if line in self.triplet_dict:
+			if self.triplet_dict.has_key(line):
 				self.triplet_dict[line] += 1
 			elif len(self.triplet_dict) <self.threshhold:
 				self.triplet_dict[line] = 1
@@ -88,8 +88,9 @@ class triplet_counting:
 			line = source_f.readline()
 		source_f.close()
 		target_f.close()
-		for item in self.triplet_dict.iteritems():
-			self.triplet_file_dict[item[1]].write(item[0])
+		for i in range(len(self.triplet_dict)):
+			(triplet,freq) = self.triplet_dict.popitem()
+			self.triplet_file_dict[freq].write(triplet)
 		self.no_of_runs += 1
 		sys.stderr.write('\ttransfer %d done\n'%self.no_of_runs)
 
