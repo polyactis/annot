@@ -35,6 +35,13 @@ class TestGoNodeDistance(unittest.TestCase):
 		for index1 in index_set1:
 			for index2 in index_set2:
 				self.instance.process_2indices(index1, index2)
+		#1532(GO:0046173) is two steps away from GO:0006066.
+		#203(GO:0005996) is one step away from GO:0006066.
+		index_set1 = self.instance.go_id2index[1532]
+		index_set2 = self.instance.go_id2index[203]
+		for index1 in index_set1:
+			for index2 in index_set2:
+				self.instance.process_2indices(index1, index2)
 
 if __name__ == '__main__':
 	suite = unittest.TestSuite()
