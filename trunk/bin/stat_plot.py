@@ -38,7 +38,7 @@ class stat_plot:
 				self.plot(connectivity, limit, plot_data)
 				
 	def plot(self, connectivity, limit, plot_data):
-		r.png('%d.png'%self.no_of_plots)
+		r.pdf('%d.pdf'%self.no_of_plots)
 		sensitivity_list = []
 		false_positive_ratio_list = []
 		for entry in plot_data:
