@@ -108,14 +108,7 @@ class gene_stat(gene_stat_on_mcl_result):
 		if self.needcommit:
 		#Database updating is too slow. Do it only if needcommit.
 			self.submit()
-		sys.stderr.write('\n\tp_value_cut_off:%f unknown_cut_off:%f connectivity_cut_off:%f\n'%(self.p_value_cut_off, self.unknown_cut_off, self.connectivity_cut_off))
-		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
-		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
-		sys.stderr.write('\tWhole Sensitvity: %f\n'%((self.tp+self.tp1)/(self.tp+self.tp1+self.fn)))
-		sys.stderr.write('\tTP0: %d  TP1: %d  TN: %d  FP: %d  FN: %d\n'%(self.tp, self.tp1, self.tn, self.fp, self.fn))
-		sys.stderr.write('\tTP0_M: %d  TP1_M: %d  FP_M: %d\n'%(self.tp_m, self.tp1_m, self.fp_m))
-		sys.stderr.write('\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
-		sys.stderr.write('\tFalse Positive Ratio: %f\n'%(self.fp_m/(self.tp_m+self.tp1_m+self.fp_m)))
+		self.stat_output()
 			
 	def _gene_stat(self, row):
 		p_value_vector = row[2][1:-1].split(',')
