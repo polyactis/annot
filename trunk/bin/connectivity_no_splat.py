@@ -216,9 +216,11 @@ class connectivity_no_splat:
 		self.vertex_pool += vertex_set
 		no_of_vertices = len(vertex_list)
 		no_of_edges = 0
+		edge_list = []
 		for i in xrange(no_of_vertices):
 			for j in xrange(i+1, no_of_vertices):
 				if self.dataset2graph[splat_id].member(vertex_list[i],vertex_list[j]):
+					edge_list.append([vertex_list[i], vertex_list[j]])
 					no_of_edges += 1
 		connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
 		#log it
@@ -226,6 +228,10 @@ class connectivity_no_splat:
 		try:
 			self.curs.execute("update %s set connectivity=%f where mcl_id=%d"% \
 			(self.table, connectivity, mcl_id))
+			#insert the edge_list of a mcl cluster into splat_result as a pseudo splat result
+			#leave the possibility of computing the connectivity of fim_result.
+			self.curs.execute("insert into splat_result(splat_id, no_of_edges, edge_set) \
+				values(%d, %d, ARRAY%s)"%(mcl_id, no_of_edges, repr(edge_list)))
 		except:
 			sys.stderr.write('Error occurred while setting connectivity\n')
 			sys.exit(1)
