@@ -26,6 +26,9 @@ Examples:
 		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3 -y 2
 		-f 45 -c 'red' -n 4096 test.R
 	
+	subgraph_visualize.py -k sc_54 -t splat_result_1 -m mcl_result_1
+		-l 0 -n 3747 -y 3 /tmp/test.R
+	
 Description:
 	This program is used to visualize the MCL clusters via R(bioconductor's
 	Rgraphviz). Two types of visualization:
@@ -33,7 +36,9 @@ Description:
 	single graph  only needs the table, mcl_table, mcl_id and centralnode.
 	2.
 	meta_graph needs table, mcl_table, gene_table, function and centralnode.
-	
+	3.
+	display codense sub_subgraph dataset by dataset, need table, mcl_table,
+	mcl_id, centralnode
 """
 
 import sys, os, psycopg, getopt
@@ -207,7 +212,7 @@ class subgraph_visualize:
 		for vertex in vertex_set:
 			gene_id = self.gene_no2gene_id[vertex]
 			if self.function in self.global_gene_to_go_dict[vertex]:
-				color_list.append('%s="%s"'%(gene_id, self.functioncolor))
+				color_list.append('"%s"="%s"'%(gene_id, self.functioncolor))
 		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
 		gene_id = self.gene_no2gene_id[centralnode]
 		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
@@ -260,7 +265,7 @@ class subgraph_visualize:
 		for vertex in vertex_set:
 			gene_id = self.gene_no2gene_id[vertex]
 			if self.function in self.global_gene_to_go_dict[vertex]:
-				color_list.append('%s="%s"'%(gene_id, self.functioncolor))
+				color_list.append('"%s"="%s"'%(gene_id, self.functioncolor))
 		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
 		gene_id = self.gene_no2gene_id[centralnode]
 		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
