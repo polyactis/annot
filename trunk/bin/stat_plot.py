@@ -5,8 +5,8 @@ Usage: stat_plot.py -f FIXED -v VARYING -t TAG [options] OFNAME
 Options:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...		database to connect, graphdb(default)
-	-f ..., --fixed=...	fixed parameter values, like urs:0.25,8,8
-	-v ..., --var=...	varying parameter, one of unrs
+	-f ..., --fixed=...	fixed parameter values, like ursp:0.25,8,8,0.001
+	-v ..., --var=...	varying parameter, one of unrsp
 	-t ..., --tag=...	just tag
 	-x ..., --xlim=...	the range for the x axis, 0.0-1000(default)
 	-y ..., --ylim=...	the range for the y axis, 0.0-1.0(default)
@@ -15,11 +15,12 @@ Options:
 	-h, --help		show this help
 
 Examples:
-	stat_plot.py -t sc_known
+	stat_plot.py -t sc_known -f ursp:0.25,8,8,0.001 -v n connectivity.jpg
 
 Description:
-	unrs: u denotes unknown_cut_off, n denotes connectivity_cut_off
+	unrsp: u denotes unknown_cut_off, n denotes connectivity_cut_off
 		r denotes recurrence_cut_off, s denotes cluster_size_cut_off
+		p denotes p_value_cut_off
 		
 """
 
@@ -50,7 +51,8 @@ class stat_plot:
 		self.option_label_dict = {'u': 'unknown_cut_off',
 			'n':'connectivity_cut_off',
 			'r':'recurrence_cut_off',
-			's':'cluster_size_cut_off'}
+			's':'cluster_size_cut_off',
+			'p':'p_value_cut_off'}
 		self.option_num_dict = {}
 		self.stat_data = []
 		self.no_of_curves = 0
@@ -58,14 +60,57 @@ class stat_plot:
 		self.varying_list = []
 	
 	def option_parsing(self):
-		#in option_num_dict, 0,1,2 are the fixed parameters. 3 is the varying parameter.
+		#in option_num_dict, 0,1,2,3 are the fixed parameters. 4 is the varying parameter.
 		for i in range(len(self.fixed_label)):
 			label = self.option_label_dict[self.fixed_label[i]]
 			self.option_num_dict[i] = option_attr(label, self.fixed_value_list[i])
-		self.option_num_dict[3] = option_attr(self.option_label_dict[self.var])
+		self.option_num_dict[4] = option_attr(self.option_label_dict[self.var])
 
 	def run(self):
 		self.option_parsing()
+		self.single_plot()
+	
+	
+	def single_plot(self):
+		#this function deals with 4 fixed parameters and 1 varying parameter
+		r.jpeg('%s'%self.ofname)
+		x_list = []
+		y_list = []
+		self.curs.execute("select  tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn from\
+			stat_plot_data where %s=%s and %s=%s and %s=%s and %s=%s and tag='%s' order by %s \
+			"%(self.option_num_dict[0].label, self.option_num_dict[0].value, \
+			self.option_num_dict[1].label, self.option_num_dict[1].value, self.option_num_dict[2].label, \
+			self.option_num_dict[2].value, self.option_num_dict[3].label, self.option_num_dict[3].value, \
+			self.tag, self.option_num_dict[4].label))
+		plot_data = self.curs.fetchall()
+		for entry in plot_data:
+			tn = entry[4]
+			fn = entry[7]
+			if self.based_on_clusters:
+				#using the tp_m, tp1_m and fp_m
+				tp = entry[1]
+				tp1 = entry[3]
+				fp = entry[6]
+			else:
+				#using the tp, tp1, fp
+				tp = entry[0]
+				tp1 = entry[2]
+				fp = entry[5]
+			if self.l1:
+				#tp1 is counted as true positive
+				tp += tp1
+			else:
+				#tp1 is counted as false positive
+				fp += tp1
+			x_list.append(tp)
+			y_list.append(float(tp)/(tp+fp))
+		
+		r.plot(x_list, y_list, type='o',pch='*',xlab='true positive',xlim=self.x_range,ylim=self.y_range, \
+				ylab='ratio', main='%s'%(self.option_num_dict[4].label), col=1)
+		r.dev_off()
+		
+	def plot(self):
+		#this function deals with 3 fixed parameters and 1 varying parameter
 		self.curs.execute("select distinct %s, %s, %s, %s, tag from\
 			stat_plot_data where %s=%s and %s=%s and %s=%s and tag='%s' order by %s \
 			"%(self.option_num_dict[0].label, self.option_num_dict[1].label, self.option_num_dict[2].label,\
@@ -73,15 +118,15 @@ class stat_plot:
 			self.option_num_dict[1].label, self.option_num_dict[1].value, self.option_num_dict[2].label, \
 			self.option_num_dict[2].value, self.tag, self.option_num_dict[3].label))
 		rows = self.curs.fetchall()
-		r.png('%s'%self.ofname)
+		r.jpeg('%s'%self.ofname)
 		for row in rows:
 			#position 0,1,2 are fixed values, 3 is varying value, 4 is the tag value.
-			self.plot(row)
+			self._plot(row)
 		#add the legend
 		r.legend(self.x_range[1], self.y_range[1], self.varying_list, col=range(1, self.no_of_curves+1), lty=1, pch='*', xjust=1)
 		r.dev_off()
 		
-	def plot(self, row):
+	def _plot(self, row):
 		self.no_of_curves += 1
 		#position 3 in row is the varying value
 		self.varying_list.append(row[3])
