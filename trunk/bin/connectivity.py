@@ -95,7 +95,7 @@ class compute_connectivity:
 						no_of_edges += 1
 			connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
 			try:
-				self.curs.execute("update mcl_result set connectivity=%f where mcl_id='%s'"% \
+				self.curs.execute("update mcl_result set connectivity=%f where mcl_id=%d"% \
 				(connectivity, mcl_id))
 			except:
 				sys.stderr.write('Error occurred while setting mcl connectivity\n')
