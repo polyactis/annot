@@ -36,6 +36,7 @@ class db_to_mcl:
 			outf = open(path, 'w')
 			self.mcl_singleton_write(row[1], outf)
 			row = self.curs.fetchone()
+			outf.close()
 			no += 1
 			sys.stderr.write('.')
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
