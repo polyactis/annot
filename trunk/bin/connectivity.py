@@ -24,6 +24,7 @@ Description:
 """
 
 import sys,os,cStringIO,psycopg,getopt
+from kjbuckets import *
 
 class compute_connectivity:
 	'''
@@ -46,14 +47,19 @@ class compute_connectivity:
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.vertex_dict = {}
+		#a structure to store vertices of a splat pattern
 		self.edge_dict = {}
+		#structure to store edges of a splat pattern
 		self.no_of_splat_records = 0
 		self.no_of_mcl_records = 0
+		self.vertex_pool = kjSet()
+		#store the vertices of all the splat patterns
+		self.log_file = open('/tmp/connectivity.log', 'w')
 					
 	def run(self):
 		self.curs.execute("begin")
 		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result")
-		self.curs.execute("fetch 1000 from crs")
+		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
 			for row in rows:
@@ -63,14 +69,17 @@ class compute_connectivity:
 					self.splat_atom_update(splat_id, edge_set)
 				elif self.table == 'mcl':
 					self.mcl_atom_update(splat_id, edge_set)
-			
+
 			if self.report:
 				if self.table == 'splat':
 					sys.stderr.write("%s%s"%("\x08"*20,self.no_of_splat_records))
 				elif self.table == 'mcl':
 					sys.stderr.write("%s%s"%("\x08"*20,self.no_of_mcl_records))
-			self.curs.execute("fetch 1000 from crs")
+			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
+
+		sys.stderr.write("\tNumber of distinct genes in all splat patterns: %d\n"%len(self.vertex_pool) )
+		self.log_file.write(repr(self.vertex_pool))
 		if self.needcommit:
 			self.curs.execute("create index connectivity_mcl_result_idx on mcl_result(connectivity)")
 			self.curs.execute("end")
@@ -79,7 +88,7 @@ class compute_connectivity:
 		else:
 			self.conn.rollback()
 			sys.stderr.write('\n\tNo real updates\n')
-	
+		
 	def mcl_atom_update(self, splat_id, edge_set):
 		'''
 		Compute the connectivity of all mcl clusters pertaining to the same splat_id.
@@ -131,11 +140,12 @@ class compute_connectivity:
 			self.edge_dict[vertex_list] = 1
 			vertex1 = vertex_list[0]
 			vertex2 = vertex_list[1]
+			self.vertex_pool.add(vertex1)
+			self.vertex_pool.add(vertex2)
 			if vertex1 not in self.vertex_dict:
 				self.vertex_dict[vertex1] = 1
 			if vertex2 not in self.vertex_dict:
 				self.vertex_dict[vertex2] = 1
-		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
