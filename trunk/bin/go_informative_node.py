@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """
-Usage: go_informative_node.py -a GO_ASSOCIATION -i GO_INDEX
+Usage:	go_informative_node.py -a GO_ASSOCIATION -i GO_INDEX [OPTIONS}
+	go_informative_node.py -k SCHEMA -b [OPTIONS]
 
 Option:
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
 	-a ..., -go_association=...	the file mapping go_id to gene_id
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
@@ -14,17 +17,24 @@ Examples:
 	go_informative_node.py -i process.pathindex.annotation.txt -a go2ug.txt
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t
-	
+	go_informative_node.py -k hs_yh60_42 -b
+
 Description:
+	First usage:
 	this program constructs informative nodes based on go_association file
 	and go_index file or go_graph file.
 	go_association file format:	go_id	gene_id
 	go_index file format:	go_id	go_index
-	go_graph file format:	term_id1	term_id2	go_id1	go_id2
+	go_graph file format:	term1_id	term2_id	go_id1	go_id2
 	Default Output is stdout.
+	go_association file should not have biological_process unknown class.
+	
+	Second usage:
+	this program constructs go_association and go_graph directly from database.
+	It depends on schema.gene, graph.association, go.term and go.term2term.
 """
 
-import sys, os, getopt, csv
+import sys, os, psycopg, getopt, csv
 from kjbuckets import *
 
 class go_informative_node:
@@ -132,9 +142,17 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, go_association, go_graph, size, stat):
-		self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
-		self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
+	def __init__(self, dbname, schema, go_association, go_graph, size, stat):
+		self.schema = schema
+		if self.schema:
+		#input from database
+			self.conn = psycopg.connect('dbname=%s'%dbname)
+			self.curs = self.conn.cursor()
+			self.curs.execute("set search_path to %s"%self.schema)
+		else:
+		#input from files
+			self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
+			self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
 		self.size = int(size)
 		self.stat = int(stat)
 		self.root = 'GO:0008150'
@@ -146,6 +164,7 @@ class go_informative_node_bfs:
 		self.log_file = open('/tmp/go_informative_node.log', 'w')
 
 	def dstruc_loadin(self):
+		sys.stderr.write("Loading Data STructure...")
 		for row in self.goa_f:
 		#setup the go_id2gene_id_dict structure
 			go_id = row[0]
@@ -159,9 +178,42 @@ class go_informative_node_bfs:
 		#setup the go_graph structure
 			self.go_graph.add((row[2], row[3]))
 		self.go_id_set = kjSet(self.go_graph.keys() + self.go_graph.values())
-		
+		sys.stderr.write("Done\n")
+
+	def dstruc_loadin_from_db(self):
+		sys.stderr.write("Loading Data STructure...")
+		#biological_process, not obsolete, not biological_process unknown.
+		self.curs.execute("select a.go_id, g.gene_id from graph.association a, go.term t,\
+			gene g where g.gene_id=a.gene_id and t.acc=a.go_id and\
+			t.term_type='biological_process' and t.acc!='GO:00000004' and t.is_obsolete=0")
+		rows = self.curs.fetchall()
+		for row in rows:
+		#setup the go_id2gene_id_dict structure
+			go_id = row[0]
+			gene_id = row[1]
+			if go_id not in self.go_id2gene_id_dict:
+				self.go_id2gene_id_dict[go_id] = kjSet([gene_id])
+			else:
+				self.go_id2gene_id_dict[go_id].add(gene_id)
+		#get the non-obsolete biological_process GO DAG
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
+			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
+			t1.term_type='biological_process' and t2.term_type='biological_process' ")
+		rows = self.curs.fetchall()
+		for row in rows:
+		#setup the go_graph structure
+			self.go_graph.add((row[2], row[3]))
+		self.go_id_set = kjSet(self.go_graph.keys() + self.go_graph.values())
+		sys.stderr.write("Done\n")
+
 	def run(self):
-		self.dstruc_loadin()
+		if self.schema:
+		#input from database	
+			self.dstruc_loadin_from_db()
+		else:
+		#input from files
+			self.dstruc_loadin()
 		for go_id in self.go_id_set.items():
 			#collect the associated genes from descendent terms
 			self.informative_node_dict[go_id] = 0
@@ -206,11 +258,13 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "ha:i:s:tb", ["help", "go_association=", "go_index=", "size=", "stat", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:a:i:s:tb", ["help", "dbname=", "schema=", "go_association=", "go_index=", "size=", "stat", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	dbname = 'graphdb'
+	schema = ''	
 	go_association = ''
 	go_index = ''
 	size = 60
@@ -220,6 +274,10 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
 		elif opt in ("-a", "--go_association"):
 			go_association = arg
 		elif opt in ("-i", "--go_index"):
@@ -230,8 +288,11 @@ if __name__ == '__main__':
 			stat = 1
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
-	if bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(go_association, go_index, size, stat)
+	if bfs==1 and schema:
+		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, stat)
+		instance.run()
+	elif bfs==1 and go_association and go_index:
+		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, stat)
 		instance.run()		
 	elif go_association and go_index:
 		instance = go_informative_node(go_association, go_index, size, stat)
