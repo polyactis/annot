@@ -228,16 +228,32 @@ def mapping_batch(dir):
 	
 
 if __name__ == '__main__':
+	def helper():
+		sys.stderr.write('\
+		#argv[1] is "mapping" or "transform".\n\
+			For "mapping", ignore argv[3].\n\
+		#argv[2] specifies the directory which contains the graph.cc\n\
+			output files. Yeast normal(no single quotes) data is OK.\n\
+		#argv[3] specifies the directory to store the gspan input files.\n')
 	'''
 	# this block uses the old class.
 	instance = graph_reorganize_old()
 	inf = open(sys.argv[1], 'r')
 	instance.parse(inf)
 	'''
-	if sys.argv[1] == 'mapping':
-		mapping_batch(sys.argv[2])
-		#argv[2] specifies the directory which contains the graph.cc output files
-	elif sys.argv[1] == 'transform':
-		transform_batch(sys.argv[2], sys.argv[3])
-		#argv[2] specifies the directory which contains the graph.cc output files.
-		#argv[3] specifies the directory to store the gspan input files.
+	if len(sys.argv) == 3:
+		if sys.argv[1] == 'mapping':
+			mapping_batch(sys.argv[2])
+		else:
+			helper()
+			sys.exit(1)
+
+	elif len(sys.argv) ==4:
+		if sys.argv[1] == 'transform':
+			transform_batch(sys.argv[2], sys.argv[3])
+		else:
+			helper()
+			sys.exit(1)
+	else:
+		helper()
+		sys.exit(1)

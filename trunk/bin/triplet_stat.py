@@ -26,21 +26,20 @@ class triplet_stat:
 			sys.exit(1)
 		global_struc = pickle.load(open(self.global_struc_fname, 'r'))
 		self.vertex_dict = global_struc['vertex_dict']
-
 		transfac_dict_orf = pickle.load(open(self.transfac_pickle_fname,'r'))
-
 		#replace the orfname with no. because the triplets are in no. form.
 		for item in transfac_dict_orf.iteritems():
 			if self.vertex_dict.has_key(item[0]):
 				no = self.vertex_dict[item[0]]
 				self.transfac_dict[no] = item[1]
 			
-		known_genes_dict_orf = pickle.load(open(self.known_genes_pickle_fname,'r'))		
+		known_genes_dict_orf = pickle.load(open(self.known_genes_pickle_fname,'r'))
 		for item in known_genes_dict_orf.iteritems():
 			if self.vertex_dict.has_key(item[0]):
 				no = self.vertex_dict[item[0]]
 				self.known_genes_dict[no] = item[1]
 
+	
 	def transfac_dict_construct(self, inf):
 		line = inf.readline()
 		while line:
@@ -91,6 +90,8 @@ class triplet_stat:
 		
 		
 	def is_homogenious(self, triplet, dict):
+		if triplet[0] not in dict or triplet[1] not in dict or triplet[2] not in dict:
+			return 0
 		list = dict[triplet[0]] + dict[triplet[1]] + dict[triplet[2]]
 		judge_dict = {}
 		for item in list:

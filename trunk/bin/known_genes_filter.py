@@ -169,9 +169,16 @@ def one_way_filter_batch(dir, output_dir):
 		outf.close()
 
 if __name__ == '__main__':
-	one_way_filter_batch(sys.argv[1], sys.argv[2])
-	# argv[1] specifies which directory contains raw yeast data
-	# argv[2] specifies the directory to store data with only known genes
+	def helper():
+		sys.stderr.write('\
+	# argv[1] specifies which directory contains raw yeast data\n\
+	# argv[2] specifies the directory to store data with only known genes\n')
+	if len(sys.argv) == 3:
+		one_way_filter_batch(sys.argv[1], sys.argv[2])
+	else:
+		helper()
+		sys.exit(1)
+
 	'''
 	two_way_filter_batch(sys.argv[1],sys.argv[2])
 	# argv[1] specifies which directory contains raw yeast data
