@@ -110,6 +110,8 @@ class kMax_batch_run:
 					max_patterns_file = open(os.path.join(self.dir, 'max-patterns'), 'r')
 					#transfer all the max-patterns into the job_outf
 					job_outf.write(max_patterns_file.read())
+					#add an end mark.
+					job_out.write('>\n')
 					#close the max_patterns_file
 					max_patterns_file.close()
 				#close the output file.
