@@ -29,6 +29,10 @@ Examples:
 	9: graph_modeling
 03-04-05
 	10: codense2db
+03-19-05
+	11: crack_by_modes
+03-19-05
+	12: crack_by_splat
 """
 import unittest, os, sys, getopt, csv
 
@@ -321,51 +325,6 @@ class TestCrackSplat(unittest.TestCase):
 		graph_dict = self.instance.splat2graph_dict(edge_set)
 		self.assertEqual(graph_dict, real_graph_dict)
 	
-	def test_graph_dict2graph(self):
-		graph_dict = {(1,2):1,
-			(2,3):1,
-			(3,4):1}
-		
-		(index2no, graph) = self.instance.graph_dict2graph(graph_dict)
-		print index2no
-		print graph
-		return (index2no, graph)
-	
-	def test_call_modes(self):
-		infname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/input/g1.matrix') 
-		outfname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/output/g1.output') 
-		no_of_genes = 10
-		result_code = self.instance.call_modes(infname, outfname, no_of_genes)
-		print "result_code: %s"%result_code
-	
-	def test_parse_modes_results(self):
-		"""
-		in alphabetical order, this should be run after test_call_modes
-		"""
-		from codense.codense2db import codense2db
-		from graphlib import Graph
-		codense2db_instance = codense2db()
-		codense2db_instance.debug = 1
-		(conn, curs) = self.instance.db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
-		#really hard to pick the mapping, must make sure the graph edges exist in the database
-		index2no = {0:898, 1:993, 2:761,3:915,4:3784,5:3808,6:3971,7:5500,8:5517,9:2621}
-		graph = Graph.Graph()
-		graph.add_edge(0,1)
-		graph.add_edge(1,2)
-		graph.add_edge(2,3)
-		graph.add_edge(2,5)
-		graph.add_edge(4,5)
-		graph.add_edge(4,6)
-		graph.add_edge(7,8)
-		graph.add_edge(2,9)
-		infname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/output/g1.output') 
-		ls = self.instance.parse_modes_results(1, infname,index2no, graph, codense2db_instance, curs)
-		for mclResult in ls:
-			print "splat_id:%s"%mclResult.splat_id
-			print "connectivity: %s"%mclResult.connectivity
-			print "vertex_set: %s"%(repr(mclResult.vertex_set))
-			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
-
 
 class TestLinearModel(unittest.TestCase):
 	"""
@@ -739,7 +698,125 @@ class TestCodense2db(unittest.TestCase):
 		print "edge_set: %s"%repr(cluster.edge_set)
 		print "recurrence_array: %s"%repr(cluster.recurrence_array)
 				
+class TestCrackByModes(unittest.TestCase):
+	"""
+	03-19-05
 		
+	"""
+	def setUp(self):
+		from CrackSplat import crack_by_modes
+		self.instance = crack_by_modes()
+	
+	def test_graph_dict2graph(self):
+		graph_dict = {(1,2):1,
+			(2,3):1,
+			(3,4):1}
+		
+		(index2no, graph) = self.instance.graph_dict2graph(graph_dict)
+		print index2no
+		print graph
+		return (index2no, graph)
+	
+	def test_call_modes(self):
+		infname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/input/g1.matrix') 
+		outfname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/output/g1.output') 
+		no_of_genes = 10
+		result_code = self.instance.call_modes(infname, outfname, no_of_genes)
+		print "result_code: %s"%result_code
+	
+	def test_parse_modes_results(self):
+		"""
+		in alphabetical order, this should be run after test_call_modes
+		"""
+		from codense.codense2db import codense2db
+		from graphlib import Graph
+		from codense.common import db_connect
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		(conn, curs) = db_connect(hostname, dbname, schema)
+		codense2db_instance = codense2db()
+		codense2db_instance.debug = 1
+		#really hard to pick the mapping, must make sure the graph edges exist in the database
+		index2no = {0:898, 1:993, 2:761,3:915,4:3784,5:3808,6:3971,7:5500,8:5517,9:2621}
+		graph = Graph.Graph()
+		graph.add_edge(0,1)
+		graph.add_edge(1,2)
+		graph.add_edge(2,3)
+		graph.add_edge(2,5)
+		graph.add_edge(4,5)
+		graph.add_edge(4,6)
+		graph.add_edge(7,8)
+		graph.add_edge(2,9)
+		infname = os.path.join(os.path.expanduser('~'),'script/hhu_clustering/data/output/g1.output') 
+		ls = self.instance.parse_modes_results(1, infname,index2no, graph, codense2db_instance, curs)
+		for mclResult in ls:
+			print "splat_id:%s"%mclResult.splat_id
+			print "connectivity: %s"%mclResult.connectivity
+			print "vertex_set: %s"%(repr(mclResult.vertex_set))
+			print "edge_set: %s"%(repr(mclResult.edge_set))
+			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
+
+class TestCrackBySplat(unittest.TestCase):
+	"""
+	03-19-05
+		
+	"""
+	def setUp(self):
+		from CrackSplat import crack_by_splat
+		self.instance = crack_by_splat(debug=1)
+		#go into following directory first
+		dir_files = '/tmp/yh'
+		if not os.path.isdir(dir_files):
+			os.makedirs(dir_files)
+		else:
+			sys.stderr.write("Warning, directory %s already exists.\n"%(dir_files))
+		os.chdir(dir_files)
+	
+	def test_write_splat_input_files(self):
+		edge_set = [(898,993), (761,993), (761,915), (761,3808), (3784,3808), (3784,3971), (5500,5517), (761,2621)]
+		from codense.common import db_connect
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		(conn, curs) = db_connect(hostname, dbname, schema)
+		from codense.codense2db import codense2db
+		codense2db_instance = codense2db()
+		combined_cor_vector, combined_sig_vector = codense2db_instance.get_combined_cor_vector(curs, edge_set)
+		no_of_datasets = self.instance.write_splat_input_files(edge_set, combined_sig_vector)
+		print "no_of_datasets: %s"%no_of_datasets
+		return no_of_datasets
+
+	
+	def test_call_splat(self):
+		sys.stderr.write("call write_splat_input_files() first...")
+		no_of_datasets = self.test_write_splat_input_files()
+		sys.stderr.write("done\n")
+		result_code = self.instance.call_splat('gph', no_of_datasets, 3, min_cut=1)
+		print "result_code: %s"%result_code
+	
+	def test_parse_splat_results(self):
+		"""
+		in alphabetical order, this should be run after test_call_splat
+		"""
+		from splat_to_db import splat_to_db
+		from codense.codense2db import codense2db
+		from graphlib import Graph
+		from codense.common import db_connect
+		splat_to_db_instance = splat_to_db()
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		codense2db_instance = codense2db()
+		(conn, curs) = db_connect(hostname, dbname, schema)
+		ls = self.instance.parse_splat_results(1, 'patterns-splat', splat_to_db_instance, codense2db_instance, curs)
+		for mclResult in ls:
+			print "splat_id:%s"%mclResult.splat_id
+			print "connectivity: %s"%mclResult.connectivity
+			print "vertex_set: %s"%(repr(mclResult.vertex_set))
+			print "edge_set: %s"%(repr(mclResult.edge_set))
+			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
+	
 			
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -762,7 +839,9 @@ if __name__ == '__main__':
 		7: TestPGeneAnalysis,
 		8: TestGenePMapRedundancy,
 		9: TestGraphModeling,
-		10: TestCodense2db}
+		10: TestCodense2db,
+		11: TestCrackByModes,
+		12: TestCrackBySplat}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
