@@ -338,7 +338,7 @@ class p_gene_lm:
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
-		sys.exit(2)	
+		sys.exit(2)
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:l:a:j:m:v:cru", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "lm_table=", "accuracy_cut_off=", "judger_type=",\
