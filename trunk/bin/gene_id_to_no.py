@@ -7,6 +7,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-c, --commit	commits the database transaction
 	-g ..., --organism=...	two letter organism abbreviation
+	-l, --log	record down some stuff in the logfile(gene_id_to_no.log)
 	-h, --help              show this help
 	
 Examples:
@@ -23,7 +24,7 @@ import sys, os, csv, psycopg, getopt
 from sets import Set
 
 class gene_id_to_no:
-	def __init__(self, dir, hostname, dbname, orgn, needcommit=0):
+	def __init__(self, dir, hostname, dbname, orgn, log, needcommit=0):
 		self.dir = dir
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -42,6 +43,9 @@ class gene_id_to_no:
 			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
 		self.organism = self.org_short2long[orgn]
+		self.log = int(log)
+		if self.log:
+			self.logfile = open('/tmp/gene_id_to_no.log', 'w')
 		self.needcommit = int(needcommit)
 		#records down the maximum gene_no ever assigned.
 		self.max_gene_no = 0
@@ -85,6 +89,8 @@ class gene_id_to_no:
 			if gene_id not in self.vertex_dict:
 				self.max_gene_no += 1
 				self.vertex_dict_extension[gene_id] = self.max_gene_no
+				if self.log:
+					self.logfile.write('%s = %d\n'%(gene_id, self.max_gene_no))
 		sys.stderr.write('New max_gene_no: %d\n'%self.max_gene_no)
 		self.submit()
 
@@ -104,7 +110,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:g:c", ["help", "hostname=", "dbname=", "organism=", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:g:lc", ["help", "hostname=", "dbname=", "organism=", "log", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -113,6 +119,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	commit = 0
 	organism = ''
+	log = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -123,11 +130,13 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-g", "--organism"):
 			organism = arg
+		elif opt in ("-l", "--log"):
+			log = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 			
 	if dbname and organism and len(args)>0:
-		instance = gene_id_to_no(args[0], hostname, dbname, organism, commit)
+		instance = gene_id_to_no(args[0], hostname, dbname, organism, log, commit)
 		instance.run()
 	else:
 		print __doc__
