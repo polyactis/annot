@@ -7,6 +7,7 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	the table storing the splat results, splat_result(default)
 	-s ..., --size=...	the number of splat records in one output file
 	-h, --help              show this help
 	
@@ -22,17 +23,18 @@ Description:
 import sys,os,cStringIO,psycopg,getopt
 
 class db_to_mcl:
-	def __init__(self, hostname, dbname, schema):
+	def __init__(self, hostname, dbname, schema, table):
 		self.vertex_dict = {}
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.table = table
 
 	def get_from_db(self, outdir, package_size):
 		if not os.path.isdir(outdir):
 			os.makedirs(outdir)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result")
+		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from %s"%self.table)
 		self.curs.execute("fetch %d from crs"%(package_size))
 		rows = self.curs.fetchall()
 		no_of_splat_records = 0
@@ -91,7 +93,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:s:", ["help", "hostname=", "dbname=", "schema=", "size="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:", ["help", "hostname=", "dbname=", "schema=", "table=", "size="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -99,6 +101,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	table = 'splat_result'
 	size = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -110,11 +113,13 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-s", "--size"):
 			size = int(arg)
 
 	if schema and size and len(args)==1:
-		instance = db_to_mcl(hostname, dbname, schema)
+		instance = db_to_mcl(hostname, dbname, schema, table)
 		instance.get_from_db(args[0], size)
 
 	else:
