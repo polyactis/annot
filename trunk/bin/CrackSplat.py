@@ -16,12 +16,11 @@ Option:
 	-n,	--new_table	target_table is new. (create it first)
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
-	-b, --debug debug flag
+	-u, --debug debug flag
 	-h, --help              show this help
 
 Examples:
-	CrackSplat.py -k sc_54 -t splat_result_p3g5e6d4q5n80 -m mcl_result_p3g5e6d4q5n80
-		-r
+	CrackSplat.py -k sc_54 -t splat_result_p3g5e6d4q5n80 -m mcl_result_p3g5e6d4q5n80 -r
 	
 Description:
 	02-24-05
@@ -257,10 +256,13 @@ class CrackSplat:
 		"""
 		02-24-05
 			submit the cluster to a mcl_result-like table
+		02-25-05
+			sort the vertex_set before put in database
 		"""
 		
 		try:
 			for mclResult in listOfMclResult:
+				mclResult.vertex_set.sort()		#sort it first
 				curs.execute("insert into %s(splat_id, vertex_set, connectivity, recurrence_array)\
 						values (%d, ARRAY%s, %f, ARRAY%s)"%\
 						(mcl_table, mclResult.splat_id, repr(mclResult.vertex_set),\
@@ -321,9 +323,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:f:a:b:y:ncr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:f:a:b:y:ncru", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "dir_files=", "parameter_a=",\
-			"parameter_b=", "type=", "new_table", "commit", "report"])
+			"parameter_b=", "type=", "new_table", "commit", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -369,7 +371,7 @@ if __name__ == '__main__':
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
-		elif opt in ("-b", "--debug"):
+		elif opt in ("-u", "--debug"):
 			debug = 1
 	if schema:
 		instance = CrackSplat(hostname, dbname, schema, table, mcl_table, dir_files, parameter_a,\
