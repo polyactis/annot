@@ -62,7 +62,7 @@ class complete_cor_vector:
 		--edge_tuple_list_output
 		--files_sort
 		(loop begins)
-			--gene_id2expr_array_setup
+			--gene_index2expr_array_setup
 			--cor_calculate
 			--file_combine
 	'''
@@ -123,6 +123,9 @@ class complete_cor_vector:
 		self.edge_cor_across_datasets = []
 		#to get the number out of the dataset name
 		self.p_no = re.compile(r'\d+$')
+		
+		#04-03-05, Important bug.
+		self.gene_cut_off = 8
 
 	def dstruc_loadin(self):
 		'''
@@ -164,23 +167,28 @@ class complete_cor_vector:
 			gene_id = row[0]
 			if gene_id in self.gene_id2index:
 				gene_index = self.gene_id2index[gene_id]
+				no_of_nas = 0
 				#shorten the float part
 				for i in range(1,len(row)):
 					if row[i] == 'NA':
 						#100000000 is regarded as NAN
 						row[i] = float(100000000)
+						no_of_nas += 1
 					elif row[i]!='':
 						row[i] = float(row[i])
 				if row[-1] == '':
 					new_row = row[1:-1]
 				else:
 					new_row = row[1:]
-				gene_index2expr_array[gene_index] = new_row
 				if self.no_of_cols == 0:
 					#hasn't been setup yet
-					self.no_of_cols = len(gene_index2expr_array[gene_index])
+					self.no_of_cols = len(new_row)
+				if len(new_row)-no_of_nas >= self.gene_cut_off:
+					#04-03-05 important bug. another difference between graph.cc and complete_cor_vector+graph_modeling.
+					gene_index2expr_array[gene_index] = new_row
+
 		del reader
-		#makeup those unpresent genese
+		#makeup those unpresent genes
 		for i in range(self.no_of_genes):
 			if i not in gene_index2expr_array:
 				gene_index2expr_array[i] = [100000000]*self.no_of_cols
