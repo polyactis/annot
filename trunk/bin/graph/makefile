@@ -1,3 +1,6 @@
+BoostPythonTarget	= clustering.so
+BoostPythonLib  = -lboost_python
+
 swig_py		= graph_modeling.py
 cxx_wrap	= graph_modeling_wrap.cc
 cxx_swig_targets	= _graph_modeling.so
@@ -17,7 +20,7 @@ c_flags		= -O2
 c_compiler	= gcc
 
 
-all:	$(gsl_cxx_targets) $(gsl_c_targets)
+all:	$(gsl_cxx_targets) $(gsl_c_targets) $(BoostPythonTarget)
 
 swig:	$(cxx_swig_targets)
 
@@ -25,7 +28,7 @@ $(gsl_cxx_targets):	%:	%.o
 	$(cxx_compiler) $(cxx_flags) $(gsl_lib) $< -o $@
 
 .cc.o:
-	$(cxx_compiler) $(cxx_flags) -c $< -o $@
+	$(cxx_compiler) $(cxx_flags) $(swig_include) -c $< -o $@
 
 $(gsl_c_targets):	%:	%.o
 	$(c_compiler) $(c_flags) $(gsl_lib) $< -o $@
@@ -45,6 +48,8 @@ $(cxx_swig_targets):	_%.so:	%.o %_wrap.o
 	$(cxx_compiler)  $(gsl_lib) $(swig_flags) $^ -o $@
 
 
-
+#for boost.python
+$(BoostPythonTarget):	%.so:	%.o
+	$(cxx_compiler) $(gsl_lib) $(BoostPythonLib) $(swig_flags) $< -o $@
 clean:
-	-rm -f *.o $(gsl_cxx_targets) $(gsl_c_targets) $(cxx_swig_targets) $(cxx_wrap) *.pyc $(swig_py)
+	-rm -f *.o $(gsl_cxx_targets) $(gsl_c_targets) $(cxx_swig_targets) $(cxx_wrap) *.pyc $(swig_py) $(BoostPythonTarget)
