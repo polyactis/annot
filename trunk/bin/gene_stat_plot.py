@@ -16,6 +16,7 @@ Option:
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
 	-y ..., --recurrence_cut_off=...	5(default), minimum recurrences
 	-x ..., --cluster_size_cut_off=...	1000(default), maximum cluster size
+	-e ..., --depth_cut_off=...	the minimum depth for a go node to be valid, 3(default)
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
@@ -48,7 +49,7 @@ Description:
 """
 
 import sys, os, psycopg, getopt, csv
-from graphlib import Graph
+from graphlib import Graph, GraphAlgo
 from sets import Set
 from rpy import r
 
@@ -82,7 +83,7 @@ class accuracy_struc:
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
-		needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
+		depth_cut_off =3, needcommit=0, gene_table='p_gene', dominant=0, plottype=3, stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -96,6 +97,7 @@ class gene_stat:
 		self.leave_one_out = int(leave_one_out)
 		self.wu = int(wu)
 		self.report = int(report)
+		self.depth_cut_off = int(depth_cut_off)
 		self.needcommit = int(needcommit)
 		self.gene_table = gene_table
 		self.dominant = int(dominant)
@@ -259,6 +261,25 @@ class gene_stat:
 				self.hist_plot_ratio(self.dataset_no2go_no, self.dataset_no2go_no_fp, 'dataset_no2go_no_ratio.png', 'dataset_no', 'number of go_nos(ratio)')
 				self.hist_plot_ratio(self.gene_no2cluster, self.gene_no2cluster_fp, 'gene_no2cluster_ratio.png', 'gene_no', 'number of clusters(ratio)')
 
+	def index_tuple(self, list):
+		new_list = []
+		for i in range(len(list)):
+			#value is position 0, and index is position 1
+			new_list.append((float(list[i]), i))
+		#the sort is based on position 0
+		new_list.sort()
+		return new_list
+
+	def is_specific(self, go_no):
+		go_id = self.go_no2go_id[go_no]
+		depth = len(GraphAlgo.shortest_path(self.go_graph, 'GO:0008150', go_id))
+		#shortest_path() return a list from GO:0008150(biological_process) to go_id.
+		#so the depth from GeneOntology root to go_id is exactly the length of the list
+		if depth < self.depth_cut_off:
+			return 0
+		else:
+			return 1
+
 	def _gene_stat_leave_one_out(self, row):
 		p_value_vector = row[2][1:-1].split(',')
 		recurrence_array = row[3][1:-1].split(',')
@@ -266,8 +287,18 @@ class gene_stat:
 		vertex_set = row[4][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
 		#transform into float type
-		p_value_vector = map(float, p_value_vector)
-		min_p_value =min(p_value_vector)
+		p_value_index_tuple_list = self.index_tuple(p_value_vector)
+		for (p_value, index) in p_value_index_tuple_list:
+			if self.wu:
+			#index 0 corresponds to go_no 0.
+				go_no = index
+			else:
+			#index 0 corresponds to go_no 1
+				go_no = index+1	
+			if self.is_specific(go_no):
+				min_p_value = p_value
+				break
+
 		if self.wu:
 			if float(p_value_vector[0]) > self.unknown_cut_off:
 			#too many unknown genes, and now cut_off is ratio.
@@ -285,14 +316,16 @@ class gene_stat:
 			self.gene_prediction_dict[gene_no] = item
 		self.gene_prediction_dict[gene_no].mcl_id_list.append(mcl_id)	
 
-		for i in range(self.no_of_functions):
-			if p_value_vector[i] == min_p_value:
+		for (p_value, index) in p_value_index_tuple_list:
+			if p_value > min_p_value:
+				break
+			elif p_value == min_p_value:
 				if self.wu:
 				#index 0 corresponds to go_no 0.
-					go_no = i
+					go_no = index
 				else:
 				#index 0 corresponds to go_no 1
-					go_no = i+1
+					go_no = index+1
 					
 				#tp is indicator variable indicating the prediction is true positive or false.
 				tp = 0
@@ -683,10 +716,10 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
-		"unknown_cut_off=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "leave_one_out",\
-		"wu", "report", "commit", "gene_table=", "dominant", "plottype"]
+		"unknown_cut_off=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "depth_cut_off=",\
+		"leave_one_out", "wu", "report", "commit", "gene_table=", "dominant", "plottype"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:lwrcg:vs:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:e:lwrcg:vs:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -700,6 +733,7 @@ if __name__ == '__main__':
 	connectivity_cut_off = 0.8
 	recurrence_cut_off = 5
 	cluster_size_cut_off = 1000
+	depth_cut_off = 3
 	leave_one_out = 0
 	wu = 0
 	report = 0
@@ -732,6 +766,8 @@ if __name__ == '__main__':
 			recurrence_cut_off = int(arg)
 		elif opt in ("-x", "--cluster_size_cut_off"):
 			cluster_size_cut_off = int(arg)
+		elif opt in ("-e", "--depth_cut_off"):
+			depth_cut_off = int(arg)
 		elif opt in ("-l", "--leave_one_out"):
 			leave_one_out = 1
 		elif opt in ("-w", "--wu"):
@@ -754,7 +790,7 @@ if __name__ == '__main__':
 	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off,\
-			leave_one_out, wu, report, commit, gene_table, dominant, plottype, stat_table_fname)
+			leave_one_out, wu, report, depth_cut_off, commit, gene_table, dominant, plottype, stat_table_fname)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
