@@ -8,6 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database to get the node_list
 	-t ..., --table=...	table to store the node distances, node_distance(default)
 	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
+	-e, --depth	compute the depth of nodes, default is pairwise distance
 	-a, --all	compute distances between all nodes in that branch,
 		instead of getting node_list from schema.go.
 	-n,	--new_table	table is new. (create it first)
@@ -40,13 +41,18 @@ class distance_of_2nodes:
 		self.jasmine_distance = jasmine_distance
 
 class go_node_distance:
-	def __init__(self, hostname, dbname, schema, table, branch, all, new_table, report=0, \
+	'''
+	In this class, go_id refers to the term id in tables of schema go.
+	the index for one go node is its path in tuple form
+	'''
+	def __init__(self, hostname, dbname, schema, table, branch, depth, all, new_table, report=0, \
 		needcommit=0, log=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		
+		self.depth = int(depth)
 		self.all = int(all)
 		self.new_table = int(new_table)
 		self.report = int(report)
@@ -123,6 +129,7 @@ class go_node_distance:
 		each index is in a tuple form
 		the indices of one node is in a Set form
 		'''
+		sys.stderr.write("Computing indices ...")
 		list_queue = [self.root]
 		#one go term id may have multiple indices
 		#',' is the trick, singleton tuple must have the trailing ','
@@ -150,9 +157,26 @@ class go_node_distance:
 					#it might have been put into the queue by previous nodes
 					#because one node have multiple parents
 					list_queue.append(neighbor)
+		
+		sys.stderr.write("done")
 			
+	def node_depth(self):
+		'''
+		compute the depth of each node of GO tree from its index and put it into go.term.
+		'''
+		for (go_id, index_tuple) in self.go_id2index.iteritems():
+			depth = 100
+			for index in index_tuple:
+				if len(index) < depth:
+					depth = len(index)
+			
+			self.curs.execute("update go.term set depth=%d where id=%d"%\
+				(depth, go_id) )
 
-	def run(self):
+		if self.needcommit:
+			self.curs.execute("end")
+		
+	def node_pairwise_distance(self):
 		if self.new_table:
 			#first create the target_table
 			try:
@@ -182,6 +206,12 @@ class go_node_distance:
 				jasmine_dist = self.jasmine_distance(go_id1, go_id2, lc_ancestors)
 				'''
 		self.submit()
+	
+	def run(self):
+		if self.depth:
+			self.node_depth()
+		else:
+			self.node_pairwise_distance()
 	
 	def process_2indices(self, index1, index2):
 		#compute three distances for these two indices
@@ -311,9 +341,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", \
-		"branch=", "all", "new_table", "report", "commit", "log"]
+		"branch=", "depth", "all", "new_table", "report", "commit", "log"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:b:anrcl", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:b:eanrcl", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -323,6 +353,7 @@ if __name__ == '__main__':
 	schema = ''
 	table = 'node_distance'
 	branch = 1
+	depth = 0
 	all = 0
 	new_table = 0
 	report = 0
@@ -342,6 +373,8 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-b", "--branch"):
 			branch = int(arg)
+		elif opt in ("-e", "--depth"):
+			depth = 1
 		elif opt in ("-a", "--all"):
 			all = 1
 		elif opt in ("-n", "--new_table"):
@@ -354,7 +387,7 @@ if __name__ == '__main__':
 			log = 1
 			
 	if schema:
-		instance = go_node_distance(hostname, dbname, schema, table, branch, all, new_table, report, \
+		instance = go_node_distance(hostname, dbname, schema, table, branch, depth, all, new_table, report, \
 			commit, log)
 		instance.dstruc_loadin()
 		instance.run()
