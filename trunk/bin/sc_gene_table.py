@@ -17,7 +17,7 @@ class sc_gene:
 		self.go_id_to_no_dict = {}
 
 	def dstruc_loadin(self):
-		self.curs.execute("select go_id,no from graph.sc_go")
+		self.curs.execute("select go_id, go_no from graph.sc_go")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.go_id_to_no_dict[row[0]] = row[1]
@@ -45,7 +45,9 @@ class sc_gene:
 				for go_id in self.known_genes_dict[orfname]:
 					no = self.go_id_to_no_dict[go_id]
 					go_functions_list[no-1] = '1'
-			self.curs.execute("insert into graph.sc_gene(orfname, no, known, go_functions) values ('%s', %d, '%s', B'%s')"%(orfname, gene_no, known,''.join(go_functions_list)))
+			self.curs.execute("insert into graph.sc_gene(orfname, gene_no, known, \
+				go_functions) values ('%s', %d, '%s', B'%s')"%\
+				(orfname, gene_no, known,''.join(go_functions_list)))
 		if self.needcommit:
 			self.conn.commit()
 
