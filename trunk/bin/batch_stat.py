@@ -36,7 +36,7 @@ class batch_stat:
 		for connectivity in self.connectivity_list:
 			for limit in self.limit_list:
 				for p_value_cut_off in self.p_value_cut_off_list:
-					if limit == 0 and p_value_cut_off == 0.001 and connectivity == 0.8:
+					if limit == 0 and p_value_cut_off == 0.0001 and connectivity == 0.8:
 						instance = gene_stat(self.dbname, schema, p_value_cut_off, limit, connectivity, self.wu, 0, 1)
 					else:
 						instance = gene_stat(self.dbname, schema, p_value_cut_off, limit, connectivity, self.wu)
