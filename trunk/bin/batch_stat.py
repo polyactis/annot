@@ -26,7 +26,7 @@ class batch_stat:
 		self.curs.execute("set search_path to %s"%schema)
 		self.connectivity_list = [0.7, 0.8, 0.9]
 		self.limit_list = [0]
-		self.p_value_cut_off_list = [0.1, 0.01, 0.001, 0.0005, 0.0001, 0.00001]
+		self.p_value_cut_off_list = [0.001, 0.0005, 0.0001, 0.00005, 0.00001]
 		self.stat_data = []
 		self.tag = tag
 		self.wu = int(wu)
