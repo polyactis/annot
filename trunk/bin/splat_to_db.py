@@ -88,7 +88,7 @@ class splat_to_db:
 			no+=1
 		if self.needcommit:
 			self.conn.commit()
-		sys.stderr.write('\tTotal patterns: %d\n'%no-1)
+		sys.stderr.write('\tTotal patterns: %d\n'%(no-1))
 		sys.stderr.write('\tLast pattern: %s\n'%self.splat_id)
 
 
