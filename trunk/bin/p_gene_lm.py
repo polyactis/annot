@@ -10,16 +10,18 @@ Option:
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-a ..., --accuracy_cut_off=...	0.5(default)
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
-	-m ..., --min_data_points=...	the minimum data points to do linear-model fitting, 5(default)
-	-v ..., --valid_space=...	the min number of known_predictions in one prediction space, 20(default)
+	-m ..., --min_data_points=...	the minimum data points to do linear-model fitting, 5(default) (IGNORE)
+	-v ..., --valid_space=...	the min number of known_predictions in one prediction space, 20(default) (IGNORE)
+	-x ..., --recurrence_gap_size=...	2(default) (IGNORE)
+	-y ..., --connectivity_gap_size=...	2(default) (IGNORE)
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
 	-u, --debug debug flag
 	-h, --help              show this help
 
 Examples:
-	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -j 1 -r
-	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -l p_gene_repos_2_e5_lm -j 1 -r -c
+	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -j 1 -r >/tmp/p_gene_lm.out
+	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -l p_gene_repos_2_e5_lm -j 1 -r -c >/tmp/p_gene_lm.out
 	
 Description:
 	02-28-05
@@ -31,11 +33,12 @@ Description:
 	Output is dumped on sys.stdout.
 """
 
-import sys, os, psycopg, getopt, csv
+import sys, os, psycopg, getopt, csv, math
 from p_gene_analysis import prediction_space_attr
 from module_cc.linear_model import linear_model
 from codense.common import *
 from numarray import *
+from rpy import r
 
 class p_gene_lm:
 	"""
@@ -51,11 +54,17 @@ class p_gene_lm:
 		Some go-nos don't have enough data to do linear-model fitting, simply ignore. But lm_table
 		will contain an average model for these go-nos to look up in the later prediction stage.
 	
+	03-27-05
+		call R to use logistic regression. No floor taking of recurrence and connectivity.
+	
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, table=None, \
 		lm_table=None, accuracy_cut_off=0, judger_type=0, min_data_points=5, \
-		needcommit=0, report=0, debug=0, valid_space=20):
-		
+		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
+		"""
+		03-08-05
+		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -68,18 +77,25 @@ class p_gene_lm:
 		self.report = int(report)		
 		self.debug = int(debug)
 		self.valid_space = int(valid_space)
-
+		#the gap between two recurrences
+		self.recurrence_gap_size = int(recurrence_gap_size)
+		self.connectivity_gap_size = int(connectivity_gap_size)
+		
 		self.go_no2prediction_space = {}
 		#an is_correct dictionary used in database fetch
 		self.is_correct_dict = {0: 'is_correct',
 			1: 'is_correct_L1',
 			2: 'is_correct_lca'}
 		
-		self.go_no2lm_results = {}
 
 		
 	def init(self):
-		self.lm_instance = linear_model()
+		"""
+		03-27-05
+			use rpy to call r instead, the gsl linear_model is useless.
+		"""
+		self.lm_instance = None
+		self.no_of_zero_p_values = 0
 		
 	def data_fetch(self, curs, table):
 		"""
@@ -88,6 +104,7 @@ class p_gene_lm:
 			
 			--prediction_space_setup()
 		"""
+		sys.stderr.write("Setting Up prediction_space...\n")
 		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, mcl_id, %s, avg_p_value, \
 			recurrence_cut_off,connectivity_cut_off, depth_cut_off from %s"\
 			%(self.is_correct_dict[self.judger_type], table))
@@ -103,6 +120,8 @@ class p_gene_lm:
 			
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
+		sys.stderr.write("\t%d zero p_values converted to 1e-8.\n"%(self.no_of_zero_p_values))
+		sys.stderr.write("done.\n")
 
 	def prediction_space_setup(self, row):
 		"""
@@ -118,188 +137,167 @@ class p_gene_lm:
 		connectivity = row[6]
 		depth_cut_off = row[7]
 		
+		#take the floor of the recurrence
+		#recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
+		#take the floor of the connectivity *10
+		#connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
+		
+		if is_correct==-1:
+			#unknown genes, not for model training
+			return
+		"""
+		03-27-05
+			Don't distinguish go_no.
+			Assign go_no = -1.
+		"""
+		go_no = -1
 		if go_no not in self.go_no2prediction_space:
-			self.go_no2prediction_space[go_no] = {}
-		#pass the value to ease programming
-		prediction_space2attr = self.go_no2prediction_space[go_no]
-		prediction_space = (recurrence, connectivity)
-		"""
-		1 deal with self.prediction_space2attr
-		"""
-		
-		if prediction_space not in prediction_space2attr:
-			#initalize its attribute if it doesn't exist
-			prediction_space2attr[prediction_space] = prediction_space_attr()
-		#pass the value to a value, ease programming
-		unit = prediction_space2attr[prediction_space]
-		
-		unit.correct_predictions += (is_correct+1)/2	#increment when is_correct=1
-		unit.known_predictions += int(is_correct>=0)	#increment when is_correct=0 or 1
-		unit.unknown_predictions += -(is_correct-1)/2	#increment when is_correct = -1
-		unit.tuple_list.append([p_value, is_correct])	#the tuple_list where the p_value_cut_off comes
+			self.go_no2prediction_space[go_no] = []
+		#convert p_value to -log(p_value)
+		if p_value == 0:
+			self.no_of_zero_p_values += 1
+			p_value = -math.log(1e-8)
+		else:
+			p_value = -math.log(p_value)
+		unit = [p_value, recurrence, connectivity, is_correct]
+		self.go_no2prediction_space[go_no].append(unit)
 	
-	def prediction_space2p_value_cut_off(self, accuracy_cut_off):
-		"""
-		02-28-05
-			for each go_no, for each prediction_space, compute its p_value_cut_off
-			
-			--p_value_outof_accuracy_cut_off()
-		"""
-		for go_no in self.go_no2prediction_space:
-			for (prediction_space, attr) in self.go_no2prediction_space[go_no].iteritems():
-				attr.p_value_cut_off = self.p_value_outof_accuracy_cut_off(attr.tuple_list, accuracy_cut_off)
-			
-	def p_value_dictionary_setup(self, prediction_list):
-		"""
-		02-28-05
-			borrowed from gene_stat_plot.py
-		"""
-		p_value_dictionary = {}
-		for ls in prediction_list:
-			p_value = ls[0]
-			if p_value in p_value_dictionary:
-				p_value_dictionary[p_value].append( ls[1:])
-			else:
-				p_value_dictionary[p_value] = [ls[1:]]
-		return p_value_dictionary
 
-	def p_value_outof_accuracy_cut_off(self, tuple_list, accuracy_cut_off):
-		"""
-		02-28-05
-			also borrowed from gene_stat_plot.py,
-			change the column no. of is_correct from 3 to 0
-		
-			--p_value_dictionary_setup()
-		"""
-		if self.debug:
-			print "\t\t###Enter p_value_outof_accuracy_cut_off()###"
-		total_clusters = 0.0
-		good_clusters = 0.0
-		#if no good p_value_cut_off to get accuracy, it's to be 0
-		p_value_cut_off = 0.0
-		p_value2cumu_accuracy = {}
-		p_value_dictionary = self.p_value_dictionary_setup(tuple_list)
-		p_value_list = p_value_dictionary.keys()
-		p_value_list.sort()
-		if self.debug:
-			print 'p_value_list sorted:%s'%repr(p_value_list)
-			
-		for p_value in p_value_list:
-			prediction_array = array(p_value_dictionary[p_value])
-			#is_correct = 0 or 1 is a prediction of known genes
-			no_of_clusters = sum(greater_equal(prediction_array[:,0], 0))
-			#is_correct = 1 is a good prediction
-			no_of_good_clusters = sum(greater(prediction_array[:,0],0))
-			total_clusters += no_of_clusters
-			good_clusters += no_of_good_clusters
-			
-			if total_clusters == 0:
-				p_value2cumu_accuracy[p_value] = -1
-				if good_clusters !=0:
-					sys.stderr.write("ERROR: good_clusters are more than total_clusters \n")
-			else:
-				p_value2cumu_accuracy[p_value] = good_clusters/total_clusters
-			if self.debug:
-				print "p_value: %s"%p_value
-				print "prediction_array: %s"%prediction_array
-				print "no_of_clusters: %s"%no_of_clusters
-				print "no_of_good_clusters: %s"%no_of_good_clusters
-				print "total_clusters:%s"%total_clusters
-				print "good_clusters: %s"%good_clusters
-				print "accuracy: %s"%(good_clusters/total_clusters)
-				raw_input("pause:")
-		p_value_list.reverse()
-		for p_value in p_value_list:
-			if p_value2cumu_accuracy[p_value] >= accuracy_cut_off:
-				p_value_cut_off = p_value
-				if self.debug:
-					print "accuracy: %s"%p_value2cumu_accuracy[p_value]
-				break
-		if self.debug:
-			print "p_value_cut_off:  %s"%p_value_cut_off
-			print "\t\t##leave p_value_outof_accuracy_cut_off()"
-		return p_value_cut_off
-	
-	def p_value_cut_off_output(self, outf):
-		"""
-		02-28-05
-			output the self.go_no2prediction_space
-		"""
-		writer = csv.writer(outf, delimiter='\t')
-		for (go_no, prediction_space2attr) in self.go_no2prediction_space.iteritems():
-			writer.writerow(['go_no', go_no])
-			writer.writerow(["recurrence", "connectivity", "p_value", "correct_predictions", "known_predictions", "unknown_predictions"])
-			for (prediction_space, attr) in prediction_space2attr.iteritems():
-				writer.writerow([prediction_space[0], prediction_space[1], attr.p_value_cut_off, \
-				attr.correct_predictions, attr.known_predictions, attr.unknown_predictions])
-	
-	def lm_fit(self, lm_instance, curs=None, lm_table=None):
+	def lm_fit(self, lm_instance, go_no2prediction_space, curs=None, lm_table=None):
 		"""
 		02-28-05
 			linear model fitting here
-			
+		
+		03-08-05
+			grouping and accumulating before do linear model fitting, see log of 2005, 
+			section 'linear model overfitting' for detail.
+		
 			--data_prepare
 			--submit
+		03-27-05
+			Use glm of R to do logistic regression
 		"""
-		for go_no in self.go_no2prediction_space:
-			y_list, x_2d_list = self.data_prepare(self.go_no2prediction_space[go_no])
-			if len(y_list) >=self.min_data_points and y_list!=[0]*len(y_list):
-				#all 0 in y_list means accuracy can't be achieved for this go_no
-				lm_instance.prepare_data(y_list, x_2d_list)
-				lm_instance.run()
-				coeff_list = lm_instance.coefficients()
-				chisq_tuple = lm_instance.chisq_return()
-				lm_instance.cleanup()
-				#append the chisq to coeff_list
-				coeff_list.append(chisq_tuple[0])
-				self.go_no2lm_results[go_no] = coeff_list
-				
-	def data_prepare(self, prediction_space2attr):
-		"""
-		02-28-05
-			prepare y_list(p_value_cut_off list) and (1, recurrence, connectivity) matrix, x_2d_list
-			
-		"""
-		y_list = []
-		x_2d_list = []
-		for (prediction_space, attr) in prediction_space2attr.iteritems():
-			if attr.known_predictions >= self.valid_space:
-				y_list.append(attr.p_value_cut_off)
-				x_2d_list.append([1, prediction_space[0], prediction_space[1]])		#(1, recurrence, connectivity)
-		return (y_list, x_2d_list)
+		sys.stderr.write("Linear Model Fitting...")
+		go_no2lm_results = {}
+		
+		for (go_no,data) in go_no2prediction_space.iteritems():
+			#convert it to a 2d array
+			data = array(data)
+			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], "is_correct":data[:,3]})
+			lm_result = r.glm(r("is_correct~p_value+recurrence+connectivity"), data=data_frame, family=r("binomial"))
+			coeff_list = [lm_result["coefficients"]["(Intercept)"], lm_result["coefficients"]["p_value"], \
+				lm_result["coefficients"]["recurrence"], lm_result["coefficients"]["connectivity"], 1]
+						#the last entry is score_cut_off, replaced later in get_score_cut_off()
+																		
+			#fill it in the data structure to be returned
+			go_no2lm_results[go_no] = coeff_list
+		sys.stderr.write("done.\n")
+		return go_no2lm_results
 	
 	def lm_results_output(self, outf, go_no2lm_results):
 		"""
 		02-28-05
-			output the self.go_no2lm_results
+			output the go_no2lm_results
 		"""
+		sys.stderr.write("Outputting Linear Model parameters...")
 		writer = csv.writer(outf, delimiter='\t')
-		writer.writerow(['go_no', 'intercept', 'coeff1', 'coeff2', 'chisq'])
+		writer.writerow(['go_no', 'intercept', 'coeff1', 'coeff2', 'coeff3', 'score_cut_off'])
 		for (go_no, coeff_list) in go_no2lm_results.iteritems():
-			writer.writerow([go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3]])
+			writer.writerow([go_no]+coeff_list)
+		del writer
+		sys.stderr.write("done.\n")
+	
+	def get_score_cut_off(self, go_no2prediction_space, go_no2lm_results, accuracy_cut_off):
+		"""
+		03-27-05
+			input: go_no2prediction_space, go_no2lm_results
+			output: score_cut_off
+			
+			After model fitting, every prediction has a score computed from the model.
+			Based on the accuracy_cut_off, this function computes the corresponding
+			score_cut_off.
+			
+			--return_score_cut_off()
+		"""
+		sys.stderr.write("Getting score cutoff for accuracy_cut_off %s...\n"%(accuracy_cut_off))
+		for go_no,data in go_no2prediction_space.iteritems():
+			score_list = []
+			coeff_list = go_no2lm_results[go_no]
+			for entry in data:
+				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity
+				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2]
+				#score, is_correct
+				score_list.append([score, entry[3]])
+			score_cut_off = self.return_score_cut_off(score_list, accuracy_cut_off, go_no)
+			if score_cut_off:
+				#found the cutting point, append the score cutoff to the coeff_list
+				go_no2lm_results[go_no][-1] = score_cut_off
+			else:
+				#can't find a score_cut_off to meet the accuracy_cut_off, append a maximum
+				go_no2lm_results[go_no][-1] = 1e10
+		sys.stderr.write("Done.\n")
+		return go_no2lm_results
+	
+	def return_score_cut_off(self, score_list, accuracy_cut_off, go_no):
+		"""
+		03-27-05
+		"""
+		sys.stderr.write("\tReturning score_cut_off for go %d..."%(go_no))
+		#default no score_cut_off
+		score_cut_off = None
+		score_list.sort()
+		#convert to a 2d array, they have the same indices
+		score_array = array(score_list)
+		previous_score = None
+		no_of_known_predictions = len(score_array)
+		#calculate the accuracy from the low score cutoff to high score cutoff, once <= accuracy_cut_off, break
+		for i in range(len(score_array)):
+			score = score_array[i,0]
+			if score == previous_score:
+				#same score, previous one doesn't meet the cutoff, this one won't either.
+				continue
+			else:
+				#this score becomes previous_score for the next score
+				previous_score = score
+				#count the is_correct==1 entries from i-th row, and divide it by (no_of_known_predictions-i+1)
+				accuracy = sum(greater(score_array[:,1][i:],0))/float(no_of_known_predictions-i+1)
+				if accuracy >= accuracy_cut_off:
+					score_cut_off = score
+					break
+		sys.stderr.write("Done.\n")
+		return score_cut_off
 	
 	def lm_table_create(self, curs, lm_table):
+		"""
+		03-27-05
+			coeff_list has changed, intercept+3 coefficients+score_cut_off
+		"""
+		sys.stderr.write("Creating Linear Model table...")
 		try:
 			curs.execute("create table %s(\
 				go_no	integer,\
 				intercept	float,\
 				coeff1	float,\
 				coeff2	float,\
-				chisq	float)"%lm_table)
+				coeff3	float,\
+				score_cut_off	float)"%lm_table)
 		except:
 			sys.stderr.write("Error occurred when creating table %s\n"%lm_table)	
+		sys.stderr.write("done.\n")
 
 	def submit(self, curs, lm_table, go_no2lm_results):
 		"""
 		02-28-05
 			submit the linear model parameters to the database
+		03-27-05
+			coeff_list has changed, intercept+3 coefficients+score_cut_off
 		"""
-		sys.stderr.write("Database transacting...")
+		sys.stderr.write("Submitting Linear model parameters...")
 		try:
 			for (go_no, coeff_list) in go_no2lm_results.iteritems():
-				curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, chisq)\
-					values (%d, %f, %f, %f, %f)"%\
-					(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3]) )
+				curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, score_cut_off)\
+					values (%d, %s, %s, %s, %s, %s)"%\
+					(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4]) )
 		except:
 			sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
 			sys.exit(1)
@@ -312,6 +310,10 @@ class p_gene_lm:
 			--db_connect
 			--data_fetch
 			--lm_fit
+			--get_score_cut_off
+				--return_score_cut_off
+			--lm_results_output
+			--submit
 		
 		"""
 		#some additional initialization
@@ -327,12 +329,12 @@ class p_gene_lm:
 				sys.exit(127)
 			
 		self.data_fetch(curs, self.table)
-		self.prediction_space2p_value_cut_off(self.accuracy_cut_off)
-		self.p_value_cut_off_output(sys.stdout)
-		self.lm_fit(self.lm_instance)
-		self.lm_results_output(sys.stdout, self.go_no2lm_results)
+		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space)
+		self.lm_results_output(sys.stdout, go_no2lm_results)
+		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off)
+		self.lm_results_output(sys.stdout, go_no2lm_results)
 		if self.needcommit:
-			self.submit(curs, self.lm_table, self.go_no2lm_results)
+			self.submit(curs, self.lm_table, go_no2lm_results)
 			curs.execute("end")
 
 if __name__ == '__main__':
@@ -340,9 +342,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:l:a:j:m:v:cru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:l:a:j:m:v:x:y:cru", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "lm_table=", "accuracy_cut_off=", "judger_type=",\
-			"min_data_points=", "valid_space=", "commit", "report", "debug"])
+			"min_data_points=", "valid_space=", "commit", "report", "debug", "recurrence_gap_size=", "connectivity_gap_size="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -356,6 +358,8 @@ if __name__ == '__main__':
 	judger_type = 0
 	min_data_points = 5
 	valid_space = 20
+	recurrence_gap_size = 2
+	connectivity_gap_size = 2
 	commit = 0
 	report = 0
 	debug = 0
@@ -387,9 +391,13 @@ if __name__ == '__main__':
 			report = 1
 		elif opt in ("-u", "--debug"):
 			debug = 1
+		elif opt in ("-x", "--recurrence_gap_size"):
+			recurrence_gap_size = int(arg)
+		elif opt in ("-y", "--connectivity_gap_size"):
+			connectivity_gap_size = int(arg)
 	if schema and table:
 		instance = p_gene_lm(hostname, dbname, schema, table, lm_table, accuracy_cut_off,\
-			judger_type, min_data_points, commit, report, debug, valid_space)
+			judger_type, min_data_points, commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
