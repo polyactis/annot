@@ -30,7 +30,7 @@ Option:
 
 Examples:
 	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -l -w p_table_file
-	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -l -w -c -g p_gene_cluster_stat2 p_table_file
+	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -l -w -c -j 2  -g p_gene_cluster_stat2 p_table_file
 
 Description:
 	This program is mainly for validation purpose. 
@@ -379,13 +379,13 @@ class gene_stat:
 		recurrence_array = map(int, recurrence_array)
 		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
-		if len(recurrence_array) < self.recurrence_cut_off:
+		if len(recurrence_array) != self.recurrence_cut_off:
 			#the recurrence is not enough
 			return
 		if len(vertex_set) > self.cluster_size_cut_off:
 			#the cluster is too big
 			return
-		if connectivity < self.connectivity_cut_off:
+		if connectivity < self.connectivity_cut_off or connectivity > self.connectivity_cut_off+0.05:
 			#the cluster is not dense enough
 			return
 		#transform into float type
