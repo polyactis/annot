@@ -47,6 +47,7 @@ class gene_id_to_no:
 		self.max_gene_no = 0
 		#mapping between gene_id and gene_no
 		self.vertex_dict = {}
+		self.vertex_dict_extension = {}
 		#a unique collection of all genes in the datasets of the directory
 		self.gene_set = Set()
 		
@@ -83,15 +84,16 @@ class gene_id_to_no:
 		for gene_id in self.gene_set:
 			if gene_id not in self.vertex_dict:
 				self.max_gene_no += 1
-				self.vertex_dict[gene_id] = self.max_gene_no
+				self.vertex_dict_extension[gene_id] = self.max_gene_no
 		sys.stderr.write('New max_gene_no: %d\n'%self.max_gene_no)
 		self.submit()
 
 	def submit(self):
+		sys.stderr.write("%d\tgenes to be inserted\n"%(len(self.vertex_dict_extension)) )
 		sys.stderr.write("Database transacting...")
-		for item in self.vertex_dict:
+		for (gene_id,gene_no) in self.vertex_dict_extension.iteritems():
 			self.curs.execute("insert into gene_id_to_no(gene_id, gene_no, organism) values('%s', %d, '%s')"%\
-				(item, self.vertex_dict[item], self.organism))
+				(gene_id, gene_no, self.organism))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write("done.\n")
