@@ -118,8 +118,8 @@ class graph_construct:
 				if len(self.cor_vector) >0:
 					min_cor = min(nn_cor_vector)		#minimum in the non-negative version of cor_vector
 					if min_cor >= self.cor_cut_off:
-						#if self.debug:
-						#	sys.stderr.write('cor vector of %s v.s. %s: %s\n'%(self.genelabels[i], self.genelabels[j],self.cor_vector,))
+						if self.debug:
+							sys.stderr.write('cor vector of %s v.s. %s: %s\n'%(self.genelabels[i], self.genelabels[j],self.cor_vector,))
 						self.graph_dict[(self.genelabels[i],self.genelabels[j])] = self.cor_vector[nn_cor_vector.index(min_cor)]
 						#not simply the smallest, but the smallest absolute value
 	
