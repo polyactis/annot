@@ -10,8 +10,8 @@ Option:
 	-h, --help              show this help
 	
 Examples:
-	choose_datasets.py -k shu datasets/hs
-	choose_datasets.py -k shu  -g sc normal/
+	choose_datasets.py -k graph datasets/hs
+	choose_datasets.py -k graph  -g sc normal/
 
 Description:
 
@@ -66,7 +66,7 @@ class choose_datasets:
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		for f in files:
 			local_gene_set = Set()
-			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
+			sys.stderr.write("%d/%d:\t%s"%(files.index(f)+1,len(files),f))
 			f_path = os.path.join(self.dir, f)
 			reader = csv.reader(file(f_path), delimiter='\t')
 			for row in reader:
@@ -80,7 +80,7 @@ class choose_datasets:
 			len_less = len(genes_less)
 			per_less = float(len_less)/len(self.gene_set)
 			#output in a readable format
-			sys.stderr.write("\t+%f(%d)\t-%f(%d)\n"%(per_more, len_more, per_less, len_less))
+			sys.stderr.write("\t%f\t%d\t%f\t%d\n"%(per_more, len_more, per_less, len_less))
 			del reader
 			
 	
