@@ -234,6 +234,11 @@ class gene_stat:
 			
 		03-08-05
 			don't take floor of recurrence and connectivity anymore, p_gene_analysis.py and p_gene_lm.py will take care of this.
+		
+		03-08-05
+			fix another important bug
+			when looking for other functions that have same min_p_value, the depth_cut_off requirement is forgotten.
+			
 		"""
 		mcl_id = row[0]
 		gene_no = row[1]
@@ -288,7 +293,8 @@ class gene_stat:
 		#The cluster is an eligible cluster. Passing all the cut_offs.
 		#
 		self.no_of_records += 1
-
+		
+		#looking for go_nos that have the same min_p_value
 		for (p_value, index) in p_value_index_tuple_list:
 			if p_value > min_p_value:
 				break
@@ -303,6 +309,9 @@ class gene_stat:
 				else:
 					#index 0 corresponds to go_no 1
 					go_no = index+1
+				if self.go_no2depth[go_no] < self.depth_cut_off:
+					#again we need the go_no to be deep enough
+					continue
 				
 				if gene_no in self.known_genes_dict:
 					k_functions_set = self.known_genes_dict[gene_no]
