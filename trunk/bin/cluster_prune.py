@@ -130,8 +130,9 @@ class cluster_prune:
 		self.no_of_bads = len(self.mcl_id_dict) - self.no_of_goods
 		if self.report:
 			sys.stderr.write("\n")
-		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
-		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
+		sys.stderr.write("Total records to be deleted: %d\n"%self.no_of_bads)
+		sys.stderr.write("Total records to be updated: %d\n"%self.no_of_goods)
+		sys.stderr.write("Database transacting...")
 		for mcl_id in self.mcl_id_dict:
 			isgood = self.mcl_id_dict[mcl_id].isgood
 			if isgood == 1:
@@ -144,7 +145,8 @@ class cluster_prune:
 			else:
 			#delete the bad mcl_ids
 				self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
-		
+		sys.stderr.write("Done\n")
+				
 	def prune_on_recurrence_array(self):
 		self.curs.execute("select mcl_id, connectivity from %s"%self.table)
 		rows = self.curs.fetchall()
@@ -186,12 +188,13 @@ class cluster_prune:
 			rows = self.curs.fetchall()
 		if self.report:
 			sys.stderr.write("\n")
-		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
-		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
+		sys.stderr.write("Total records to be deleted: %d\n"%self.no_of_bads)
+		sys.stderr.write("Total records to be updated: %d\n"%self.no_of_goods)
+		sys.stderr.write("Database transacting...")
 		for mcl_id in self.bad_mcl_id_list:
 			self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
 		#self.curs.executemany("delete from "+self.table+" where mcl_id=%d", self.bad_mcl_id_list)
-		
+		sys.stderr.write("Done\n")
 	def run(self):
 		if prune_type == 0:
 			self.dstruc_loadin()
