@@ -43,7 +43,7 @@ class mcl_batch:
 			job_f.write(out_block)
 			job_f.close()
 			wl = ['qsub', job_fname]
-			os.spawnvp(os.P_NOWAIT, 'qsub', wl)
+			os.spawnvp(os.P_WAIT, 'qsub', wl)
 
 if __name__ == '__main__':
 	def helper():
