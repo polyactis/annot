@@ -8,6 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-p ..., --prefix=...	specify the splat_id's prefix
 	-c ..., --commit=...	0(default) or 1 specifies commit or not
+	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
@@ -46,7 +47,7 @@ class splat_result_iterator:
 class splat_to_db:
 	'''
 	'''
-	def __init__(self, infname, dbname, schema, prefix, needcommit=0):
+	def __init__(self, infname, dbname, schema, prefix, report, needcommit=0):
 		self.splat_id = ''
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
@@ -54,6 +55,7 @@ class splat_to_db:
 		self.edge_set = []
 		
 		self.inf = open(infname, 'r')
+		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
@@ -103,7 +105,8 @@ class splat_to_db:
 				self.conn.rollback()
 				sys.exit(1)
 			no+=1
-			sys.stderr.write('%s%d'%('\x08'*20, no))
+			if self.report:
+				sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
@@ -115,7 +118,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:c:", ["help", "dbname=", "schema=", "prefix=", "commit="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:p:c:", ["help", "report", "dbname=", "schema=", "prefix=", "commit="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -124,6 +127,7 @@ if __name__ == '__main__':
 	schema = ''
 	commit = 0
 	prefix = ''
+	report = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -136,9 +140,10 @@ if __name__ == '__main__':
 			commit = int(arg)
 		elif opt in ("-p", "--prefix"):
 			prefix = arg
-
+		elif opt in ("-r", "--report"):
+			report = 1
 	if schema and prefix and len(args)==1:
-		instance = splat_to_db(args[0], dbname, schema, prefix, commit)
+		instance = splat_to_db(args[0], dbname, schema, prefix, report, commit)
 		instance.run()
 	else:
 		print __doc__
