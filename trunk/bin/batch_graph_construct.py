@@ -21,3 +21,5 @@ def batch(dir, of_name):
 		
 if __name__ == '__main__':
 	batch(sys.argv[1],sys.argv[2])
+	# argv[1] specifies which directory contains data
+	# argv[2] specifies the outputfile name in the user's home directory
