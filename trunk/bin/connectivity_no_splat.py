@@ -7,11 +7,11 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	'fim_result' or 'mcl_result', compute which table's connectivity
+	-t ..., --table=...	a 'mcl_result or fim_result' -like table, compute which table's connectivity
 	-g ..., --graphdir=...	the directory contains all graphs in gspan format.
 	-a ..., --avg=...	CHOICE is 'p'(avg the top #support connectivities) or
 		'a'(avg all the connectivities)
-	-f ..., --form=...	'fim_result' or 'mcl_result'
+	-f ..., --form=...	'fim_result' or 'mcl_result'(default)
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
