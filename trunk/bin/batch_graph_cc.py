@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-
-
-import os,sys
-
 '''
 Usage:	'program_name' arg1 arg2
 	
@@ -10,6 +6,7 @@ Usage:	'program_name' arg1 arg2
 	arg2 is the name of the directory to hold the results
 '''
 
+import os,sys
 
 def batch(dataset_dir, result_dir):
 	files = os.listdir(dataset_dir)
@@ -28,6 +25,9 @@ def batch(dataset_dir, result_dir):
 		
 
 if __name__ == '__main__':
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
 	#argv[1] is the source directory which stores all the datasets.
 	#argv[2] is the output directory which stores all the output files.
 	batch(sys.argv[1],sys.argv[2])
