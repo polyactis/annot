@@ -7,13 +7,15 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-c ..., --commit=...	0(default) or 1 specifies commit or not
+	-t ..., --table=...	the table to store the splat results, splat_result(default)
+	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
 	splat_to_db.py -k shu patterns-splat
-	splat_to_db.py -k shu -c 1 patterns-splat
+	splat_to_db.py -k shu -c patterns-splat
+	splat_to_db.py -k sc_yh60_splat_5 -c -t splat_result_4 patterns-splat
 	
 Description:
 	Parse the splat results and import into schema.splat_result.
@@ -47,7 +49,7 @@ class splat_result_iterator:
 class splat_to_db:
 	'''
 	'''
-	def __init__(self, infname, hostname, dbname, schema, prefix, report, needcommit=0):
+	def __init__(self, infname, hostname, dbname, schema, table, prefix, report, needcommit=0):
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
 		self.recurrence_array = []
@@ -59,6 +61,7 @@ class splat_to_db:
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.table = table
 		self.prefix = prefix
 					
 	def parse(self, pattern):
@@ -84,6 +87,18 @@ class splat_to_db:
 			line = pattern.readline()
 			
 	def run(self):
+		#if table is not splat_result, create it like splat_result
+		if self.table != 'splat_result':
+			try:
+				self.curs.execute("create table %s(\
+					splat_id		serial primary key,\
+					no_of_edges	integer,\
+					recurrence_pattern	bit varying(200),\
+					recurrence_array	integer[],\
+					edge_set	integer[][],\
+					connectivity	float)"%self.table)
+			except:
+				sys.stderr.write("Error occurred when creating table %s\n"%self.table)
 		iter = splat_result_iterator(self.inf)
 		no = 0
 		for pattern in iter:
@@ -94,17 +109,20 @@ class splat_to_db:
 			string_recurrence_array = repr(self.recurrence_array)
 			string_recurrence_array = '{'+string_recurrence_array[1:-1]+'}'
 			try:
-				self.curs.execute("insert into splat_result(no_of_edges, \
+				self.curs.execute("insert into %s(no_of_edges, \
 							recurrence_pattern, recurrence_array, edge_set) values (%d,B'%s','%s','%s')"%\
-							(self.no_of_edges, self.recurrence_pattern,\
+							(self.table, self.no_of_edges, self.recurrence_pattern,\
 							string_recurrence_array, string_edge_set ))
 			except:
-				sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
+				sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
 				self.conn.rollback()
 				sys.exit(1)
+			
 			no+=1
-			if self.report:
+			if self.report and no%1000==0:
 				sys.stderr.write('%s%d'%('\x08'*20, no))
+		if self.report:
+			sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
@@ -115,7 +133,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:p:c:", ["help", "report", "hostname=", "dbname=", "schema=", "prefix=", "commit="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:t:p:c", ["help", "report", "hostname=", "dbname=", "schema=", "table=", "prefix=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -124,6 +142,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	commit = 0
+	table = 'splat_result'
 	prefix = ''
 	report = 0
 	for opt, arg in opts:
@@ -136,14 +155,16 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-c", "--commit"):
-			commit = int(arg)
+		elif opt in ("-t", "--table"):
+			table = arg
 		elif opt in ("-p", "--prefix"):
 			prefix = arg
+		elif opt in ("-c", "--commit"):
+			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and len(args)==1:
-		instance = splat_to_db(args[0], hostname, dbname, schema, prefix, report, commit)
+		instance = splat_to_db(args[0], hostname, dbname, schema, table, prefix, report, commit)
 		instance.run()
 	else:
 		print __doc__
