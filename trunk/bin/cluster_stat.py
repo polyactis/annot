@@ -25,10 +25,9 @@ class cluster_stat:
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.global_gene_to_go_dict[row[0]] = []
-			go_functions_vector = row[1]
-			for i in range(len(row[1])):
-				if go_functions_vector[i]=='1':
-					self.global_gene_to_go_dict[row[0]].append(i+1)
+			go_functions_list = row[1][1:-1].split(',')
+			for go_no in go_functions_list:
+				self.global_gene_to_go_dict[row[0]].append(int(go_no))
 		self.no_of_genes = len(self.global_gene_to_go_dict)
 		
 	def run(self):
@@ -70,7 +69,8 @@ class cluster_stat:
 				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
 					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
 				p_value_vector[go_no-1] = p_value
-			self.curs.execute("insert into sc_cluster_stat(mcl_id, leave_one_out, p_value_vector)\
+			if self.needcommit:
+				self.curs.execute("insert into sc_cluster_stat(mcl_id, leave_one_out, p_value_vector)\
 				values(%d, %d, ARRAY%s)"%(mcl_id, gene_no, repr(p_value_vector)))
 			self.no_of_records += 1
 

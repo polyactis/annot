@@ -39,15 +39,20 @@ class sc_gene:
 			orfname = self.vertex_list[i]
 			gene_no = i+1
 			known = '0'
-			go_functions_list = ['0']*83
+			go_functions_list = []
 			if orfname in self.known_genes_dict:
 				known = '1'
 				for go_id in self.known_genes_dict[orfname]:
 					no = self.go_id_to_no_dict[go_id]
-					go_functions_list[no-1] = '1'
-			self.curs.execute("insert into graph.sc_gene(orfname, gene_no, known, \
-				go_functions) values ('%s', %d, '%s', B'%s')"%\
-				(orfname, gene_no, known,''.join(go_functions_list)))
+					go_functions_list.append(no)
+			if go_functions_list:
+				self.curs.execute("insert into graph.sc_gene(orfname, gene_no, known, \
+				go_functions) values ('%s', %d, '%s', ARRAY%s)"%\
+				(orfname, gene_no, known,repr(go_functions_list)))
+			else:
+				self.curs.execute("insert into graph.sc_gene(orfname, gene_no, known)\
+				values ('%s', %d, '%s')"%\
+				(orfname, gene_no, known))
 		if self.needcommit:
 			self.conn.commit()
 
