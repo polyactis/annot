@@ -1,33 +1,37 @@
 #!/usr/bin/env python
-import sys,os,cStringIO,psycopg
+"""
+Usage: db_to_mcl.py -k SCHEMA -s SIZE [OPTION] MCLINPUTDIR
 
+Option:
+	MCLINPUTDIR usually is patterns-splat, output of splat.
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-s ..., --size=...	the number of splat records in one output file
+	-h, --help              show this help
+	
+Examples:
+	db_to_mcl.py -k shu -s 10000 gph_result/mcl_input
+	
+Description:
+	Output schema.splat_result into several files. (mcl_input format)
+	Each file is with the number of splat patterns.
+
+"""
+
+import sys,os,cStringIO,psycopg,getopt
 
 class db_to_mcl:
-	def __init__(self, dbname):
+	def __init__(self, dbname, schema):
 		self.vertex_dict = {}
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to graph")	
-		self.org_short2long = {'at':'Arabidopsis thaliana',
-					'ce':'Caenorhabditis elegans',
-					'dm':'Drosophila melanogaster',
-					'hs':'Homo sapiens',
-					'mm':'Mus musculus',
-					'sc':'Saccharomyces cerevisiae',
-					'Arabidopsis thaliana':'Arabidopsis thaliana',
-					'Caenorhabditis elegans':'Caenorhabditis elegans',
-					'Drosophila melanogaster':'Drosophila melanogaster',
-					'Homo sapiens':'Homo sapiens',
-					'Mus musculus':'Mus musculus',
-					'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
-					'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
-					
-	def get_from_db(self, outdir, organism, package_size):
+		self.curs.execute("set search_path to %s"%schema)
+
+	def get_from_db(self, outdir, package_size):
 		if not os.path.isdir(outdir):
 			os.makedirs(outdir)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result \
-			where organism='%s'"%(self.org_short2long[organism]))
+		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result")
 		self.curs.execute("fetch %d from crs"%(package_size))
 		rows = self.curs.fetchall()
 		no_of_splat_records = 0
@@ -81,15 +85,34 @@ class db_to_mcl:
 		outf.write(out_block)
 		
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-		argv[1] is the output directory.\n\
-		argv[2] is the database name.\n\
-		argv[3] is two-letter organism abbreviation.\n\
-		argv[4] specifies the number of splat records in one output file.\n')
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
 		
-	if len(sys.argv) == 5:
-		instance = db_to_mcl(sys.argv[2])
-		instance.get_from_db(sys.argv[1], sys.argv[3], int(sys.argv[4]))
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:s:", ["help", "dbname=", "schema=", "size="])
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = 'graphdb'
+	schema = ''
+	size = 0
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-s", "--size"):
+			size = int(arg)
+
+	if schema and size and len(args)==1:
+		instance = db_to_mcl(dbname, schema)
+		instance.get_from_db(args[0], size)
+
 	else:
-		helper()
+		print __doc__
+		sys.exit(2)
