@@ -43,14 +43,14 @@ class compute_connectivity:
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.source_table = source_table
+		self.target_table = target_table
 		try:
 			self.curs.execute("drop index %s_connectivity_idx"%self.target_table)
 		except psycopg.ProgrammingError, error:
 			sys.stderr.write("Warning: drop the index of connectivity error.\n")
 			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
-		self.source_table = source_table
-		self.target_table = target_table
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.vertex_dict = {}
