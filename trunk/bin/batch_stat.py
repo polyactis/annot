@@ -22,6 +22,9 @@ Option:
 	-w, --wu	Ignore it, default is also wu's strategy.
 	-v, --dominant	Only assign the dominant function(s) to a gene.
 	-c, --commit	commit the database transaction, records in table stat_plot_data
+	--gc	commit the transaction of gene_stat, records in table specified by '--gg'
+		default is 'p_gene'
+	--gg=...	the gene_table for gene_stat to store records if '--gc' is turned on
 	-h, --help              show this help
 	
 Examples:
@@ -44,7 +47,8 @@ from gene_stat_plot import gene_stat
 
 class batch_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, tag, p_value_list, unknown_list, connectivity_list,\
-			recurrence_list, size_list, leave_one_out, wu, judger_type, depth_list, dir_files=None, dominant=0, needcommit=0):
+			recurrence_list, size_list, leave_one_out, wu, judger_type, depth_list, dir_files=None, dominant=0, needcommit=0,\
+			needcommit_of_gene_stat=0, gene_table='p_gene'):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -75,8 +79,8 @@ class batch_stat:
 		#default parameters to invoke gene_stat
 		self.report = 0
 		self.log = 0
-		self.needcommit_of_gene_stat = 0
-		self.gene_table = 'p_gene'
+		self.needcommit_of_gene_stat = int(needcommit_of_gene_stat)
+		self.gene_table = gene_table
 		
 	def run(self):
 		instance = gene_stat(self.hostname, self.dbname, self.schema, self.table, self.mcl_table, self.p_value_list[0],\
@@ -110,7 +114,8 @@ if __name__ == '__main__':
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:g:p:u:n:r:s:e:j:f:lwvc", ["help", "hostname=", "dbname=", "schema=", "table=",\
 			"mcl_table=", "tag=", "p_value_list=", "unknown_list=", "connectivity_list=", "recurrence_list=",\
-			"size_list=", "depth_list=", "judger_type=", "dir_files=", "leave_one_out", "wu", "dominant", "commit"])
+			"size_list=", "depth_list=", "judger_type=", "dir_files=", "leave_one_out", "wu", "dominant", "commit",\
+			"gc", "gg="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -133,6 +138,8 @@ if __name__ == '__main__':
 	wu = 1 
 	dominant = 0
 	commit = 0
+	needcommit_of_gene_stat = 0
+	gene_table = 'p_gene'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -181,13 +188,18 @@ if __name__ == '__main__':
 			dominant = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
-	
+		elif opt in ("--gc"):
+			needcommit_of_gene_stat = 1
+		elif opt in ("--gg"):
+			gene_table = arg
+
 	if schema:
 		if commit == 1 and tag == '':
 			print __doc__
 			sys.exit(2)
 		instance = batch_stat(hostname, dbname, schema, table, mcl_table, tag, p_value_list, unknown_list,\
-			connectivity_list, recurrence_list, size_list, leave_one_out, wu, judger_type, depth_list, dir_files, dominant, commit)
+			connectivity_list, recurrence_list, size_list, leave_one_out, wu, judger_type, depth_list, dir_files, dominant, \
+			commit, needcommit_of_gene_stat, gene_table)
 		instance.run()
 	else:
 		print __doc__
