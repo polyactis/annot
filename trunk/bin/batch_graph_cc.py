@@ -8,7 +8,8 @@ def batch(dataset_dir, result_dir):
 	if not os.path.isdir(result_dir):
 		os.makedirs(result_dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	bin_dir = '/home/yh/script/annot/bin/'
+	homedir = os.path.expanduser('~')
+	bin_dir = os.path.join(homedir, 'script/annot/bin/')
 	
 	for f in files:
 		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
