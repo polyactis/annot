@@ -102,7 +102,7 @@ class gene_stat:
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.unknown_cut_off = float(unknown_cut_off)
 		self.connectivity_cut_off = float(connectivity_cut_off)
-		self.recurrence_cut_off = int(recurrence_cut_off)
+		self.recurrence_cut_off = float(recurrence_cut_off)
 		self.cluster_size_cut_off = int(cluster_size_cut_off)
 		self.leave_one_out = int(leave_one_out)
 		self.wu = int(wu)
@@ -181,7 +181,7 @@ class gene_stat:
 		#parameter_reset
 		self.unknown_cut_off = float(unknown_cut_off)
 		self.connectivity_cut_off = float(connectivity_cut_off)
-		self.recurrence_cut_off = int(recurrence_cut_off)
+		self.recurrence_cut_off = float(recurrence_cut_off)
 		self.cluster_size_cut_off = int(cluster_size_cut_off)
 		self.p_value_cut_off = float(p_value_cut_off)	
 		self.depth_cut_off = int(depth_cut_off)
@@ -407,16 +407,18 @@ class gene_stat:
 		p_value_vector = row[2][1:-1].split(',')
 		connectivity = float(row[3])
 		recurrence_array = row[4][1:-1].split(',')
-		recurrence_array = map(int, recurrence_array)
+		recurrence_array = map(float, recurrence_array)
 		vertex_set = row[5][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
-		if len(recurrence_array) != self.recurrence_cut_off:
+		recurrence = sum(recurrence_array)
+		sys.stderr.write('%s\n'%recurrence)
+		if recurrence < self.recurrence_cut_off or recurrence > (self.recurrence_cut_off+2):
 			#the recurrence is not enough
 			return
 		if len(vertex_set) > self.cluster_size_cut_off:
 			#the cluster is too big
 			return
-		if connectivity < self.connectivity_cut_off or connectivity > self.connectivity_cut_off+0.05:
+		if connectivity < self.connectivity_cut_off or connectivity > (self.connectivity_cut_off+0.1):
 			#the cluster is not dense enough
 			return
 		#transform into float type
@@ -803,7 +805,7 @@ class gene_stat:
 				cluster_context varchar,\
 				cluster_array   integer[],\
 				p_value_cut_off float,\
-				recurrence_cut_off      integer,\
+				recurrence_cut_off      float,\
 				connectivity_cut_off    float,\
 				cluster_size_cut_off    integer,\
 				unknown_cut_off      float,\
@@ -831,7 +833,7 @@ class gene_stat:
 				self.curs.execute("insert into %s(gene_no, go_no, is_correct, avg_p_value, e_accuracy,\
 					no_of_clusters, cluster_context, cluster_array, p_value_cut_off, recurrence_cut_off,\
 					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off)\
-					values(%d, %d, %d, %f, %f, %d, '%s', ARRAY%s, %f, %d, %f, %d, %f, %d)"%\
+					values(%d, %d, %d, %f, %f, %d, '%s', ARRAY%s, %f, %s, %f, %d, %f, %d)"%\
 					(self.gene_table, gene_no, go_no, unit[go_no].is_correct, sum(unit[go_no].p_value_list)/no_of_clusters,\
 					e_accuracy, no_of_clusters, ';'.join(context_list),\
 					repr(unit[go_no].cluster_array), self.p_value_cut_off, self.recurrence_cut_off,\
@@ -843,7 +845,7 @@ class gene_stat:
 
 	def stat_output(self):
 		sys.stderr.write('\n\tp_value_cut_off:%f unknown_cut_off:%f connectivity_cut_off:%f\n'%(self.p_value_cut_off, self.unknown_cut_off, self.connectivity_cut_off))
-		sys.stderr.write('\trecurrence_cut_off:%d cluster_size_cut_off:%d\n'%(self.recurrence_cut_off, self.cluster_size_cut_off))
+		sys.stderr.write('\trecurrence_cut_off:%s cluster_size_cut_off:%d\n'%(self.recurrence_cut_off, self.cluster_size_cut_off))
 		sys.stderr.write('\tdepth_cut_off:%d\n'%(self.depth_cut_off))
 		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
 		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
@@ -1030,7 +1032,7 @@ if __name__ == '__main__':
 		elif opt in ("-n", "--connectivity_cut_off"):
 			connectivity_cut_off = float(arg)
 		elif opt in ("-y", "--recurrence_cut_off"):
-			recurrence_cut_off = int(arg)
+			recurrence_cut_off = float(arg)
 		elif opt in ("-x", "--cluster_size_cut_off"):
 			cluster_size_cut_off = int(arg)
 		elif opt in ("-e", "--depth_cut_off"):
