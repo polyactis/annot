@@ -6,12 +6,12 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database to get the node_list,
-		public(default), (IGNORE)
+		public(default)
 	-t ..., --table=...	table to store the node distances, node_distance(default)
 	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
 	-e, --depth	compute the depth of nodes, default is pairwise distance
 	-a, --all	compute distances between all nodes in that branch,
-		instead of getting node_list from schema.go. (IGNORE)
+		instead of getting node_list from schema.go.
 	-n,	--new_table	table is new. (create it first)
 	-r, --report	report the progress(a number) IGNORE
 	-c, --commit	commit the database transaction
@@ -19,10 +19,13 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	#compute pairwise distance
-	go_node_distance.py -t node_dist -n -c
+	#compute pairwise distance only for nodes in sc_54
+	go_node_distance.py -k sc_54 -t node_dist -n -c
 	
-	#compute the depth
+	#compute pairwise distance between all GO nodes
+	go_node_distance.py  -t node_dist -n -c -a
+	
+	#compute the depth of all GO nodes
 	go_node_distance.py -z localhost -d graphdb -e -r -c
 	
 Description:
@@ -102,6 +105,8 @@ class go_node_distance:
 		self.go_graph = Graph.Graph()
 		#the list containing all indices
 		self.index_list = Set()
+		#the node_list to be pairwisely computed
+		self.node_list = []
 		
 	def dstruc_loadin(self):
 		"""
@@ -111,6 +116,8 @@ class go_node_distance:
 			the case that self.all is not set.
 		03-05-05
 			self.all is deprecated
+		03-06-05
+			self.all is used again
 		"""
 		sys.stderr.write("Loading Data STructure...")
 		
@@ -137,7 +144,14 @@ class go_node_distance:
 		rows = self.curs.fetchall()
 		#it's also a term_id
 		self.root = rows[0][0]
-			
+		
+		if self.all==0:
+			#get the node_list from schema.go
+			self.curs.execute("select t.id from go g, go.term t where g.go_id=t.acc")
+			rows = self.curs.fetchall()
+			for row in rows:
+				self.node_list.append(row[0])
+		
 		sys.stderr.write("Done\n")
 		
 	def go_index_setup(self):
@@ -224,7 +238,10 @@ class go_node_distance:
 			
 		sys.stderr.write("Computing the pairwise distances of all GO nodes...")
 	
-		go_id_list = self.go_id2index.keys()
+		if self.all:
+			go_id_list = self.go_id2index.keys()
+		else:
+			go_id_list = self.node_list
 		no_of_nodes = len(go_id_list)
 		for i in range(no_of_nodes):
 			for j in range(i+1, no_of_nodes):
