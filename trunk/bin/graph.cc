@@ -165,15 +165,14 @@ void graph_construct::edge_construct()
 				if ( abs_min_cor >= COR_CUT_OFF)
 					no_of_cor6++;
 				if ( abs_min_cor >= cor_array[(df-5)][0] )
-				{
 					no_of_05++;
-					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
-				}
 				if ( abs_min_cor >= cor_array[(df-5)][1] )
 					no_of_025++;
-				
 				if ( abs_min_cor >= cor_array[(df-5)][2] )
+				{
 					no_of_01++;
+					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+				}
 			}
 		}			
 }
