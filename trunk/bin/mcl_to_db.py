@@ -17,6 +17,12 @@ class mcl_result_iterator:
 		mcl_begin = 0
 		line = self.inf.readline()
 		while line != '\n':
+			'''
+			\n
+			(mclruninfo
+			...
+			is discarded.
+			'''
 			if line == '':
 				raise StopIteration
 				break
