@@ -169,14 +169,21 @@ class TestSubgraphVisualize(unittest.TestCase):
 class TestGeneStat(unittest.TestCase):
 	"""
 	02-21-05
+	
+	03-14-05
+		modify because gene_stat.py changed
 	"""
 	def setUp(self):
+		"""
+		03-14-05
+			use schema sc_54_6661 to replace sc_54
+		"""
 		from gene_stat import gene_stat as gene_stat_slim
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
-		schema = 'sc_54'
-		table = 'cluster_stat_tmp'
-		mcl_table = 'mcl_result_p3g5e6d4q5n80'
+		schema = 'sc_54_6661'
+		table = 'cluster_stat_hhu_2nd'
+		mcl_table = 'mcl_result_hhu_2nd'
 		depth_cut_off = 5
 		dir_files = None
 		leave_one_out = 1
@@ -187,46 +194,63 @@ class TestGeneStat(unittest.TestCase):
 		subgraph_cut_off = 0
 		debug = 0
 		self.instance = gene_stat_slim(hostname, dbname, schema, table, mcl_table, \
-			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table,\
-			subgraph_cut_off, debug)
-
+			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table)
+		
 	
 	def test_L1_match(self):
 		"""
 		02-21-05
+		
+		03-14-05
+			
 		"""
-		#loadin data structures used in L1_match()
-		self.instance.dstruc_loadin()
+		#call dstruc_loadin()
+		from codense.common import db_connect, get_go_id2go_no
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.dstruc_loadin(curs)
+		#get go_id2go_no
+		go_id2go_no = get_go_id2go_no(curs)
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		node_distance_class = gene_p_map_redundancy()
 		self.instance.debug_L1_match =1
 		#it's GO:0006512
-		go_no = 449
+		go_no = go_id2go_no['GO:0006512']
 		#it's YFR053C
 		gene_no = 2048
 		k_functions_set = self.instance.known_genes_dict[gene_no]
-		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		is_correct = self.instance.L1_match(go_no, k_functions_set, node_distance_class, curs)
 		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
 		#it's GO:0046165, a child of GO:0006166, should be correct
-		go_no = 1531
-		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		go_no = go_id2go_no['GO:0046165']
+		is_correct = self.instance.L1_match(go_no, k_functions_set, node_distance_class, curs)
 		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
-		#it's GO:0046173, a child of GO:0046165, should be wrong
-		go_no = 1532
-		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		#it's GO:0046173, a child of GO:0046165, should be wrong, after 03-14-05, using sc_54_6661, it's also correct.
+		go_no = go_id2go_no['GO:0046173']
+		is_correct = self.instance.L1_match(go_no, k_functions_set, node_distance_class, curs)
 		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
 		
 	def test_common_ancestor_deep_enough(self):
 		"""
 		02-21-05
+		
+		03-14-05
+		
 		"""
-		#loadin data structures used in common_ancestor_deep_enough()
-		self.instance.dstruc_loadin()
+		#call dstruc_loadin()
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.dstruc_loadin(curs)
+		
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		node_distance_class = gene_p_map_redundancy()
+		
 		self.instance.debug_common_ancestor_deep_enough =1
 		#it's GO:0006512
 		go_no = 449
 		#it's YFR053C
 		gene_no = 2048
 		k_functions_set = self.instance.known_genes_dict[gene_no]
-		is_correct = self.instance.common_ancestor_deep_enough(go_no, k_functions_set)
+		is_correct = self.instance.common_ancestor_deep_enough(go_no, k_functions_set, node_distance_class, curs)
 		print "common_ancestor_deep_enough result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
 	
 	def test_submit(self):
@@ -234,9 +258,11 @@ class TestGeneStat(unittest.TestCase):
 		02-21-05
 			testing the new submit()
 		"""
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
 		#setting the testing gene_table and flag the needcommit
 		self.instance.gene_table = 'p_gene_test'
-		self.instance.needcommit = 1
+		self.instance.needcommit = 0
 		#construct a testing prediction_tuple2list
 		tuple = (3,  4)	#(recurrence, connectivity)
 		#[p-value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
@@ -244,23 +270,30 @@ class TestGeneStat(unittest.TestCase):
 		unit = [0.001, 3, 5000, 50, 0, 1, 1, 10, 0.25]
 		prediction_list = [unit]
 		self.instance.prediction_tuple2list[tuple] = prediction_list
-		self.instance.submit()
+		self.instance.submit(curs, self.instance.gene_table)
 	
 	def test__gene_stat_leave_one_out(self):
 		"""
 		02-21-05
 			new _gene_stat_leave_one_out() adds more fields to a prediction_list
-			
+		
+		03-14-05
 		"""
+		#call dstruc_loadin()
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.dstruc_loadin(curs)
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		node_distance_class = gene_p_map_redundancy()
 		"""fake a row like [mcl_id, c.leave_one_out, c.p_value_vector, c.connectivity, \
 			m.recurrence_array, m.vertex_set]"""
 		row = [3, 6166, '{0.25,0.1,0.01,0.001}', 0.34, '{0.7,0.8,0.9}', '{1,2,3,4,6166}']
 		#setup a go_no2depth
 		self.instance.go_no2depth[3] = 10
-		self.instance._gene_stat_leave_one_out(row)
+		self.instance._gene_stat_leave_one_out(row, node_distance_class, curs)
 		for (tuple, prediction_list) in self.instance.prediction_tuple2list.iteritems():
-			self.assertEqual(tuple, (2,2))
-			self.assertEqual(prediction_list, [[0.001, 3, 6166, 3, -1, -1, -1, 5, 0.25]] )
+			print "prediction_space is %s"%repr(tuple)
+			self.assertEqual(prediction_list, [[0.001, 3, 6166, 3, 0, 0, 0, 5, 0.25]] )
 
 class TestCrackSplat(unittest.TestCase):
 	"""
