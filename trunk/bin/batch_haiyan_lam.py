@@ -41,6 +41,10 @@ Examples:
 	batch_haiyan_lam.py --mp='sc_54_6661_merge_6' -n 6661 -p 805939 -l 54
 		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --rr=4-6
 	
+	#better to use mpirun or mpiexec to control nodes
+	mpirun c4-6 batch_haiyan_lam.py --mp='sc_54_6661_merge_6' -n 6661 
+		-p 805939 -l 54 -e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1
+	
 Description:
 	This program is used to start several codense or copath, with different settings
 	on several nodes via lam/mpi.
