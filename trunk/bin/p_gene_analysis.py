@@ -85,7 +85,9 @@ class p_gene_analysis:
 		this is the second part of gene_stat_plot.py, which works on p_gene table
 		the first part goes to gene_stat.py
 	03-01-05
-		add a functionality to get p_value_cut_off from linear_model
+		_p_gene_analysis(): add a functionality to get p_value_cut_off from linear_model
+	03-02-05
+		submit(): gene_p table enlarged, p_gene_id_src is for gene_p_map_redundancy.py
 	run()
 		--init()
 		--db_connect()
@@ -158,6 +160,7 @@ class p_gene_analysis:
 			for each go_no, get its linear model parameters
 			also return 2d matrix for a general linear model(see get_general_lm_results)
 		"""
+		sys.stderr.write("Getting linear model parameters...")
 		go_no2lm_results = {}
 		lm_results_2d_list = []
 		curs.execute("select go_no, intercept, coeff1, coeff2 from %s"%lm_table)
@@ -167,7 +170,7 @@ class p_gene_analysis:
 			lm_results = row[1:]		#intercept coeff1 coeff2
 			go_no2lm_results[go_no] = lm_results
 			lm_results_2d_list.append(lm_results)
-		
+		sys.stderr.write("Done\n")		
 		return (go_no2lm_results, lm_results_2d_list)
 		
 	def get_general_lm_results(self, lm_results_2d_list):
@@ -227,6 +230,7 @@ class p_gene_analysis:
 		02-21-05
 			--_p_gene_analysis()
 		"""
+		sys.stderr.write("Setting up prediction_space and prediction_pair...")
 		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, mcl_id, %s, avg_p_value, \
 			recurrence_cut_off,connectivity_cut_off, depth_cut_off,p_gene_id from %s"\
 			%(self.is_correct_dict[self.judger_type], gene_table))
@@ -241,7 +245,8 @@ class p_gene_analysis:
 			
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
-
+		sys.stderr.write("Done\n")		
+	
 	def _p_gene_analysis(self, row):
 		"""
 		02-28-05
@@ -437,10 +442,16 @@ class p_gene_analysis:
 			stat_table_f.writerow(row)
 		
 	def gene_p_table_submit(self, curs, gene_p_table, gene_p_list):
+		"""
+		03-02-05
+			gene_p table enlarged, p_gene_id_src is for gene_p_map_redundancy.py
+		"""
 		sys.stderr.write("Submiting gene_p_table...")
 		curs.execute("create table %s(\
+			gene_p_id	serial primary key,\
 			p_gene_id	integer,\
-			p_value_cut_off	float)"%gene_p_table)
+			p_value_cut_off	float,\
+			p_gene_id_src integer)"%gene_p_table)
 			
 		for (p_gene_id, p_value_cut_off) in gene_p_list:
 			curs.execute("insert into %s(p_gene_id, p_value_cut_off)\
