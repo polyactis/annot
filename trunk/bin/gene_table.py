@@ -75,12 +75,14 @@ class gene_table:
 			f_path = os.path.join(self.dir, f)
 			reader = csv.reader(file(f_path), delimiter='\t')
 			for row in reader:
-				if row[0] in self.gene_id2freq:
-				#not first encountering
-					self.gene_id2freq[row[0]] += 1
-				else:
-				#first encountering
-					self.gene_id2freq[row[0]] = 1
+				if row[0] in self.gene_id2gene_no:
+				#03-29-05, ignore genes not in graph.gene_id_to_no.
+					if row[0] in self.gene_id2freq:
+					#not first encountering
+						self.gene_id2freq[row[0]] += 1
+					else:
+					#first encountering
+						self.gene_id2freq[row[0]] = 1
 			del reader
 		
 		if self.union:
