@@ -11,25 +11,22 @@ Examples:
 
 02-17-05
 	1: unittest for gene_stat_plot.
-
 02-20-05
 	2: unittest for subgraph_visualize
-
 02-20-05
 	3: unittest for gene_stat
-
 02-25-05
 	4: unittest for CrackSplat
-
+02-28-05
+	5: unittest for module_cc.linear_model
+02-28-05
+	6: unittest for p_gene_lm
 """
 import unittest, os, sys, getopt
-from gene_stat_plot import gene_stat
-from gene_stat import gene_stat as gene_stat_slim
-from visualize.subgraph_visualize import subgraph_visualize
-from CrackSplat import CrackSplat
 
 class TestGeneStatPlot(unittest.TestCase):
 	def setUp(self):
+		from gene_stat_plot import gene_stat
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
 		schema = 'sc_54'
@@ -131,6 +128,7 @@ class TestGeneStatPlot(unittest.TestCase):
 
 class TestSubgraphVisualize(unittest.TestCase):
 	def setUp(self):
+		from visualize.subgraph_visualize import subgraph_visualize
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
 		schema = 'sc_54'
@@ -165,6 +163,7 @@ class TestGeneStat(unittest.TestCase):
 	02-21-05
 	"""
 	def setUp(self):
+		from gene_stat import gene_stat as gene_stat_slim
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
 		schema = 'sc_54'
@@ -260,6 +259,7 @@ class TestCrackSplat(unittest.TestCase):
 	02-25-05
 	"""
 	def setUp(self):
+		from CrackSplat import CrackSplat
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
 		schema = 'sc_54'
@@ -319,6 +319,106 @@ class TestCrackSplat(unittest.TestCase):
 			print "vertex_set: %s"%(repr(mclResult.vertex_set))
 			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
 
+
+class TestLinearModel(unittest.TestCase):
+	"""
+	02-28-05
+	"""
+	def setUp(self):
+		from module_cc.linear_model import linear_model
+		self.instance = linear_model()
+		
+	def test_splat2graph_dict(self):
+		x_2d_list = [[1, 14, 2],
+					[1, 16, 0],
+					[1, 16, 2],
+					[1, 18, 0],
+					[1, 18, 2],
+					[1, 18, 4],
+					[1, 20, 0],
+					[1, 20, 2],
+					[1, 20, 4],
+					[1, 20, 6],
+					[1, 22, 0],
+					[1, 22, 2],
+					[1, 22, 4],
+					[1, 22, 6],
+					[1, 22, 8],
+					[1, 24, 2],
+					[1, 26, 0],
+					[1, 26, 2],
+					[1, 26, 4]]
+		y_list = [0.5500000, 0.6842105, 0.7647059, 0.5030303, 0.4000000, 0.7647059, \
+			0.5439739, 0.5727412, 0.5603448, 0.5625000, 0.5781991, 0.6218905, \
+			0.561538, 0.5573770, 0.5208333, 0.6666667, 0.8666667, 0.6862745, 0.6551724]
+
+		self.instance.prepare_data(y_list, x_2d_list);
+		self.instance.run()
+		coeff_list = self.instance.coefficients()
+		chisq_tuple = self.instance.chisq_return()
+		self.assertEqual
+		real_coeff_list = [0.44622090360304795, 0.0096039858657607172, -0.01244257855672223]
+		real_chisq_tuple = (0.18409639558598592,)
+		self.assertEqual(coeff_list, real_coeff_list)
+		self.assertEqual(chisq_tuple, real_chisq_tuple)
+		"""
+		print
+		print "Coefficient list: %s"%repr(self.instance.coefficients())
+		print "chisq: %s"%repr(self.instance.chisq_return())
+		"""
+	
+	def tearDown(self):
+		self.instance.cleanup()
+
+class TestPGeneLm(unittest.TestCase):
+	"""
+	02-28-05
+	"""
+	def setUp(self):
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = ''
+		table = None
+		lm_table = None
+		accuracy_cut_off = 0.5
+		judger_type = 0
+		min_data_points = 20
+		commit = 0
+		report = 0
+		debug = 0
+		from p_gene_lm import p_gene_lm
+		self.instance = p_gene_lm(hostname, dbname, schema, table, lm_table, accuracy_cut_off,\
+			judger_type, min_data_points, commit, report, debug)
+	
+	def test_p_value_outof_accuracy_cut_off(self):
+		self.instance.debug = 0
+		tuple_list = [[0.001, 1], [0.001, -1], [0.001, 1], [0.001,1], [0.01, 1], [0.01, 0], [0.01, 1], [0.01, -1]]
+		accuracy_cut_off = 0.84
+		p_value_cut_off = self.instance.p_value_outof_accuracy_cut_off(tuple_list, accuracy_cut_off)
+		self.assertEqual(p_value_cut_off, 0.001)
+	
+	def test_data_fetch(self):
+		from codense.common import db_connect
+		self.instance.schema = 'sc_54'
+		self.instance.table = 'p_gene_repos_2_e5'
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.data_fetch(curs, self.instance.table)
+		#print self.instance.go_no2prediction_space
+	
+	def test_data_prepare(self):
+		from p_gene_analysis import prediction_space_attr
+		prediction_space2attr = {}
+		connectivity_list = [0,2,4]*3
+		recurrence_list = range(2,20,2)
+		for i in range(len(connectivity_list)):
+			prediction_space2attr[(recurrence_list[i], connectivity_list[i])] = prediction_space_attr()
+			prediction_space2attr[(recurrence_list[i], connectivity_list[i])].known_predictions = 5*i
+			prediction_space2attr[(recurrence_list[i], connectivity_list[i])].p_value_cut_off = 0.001*i
+		
+		y_list, x_2d_list = self.instance.data_prepare(prediction_space2attr)
+		print y_list
+		print x_2d_list
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -334,7 +434,9 @@ if __name__ == '__main__':
 	TestCaseDict = {1:TestGeneStatPlot,
 		2: TestSubgraphVisualize,
 		3: TestGeneStat,
-		4: TestCrackSplat}
+		4: TestCrackSplat,
+		5: TestLinearModel,
+		6: TestPGeneLm}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
