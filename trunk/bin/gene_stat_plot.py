@@ -525,9 +525,8 @@ class gene_stat:
 				#convert the context_dict into a human-readable list.
 				context_list = []
 				for member in unit[go_no].context_dict:
-					percentage = unit[go_no].context_dict[member]/float(no_of_clusters)
-					if percentage >= 0.3:
-						context_list.append('%s(%2.1f%%)'%(self.gene_no2gene_id[member], (percentage*100) ))
+					no_of_containing_clusters = unit[go_no].context_dict[member]
+					context_list.append('%s/%d'%(member, no_of_containing_clusters ))
 				if go_no not in self.go_no2accuracy:
 				#There's possibility that one function can not be validated.
 				#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
@@ -668,9 +667,8 @@ class gene_stat:
 			#convert the context_dict into a human-readable list.
 			context_list = []
 			for member in unit[go_no].context_dict:
-				percentage = unit[go_no].context_dict[member]/float(no_of_clusters)
-				if percentage >= 0.3:
-					context_list.append('%s(%2.1f%%)'%(self.gene_no2gene_id[member], (percentage*100) ))
+				no_of_containing_clusters = unit[go_no].context_dict[member]
+				context_list.append('%s/%d'%(self.gene_no2gene_id[member], no_of_containing_clusters ))
 			row.append(';'.join(context_list))
 			#write the row into the stat_table_fname
 			f_handler.writerow(row)
