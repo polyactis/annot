@@ -11,6 +11,8 @@ Option:
 	-u ..., --unknown_cut_off=...	unknown_gene_ratio_cut_off, 0.25(default)
 	-l ..., --limit=...,	IGNORE it, interface relics.
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
+	-y ..., --recurrence_cut_off=...	5(default), minimum recurrences
+	-x ..., --cluster_size_cut_off=...	20(default), maximum cluster size
 	-w, --wu	IGNORE it. interface relics.
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
@@ -42,7 +44,8 @@ class gene_prediction:
 		self.mcl_id_list = []
 
 class gene_stat_on_mcl_result:
-	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
+	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, \
+		limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -51,6 +54,8 @@ class gene_stat_on_mcl_result:
 		self.unknown_cut_off = float(unknown_cut_off)
 		self.limit = int(limit)
 		self.connectivity_cut_off = float(connectivity_cut_off)
+		self.recurrence_cut_off = int(recurrence_cut_off)
+		self.cluster_size_cut_off = int(cluster_size_cut_off)
 		self.wu = int(wu)
 		self.report = int(report)
 		self.needcommit = int(needcommit)
@@ -112,7 +117,8 @@ class gene_stat_on_mcl_result:
 			sys.exit(2)
 
 		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio\
-				from %s where connectivity>=%f and p_value_min notnull"%(self.table, self.connectivity_cut_off))
+				from %s where connectivity>=%f and p_value_min notnull and array_upper(recurrence_array, 1)>=%d\
+				and array_upper(vertex_set, 1)<=%d"%(self.table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -268,9 +274,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:y:x:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -282,6 +288,8 @@ if __name__ == '__main__':
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
+	recurrence_cut_off = 5
+	cluster_size_cut_off = 20
 	wu = 0
 	report = 0
 	commit = 0
@@ -306,6 +314,10 @@ if __name__ == '__main__':
 			limit = int(arg)
 		elif opt in ("-n", "--connectivity_cut_off"):
 			connectivity_cut_off = float(arg)
+		elif opt in ("-y", "--recurrence_cut_off"):
+			recurrence_cut_off = int(arg)
+		elif opt in ("-x", "--cluster_size_cut_off"):
+			cluster_size_cut_off = int(arg)
 		elif opt in ("-w", "--wu"):
 			wu = 1
 		elif opt in ("-r", "--report"):
@@ -314,7 +326,8 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, p_value_cut_off,\
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
