@@ -72,7 +72,7 @@ class gene_p_map_redundancy:
 			
 			--gene_no2p_gene_setup()
 		"""
-		curs.execute("DECLARE crs CURSOR FOR select g.p_gene_id, p.gene_no, p.go_no\
+		curs.execute("DECLARE crs CURSOR FOR select g.p_gene_id, p.gene_no, p.go_no, p.p_value_cut_off\
 			from %s g, %s p where g.p_gene_id=p.p_gene_id"%(gene_p_table, p_gene_table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
@@ -97,6 +97,7 @@ class gene_p_map_redundancy:
 		p_gene_id = row[0]
 		gene_no = row[1]
 		go_no = row[2]
+		p_value_cut_off = row[3]
 		if gene_no not in self.gene_no2p_gene:
 			self.gene_no2p_gene[gene_no] = {}
 		
@@ -104,7 +105,7 @@ class gene_p_map_redundancy:
 		p_gene_id2go_no = self.gene_no2p_gene[gene_no]
 		
 		if p_gene_id not in p_gene_id2go_no:
-			p_gene_id2go_no[p_gene_id] = go_no
+			p_gene_id2go_no[p_gene_id] = [go_no, p_value_cut_off]
 		else:
 			sys.stderr.write("Error, duplicate p_gene_id:%s found in gene_p_table\n"%p_gene_id)
 			sys.exit(127)
@@ -129,16 +130,16 @@ class gene_p_map_redundancy:
 		for i in range(len(p_gene_id_list)):
 			p_gene_id1 = p_gene_id_list[i]
 			if p_gene_id1 not in p_gene_id_map:
+				go_no1,p_value_cut_off = p_gene_id2go_no[p_gene_id1]
 				#not mapped, first encounter, it's the source, mapp to itself
-				p_gene_id_map[p_gene_id1] = p_gene_id1
+				p_gene_id_map[p_gene_id1] = [p_gene_id1, p_value_cut_off]
 				if self.debug:
 					print "%s not in p_gene_id_map yet,mapped to itself"%p_gene_id1
-				go_no1 = p_gene_id2go_no[p_gene_id1]
 				for j in range(i+1, len(p_gene_id_list)):
 					p_gene_id2 = p_gene_id_list[j]
 					if p_gene_id2 not in p_gene_id_map:
 						#the p_gene_id hasn't found its source
-						go_no2 = p_gene_id2go_no[p_gene_id2]
+						go_no2, p_value_cut_off = p_gene_id2go_no[p_gene_id2]
 						if go_no1 < go_no2:
 							key= (go_no1, go_no2)
 						else:
@@ -152,7 +153,7 @@ class gene_p_map_redundancy:
 							print "jasmine_distance of %s and %s is %s"%(go_no1, go_no2, jasmine_distance)
 						if jasmine_distance == 0:
 							#jasmine_distance=0 means they are parent-child
-							p_gene_id_map[p_gene_id2] = p_gene_id1
+							p_gene_id_map[p_gene_id2] = [p_gene_id1, p_value_cut_off]
 							if self.debug:
 								print "%s not in p_gene_id_map, mapped to %s"%(p_gene_id2, p_gene_id1)
 
@@ -203,11 +204,26 @@ class gene_p_map_redundancy:
 		"""
 		03-01-05
 			update the gene_p_table to reflect the mapping
+		03-04-05
+			operation update is too slow, so drop it first and create it later.
 		"""
 		sys.stderr.write("Updating table %s..."%gene_p_table)
-		for (p_gene_id, p_gene_id_src) in p_gene_id_map.iteritems():
+		curs.execute("end")
+		curs.execute("begin")
+		curs.execute("drop table %s"%gene_p_table)
+		curs.execute("create table %s(\
+			gene_p_id	serial primary key,\
+			p_gene_id	integer,\
+			p_value_cut_off	float,\
+			p_gene_id_src integer)"%gene_p_table)
+			
+		for (p_gene_id, [p_gene_id_src,p_value_cut_off]) in p_gene_id_map.iteritems():
+			curs.execute("insert into %s(p_gene_id, p_value_cut_off, p_gene_id_src)\
+					values(%d, %f, %d)"%(gene_p_table, p_gene_id, p_value_cut_off, p_gene_id_src))
+			"""
 			curs.execute("update %s set p_gene_id_src=%d where p_gene_id=%d"%\
 				(gene_p_table, p_gene_id_src, p_gene_id))
+			"""
 		sys.stderr.write("Done\n")
 		
 	def run(self):
