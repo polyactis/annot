@@ -91,20 +91,28 @@ class cluster_stat:
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
-		for vertex in vertex_list_all:
-			if int(vertex) in self.global_gene_to_go_dict:
+		for i in range(len(vertex_list_all)):
+			vertex_list_all[i] = int(vertex_list_all[i])
+			if vertex_list_all[i] in self.global_gene_to_go_dict:
 			#this filter will only be useful when Jasmine's strategy is applied to whole gene-set(unknown included)
-				vertex_list.append(int(vertex))
+				vertex_list.append(vertex_list_all[i])
 		cluster_size = len(vertex_list)
 		p_value_vector = [1] * self.no_of_functions
 		self.local_go_no_dict_construct(vertex_list)
-		for gene_no in vertex_list:
+		for gene_no in vertex_list_all:
 			self.go_no_dict_adjust(gene_no)
 			for go_no in self._local_go_no_dict:
-				x = self._local_go_no_dict[go_no]
-				m = self._global_go_no_dict[go_no]
-				n = self.no_of_genes -1 - m
-				k = cluster_size-1
+				if self.wu or (gene_no not in self.global_gene_to_go_dict):
+				# code after 'or' deals with the situation that Jasmine's strategy is applied to whole gene-set(unknown included)
+					x = self._local_go_no_dict[go_no]
+					m = self._global_go_no_dict[go_no]
+					n = self.no_of_genes - m
+					k = cluster_size
+				else:
+					x = self._local_go_no_dict[go_no]
+					m = self._global_go_no_dict[go_no]
+					n = self.no_of_genes -1 - m
+					k = cluster_size-1
 				p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
 				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
 					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
@@ -138,21 +146,24 @@ class cluster_stat:
 		'''
 		self._local_go_no_dict = self.local_go_no_dict.copy()
 		self._global_go_no_dict = self.global_go_no_to_size_dict.copy()
+		if gene_no not in self.global_gene_to_go_dict:
+		#this filter will only be useful when Jasmine's strategy is applied to whole gene-set(unknown included)
+			return
 		go_no_list = self.global_gene_to_go_dict[gene_no]
 		for go_no in go_no_list:
 			self._local_go_no_dict[go_no] -= 1
 			self._global_go_no_dict[go_no] -= 1
-			if self.wu:
-			# for Wu's strategy
-				if self._local_go_no_dict.has_key(0):
-					self._local_go_no_dict[0] += 1
-				else:
-					self._local_go_no_dict[0] = 1
-				self._global_go_no_dict[0] += 1
 			if self._local_go_no_dict[go_no] == 0:
 				del self._local_go_no_dict[go_no]
 			if self._global_go_no_dict[go_no] == 0:
 				del self._global_go_no_dict[go_no]
+		if self.wu:
+		# for Wu's strategy
+			if self._local_go_no_dict.has_key(0):
+				self._local_go_no_dict[0] += 1
+			else:
+				self._local_go_no_dict[0] = 1
+			self._global_go_no_dict[0] += 1
 
 
 if __name__ == '__main__':
