@@ -14,6 +14,7 @@ Option:
 	-s ..., --contrast=...	the contrast differential ratio for two contexts to be different, 0.3(default)
 	-r, --report	report the progress(a number) IGNORE
 	-c, --commit	commit the database transaction, records in table gene. IGNORE
+	-l, --log	record down some stuff in the logfile(cluster_stat.log)
 	-h, --help              show this help
 
 Examples:
@@ -58,7 +59,7 @@ class accuracy_struc:
 
 class context_specific:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, contrast=0.3, report=0, \
-		needcommit=0, gene_table='p_gene', stat_table_fname='null'):
+		needcommit=0, log=0, gene_table='p_gene', stat_table_fname='null'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -69,7 +70,9 @@ class context_specific:
 		self.needcommit = int(needcommit)
 		self.gene_table = gene_table
 		self.stat_table_fname = stat_table_fname
-		
+		self.log = int(log)
+		if self.log:
+			self.log_file = open('/tmp/context_specific.log','w')	
 		#mapping between gene_no and go_no list
 		self.known_genes_dict = {}
 		#some counters
@@ -78,7 +81,7 @@ class context_specific:
 		self.list_no_of_functions_each_gene = []
 		self.list_no_of_contexts_each_gene = []
 		self.no_of_records = 0
-		self.log_file = open('/tmp/context_specific.log','w')
+
 		self.gene_prediction_dict = {}
 		self.no_of_p_known = 0
 		self.go_no2go_id = {}
@@ -190,7 +193,10 @@ class context_specific:
 					#function_struc.context_dict will be a Set data structure to store context genes
 					#function_struc.cluster_array will store the go terms to be merged
 					go_no_list.append(go_no)
-					self.depth_list.append(self.depth_of_one_node(go_no))
+					depth = self.depth_of_one_node(go_no)
+					if self.log:
+						self.log_file.write("Depth of %s: %d\n"%(self.go_no2go_id[go_no], depth))
+					self.depth_list.append(depth)
 					
 					item = function_struc()
 					item.context_dict = Set(unit.p_functions_struc_dict[go_no].context_dict.keys())
@@ -202,6 +208,8 @@ class context_specific:
 						go_id1 = self.go_no2go_id[go_no_list[i]]
 						go_id2 = self.go_no2go_id[go_no_list[j]]
 						distance = len(GraphAlgo.shortest_path(self.go_graph, go_id1, go_id2))-1
+						if self.log:
+							self.log_file.write("Distance between %s and %s: %d\n"%(go_id1, go_id2, distance))
 						if distance > max_distance:
 							max_distance = distance
 				
@@ -312,9 +320,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", \
-		"contrast=", "report", "commit", "gene_table="]
+		"contrast=", "report", "commit", "log", "gene_table="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:s:rcg:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:s:rclg:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -327,6 +335,7 @@ if __name__ == '__main__':
 	contrast = 0.3
 	report = 0
 	commit = 0
+	log = 0
 	gene_table = 'p_gene'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -348,6 +357,8 @@ if __name__ == '__main__':
 			report = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
+		elif opt in ("-l", "--log"):
+			log = 1
 		elif opt in ("-g", "--gene_table"):
 			gene_table = arg
 	if len(args) == 1:
@@ -357,7 +368,7 @@ if __name__ == '__main__':
 			
 	if schema and gene_table:
 		instance = context_specific(hostname, dbname, schema, table, mcl_table, contrast, report, \
-			commit, gene_table, stat_table_fname)
+			commit, log, gene_table, stat_table_fname)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
