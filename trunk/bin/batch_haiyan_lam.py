@@ -113,6 +113,9 @@ class batch_haiyan_lam:
 		03-19-05
 			1. no default for rank_range, must be specified by user
 			2. program_path is parameter_list[0]
+		
+		03-19-05
+			op contains the output directory.
 			
 		"""
 		#None arguments
@@ -149,6 +152,7 @@ class batch_haiyan_lam:
 										int_conn_perc = int(float(conn_perc)*100)
 										op = self.binary+self.mp+'G%sE%sD%sQ%sS%sC%s'%\
 		(min_graph_size, min_edge_freq, int_first_density_cutoff, int_second_density_cutoff, max_pre_graph_size, int_conn_perc)
+										op = os.path.join(self.od, op)
 									if self.type==0:
 										parameter_list.append([program_path,\
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file,\
@@ -184,6 +188,9 @@ class batch_haiyan_lam:
 		
 		03-19-05
 			no communicator anymore
+		03-19-05
+			Don't change to the output directory anymore cause op already contains
+			directory information.
 		"""
 		comm = None
 		"""
@@ -222,9 +229,8 @@ class batch_haiyan_lam:
 				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/batch_haiyan_lam%s.sh'%job_number)
 				job_f = open(job_fname, 'w')
 				job_f.write('date\n')	#the beginning time
-				#change to the ouput directory first, because copath and coden output to the current directory
-				jobrow = ['ssh', 'node%s'%node_rank, '"', 'cd', self.od, ';']	#the " before cd is used to concatenate two commands in shell
-				jobrow = jobrow + parameter + ['"']	#the ending " corresponds to the " before cd above
+				jobrow = ['ssh', 'node%s'%node_rank]
+				jobrow = jobrow + parameter
 				job_f.write('echo %s\n'%' '.join(jobrow))	#print the commandline
 				job_f.write("%s\n"%' '.join(jobrow))	#command here
 				job_f.write('date\n')	#the ending time
