@@ -10,22 +10,29 @@ Option:
 	-t ..., --table=...	the splat_result table (edge_set)
 	-i ..., --input_file=...	gspan format(by graph_merge.py)
 	-o ..., --output_file=...	the edge correlation vector file, for CODENSE and COPATH
+	-s ..., --significance_file=...	the edge significance flag vector file.
 	-b ..., --label=...	use gene 1(index, default) or 2(no) or 3(id) to label
 	-f ..., --dir_files=...	the directory to store the temporary files, /tmp/yh(default)
+	-p ..., --p_value_cut_off=...	the p_value_cut_off for an edge to be significant, 0.01(default)
+	-c ..., --cor_cut_off=...	the cor_cut_off for an edge to be significant, 0.6(default)
+		priority gives p_value_cut_off, cor_cut_off is used only when p_value_cut_off=0
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
 	#create a file to dump into database by haiyan_cor_vector2db.py
-	complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector ~/datasets/sc_54
+	complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector
+		-s /tmp/edge_significance_vector ~/datasets/sc_54
+	
 	#output cor_vector from database
 	complete_cor_vector.py -k sc_54 -i sc_merge_gspan -o /tmp/cor_vector
 
 Description:
 	given a summary graph, get all the edges, find the correlations in all
-	the datasets, whether significant or insignificant, for each edge,
+	the datasets, and also its significance flag, for each edge,
 	output in haiyan's format with gene_index based on the order of nodes
-	appearing in the 'v' part of the gspan file.
+	appearing in the 'v' part of the gspan file. 03-02-05, significance flag
+	vector is output in another file.
 
 """
 
@@ -41,6 +48,11 @@ def string_convert_to_three_int(str):
 
 class complete_cor_vector:
 	'''
+	
+	03-02-05
+		Now, graph_modeling can return the significance flag for an edge.
+		Add a significance_file to hold those flags.
+	
 	run
 		--cor_vector_from_db
 		or
@@ -51,11 +63,12 @@ class complete_cor_vector:
 		--files_sort
 		(loop begins)
 			--gene_id2expr_array_setup
-			--expr_array2expr_list
-			--python_call
+			--cor_calculate
 			--file_combine
 	'''
-	def __init__(self, hostname, dbname, schema, table, input_file, output_file, label, dir_files, report, dir):
+	def __init__(self, data_dir, hostname, dbname, schema, table, input_file, output_file, \
+		significance_file, label, dir_files=None, p_value_cut_off=0.01, cor_cut_off=0.6, \
+		report=0):
 		"""
 		run	--dstruc_loadin
 			--edge_tuple_list_output
@@ -65,13 +78,16 @@ class complete_cor_vector:
 				cor_calculate
 				file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
 		"""
+		self.dir = data_dir
 		self.schema = schema
 		self.table = table
 		self.input_file = input_file
 		self.output_file = output_file
+		self.significance_file = significance_file
 		self.label = int(label)
 		self.dir_files = dir_files
-		self.dir = dir
+		self.p_value_cut_off = float(p_value_cut_off)
+		self.cor_cut_off = float(cor_cut_off)
 		if self.schema:
 			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 			self.curs = self.conn.cursor()
@@ -91,6 +107,7 @@ class complete_cor_vector:
 
 		self.tmp_file1 = os.path.join(self.dir_files, 'tmp_complete_cor_vector1')
 		self.tmp_file2 = os.path.join(self.dir_files, 'tmp_complete_cor_vector2')
+		self.significance_tmp_file = os.path.join(self.dir_files, 'significance_tmp')
 		#mapping between gene_no and gene_id
 		self.gene_index2no = {}
 		self.gene_no2index = {}
@@ -209,15 +226,18 @@ class complete_cor_vector:
 			new_files_list[no-1] = f
 		return new_files_list
 	
-	def cor_calculate(self, output_file, gene_index2expr_array):
+	def cor_calculate(self, output_file, significance_file, gene_index2expr_array):
 		of = open(output_file, 'w')
+		sf = open(significance_file, 'w')
 		#start from 0, one step by 2
 		for i in range(0, len(self.edge_tuple_list), 2):
 			gene_index1 = self.edge_tuple_list[i]
 			gene_index2 = self.edge_tuple_list[i+1]
-			y = graph_modeling.ind_min_cor(gene_index2expr_array[gene_index1], gene_index2expr_array[gene_index2])
+			edge_data = graph_modeling.ind_min_cor(gene_index2expr_array[gene_index1], gene_index2expr_array[gene_index2])
 			#get the integer part of the float*1000
-			of.write("%s\n"%(int(math.modf(y.value*1000)[1]) ) )
+			of.write("%s\n"%(int(math.modf(edge_data.value*1000)[1]) ) )
+			sf.write("%s\n"%(edge_data.significance))
+		sf.close()
 		of.close()
 	
 	def cor_vector_from_db(self, output_file):
@@ -254,11 +274,17 @@ class complete_cor_vector:
 		if self.schema:
 			self.cor_vector_from_db(self.output_file)
 		else:
+			if self.significance_file==None:
+				sys.stderr.write("Error: where's the significance file?\n")
+				sys.exit(2)
 			self.cor_vector_from_files()
 
 	def cor_vector_from_files(self):
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
 		self.edge_tuple_list_output(self.output_file)
+		self.edge_tuple_list_output(self.significance_file)
+		#set the cor_cut_off_vector, internal structure of graph_modeling
+		graph_modeling.cor_cut_off_vector_construct(self.p_value_cut_off, self.cor_cut_off)
 		#sort all the files based on the dataset number, to order the columns of the outputed edge correlation vector
 		self.files = self.files_sort(self.files)
 		for f in self.files:
@@ -266,7 +292,7 @@ class complete_cor_vector:
 			f_path = os.path.join(self.dir, f)
 			#get the expression values only for those genes
 			gene_index2expr_array = self.gene_index2expr_array_setup(f_path)
-			self.cor_calculate(self.tmp_file1, gene_index2expr_array)
+			self.cor_calculate(self.tmp_file1, self.significance_tmp_file, gene_index2expr_array)
 			"""#convert the expression values dictionary to a list for python_call
 			expr_list = self.expr_array2expr_list(gene_index2expr_array)
 			#call the C++ module
@@ -274,6 +300,8 @@ class complete_cor_vector:
 			"""
 			#combine the self.output_file and self.tmp_file1 into self.output_file by means of self.tmp_file2
 			self.file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
+			self.file_combine(self.significance_file, self.significance_tmp_file, self.tmp_file2)
+		os.remove(self.significance_tmp_file)
 		os.remove(self.tmp_file1)
 		#self.tmp_file2 is removed in the last call to file_combine
 		os.rmdir(self.dir_files)
@@ -285,8 +313,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:b:f:r", ["help",  "hostname=", "dbname=", "schema=", "table=", \
-			"input_file=", "output_file=", "label=", "dir_files=", "report"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:s:b:f:p:c:r", ["help",  "hostname=", \
+			"dbname=", "schema=", "table=", "input_file=", "output_file=", "significance_file=", \
+			"label=", "dir_files=", "p_value_cut_off=", "cor_cut_off=", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -297,8 +326,11 @@ if __name__ == '__main__':
 	table = 'edge_cor_vector'
 	input_file = None
 	output_file = None
+	significance_file = None
 	label = 1
 	dir_files = '/tmp/yh'
+	p_value_cut_off = 0.01
+	cor_cut_off = 0.6
 	report = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -316,10 +348,16 @@ if __name__ == '__main__':
 			input_file = arg
 		elif opt in ("-o", "--output_file"):
 			output_file = arg
+		elif opt in ("-s", "--significance_file"):
+			significance_file = arg
 		elif opt in ("-b", "--label"):
 			label = int(arg)
 		elif opt in ("-f", "--dir_files"):
 			dir_files = arg
+		elif opt in ("-p", "--p_value_cut_off"):
+			p_value_cut_off = float(arg)
+		elif opt in ("-c", "--cor_cut_off"):
+			cor_cut_off = float(arg)
 		elif opt in ("-r", "--report"):
 			report = 1
 			
@@ -328,8 +366,9 @@ if __name__ == '__main__':
 	else:
 		data_dir = None
 	if input_file and output_file:
-		instance = complete_cor_vector(hostname, dbname, schema, table, \
-			input_file, output_file, label, dir_files, report, data_dir)
+		instance = complete_cor_vector(data_dir, hostname, dbname, schema, table, \
+			input_file, output_file, significance_file, label, dir_files, p_value_cut_off, \
+			cor_cut_off, report)
 		instance.run()
 	else:
 		print __doc__
