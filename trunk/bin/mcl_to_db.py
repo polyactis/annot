@@ -7,7 +7,8 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --type=...	result type, 'mcl'(default) or 'mcode'
+	-f ..., --form=...	result type, 'mcl'(default) or 'mcode'
+	-t ..., --table=...	the table to store the mcl results, mcl_result(default)
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
@@ -78,7 +79,7 @@ class mcode_iterator:
 		self.pattern += line
 
 class mcl_to_db:
-	def __init__(self, dir, hostname, dbname, schema, type, report, needcommit=0):
+	def __init__(self, dir, hostname, dbname, schema, type, table, report, needcommit=0):
 		self.dir = os.path.abspath(dir)
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -91,6 +92,7 @@ class mcl_to_db:
 		self.curs.execute("truncate mcl_result")
 		self.curs.execute("alter sequence mcl_result_mcl_id_seq restart with 1")
 		self.type = type
+		self.table = table
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.splat_id = ''
@@ -107,10 +109,26 @@ class mcl_to_db:
 			'mcode': self.mcode_parser}
 		
 	def submit(self):
+		#if table is not splat_result, create it like splat_result
+		if self.table != 'mcl_result':
+			try:
+				self.curs.execute("create table %s(\
+					mcl_id	serial primary key,\
+					splat_id	integer,\
+					vertex_set	integer[],\
+					parameter	varchar,\
+					connectivity	float,\
+					p_value_min	float,\
+					go_no_vector	integer[],\
+					unknown_gene_ratio	float,\
+					recurrence_array	integer[])"%self.table)
+			except:
+				sys.stderr.write("Error occurred when creating table %s\n"%self.table)
 		f_list = os.listdir(self.dir)
 		no = 0
 		for fname in f_list:
 			if fname.find('out') == 0:
+				sys.stderr.write("%d/%d:\t%s\n"%(f_list.index(fname)+1,len(f_list),fname))
 				path = os.path.join(self.dir, fname)
 				inf = open(path, 'r')
 				iter = self.iterator_dict[self.type](inf)
@@ -124,18 +142,20 @@ class mcl_to_db:
 						string_vertex_set = string_vertex_set.replace(']','}')
 						self.mcl_to_be_inserted.append([self.splat_id, string_vertex_set, self.parameter, self.connectivity])
 						no+=1
-					if self.report:
+					if self.report and no%1000==0:
 						sys.stderr.write('%s%s'%('\x08'*20, no))
+		if self.report:
+			sys.stderr.write('%s%s'%('\x08'*20, no))
 		if self.needcommit:
 			for entry in self.mcl_to_be_inserted:
 				try:
-					self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter, connectivity) \
-					values (%s,'%s','%s',%f)"%(entry[0], entry[1], entry[2], entry[3]))
+					self.curs.execute("insert into %s(splat_id, vertex_set, parameter, connectivity) \
+					values (%s,'%s','%s',%f)"%(self.table, entry[0], entry[1], entry[2], entry[3]))
 				except:
 					sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 					self.conn.rollback()
 					sys.exit(1)
-			self.curs.execute("create index splat_id_idx on mcl_result(splat_id)")
+			self.curs.execute("create index %s_splat_id_idx on %s(splat_id)"%(self.table, self.table))
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal clusters: %d\n'%no)
 
@@ -195,7 +215,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrcz:d:k:t:", ["help", "report", "hostname=", "dbname=", "schema=", "type=", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:f:t:c", ["help", "report", "hostname=", "dbname=", "schema=", "form=", "table=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -204,6 +224,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	type = 'mcl'
+	table = 'mcl_result'
 	commit = 0
 	report = 0
 	for opt, arg in opts:
@@ -216,7 +237,9 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-t", "--type"):
+		elif opt in ("-t", "--table"):
+			table = arg
+		elif opt in ("-f", "--form"):
 			type = arg
 		elif opt in ("-c", "--commit"):
 			commit = 1
@@ -224,7 +247,7 @@ if __name__ == '__main__':
 			report = 1
 
 	if schema and len(args)==1:
-		instance = mcl_to_db(args[0], hostname, dbname, schema, type, report, commit)
+		instance = mcl_to_db(args[0], hostname, dbname, schema, type, table, report, commit)
 		instance.submit()
 
 	else:
