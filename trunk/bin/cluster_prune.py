@@ -255,7 +255,7 @@ class cluster_prune:
 						#replace the kjSet with the original database output(recurrence_array)
 						entry[8] = row[1]
 						self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
-						go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s', '%s', %f,\
+						go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, %d, '%s', '%s', %f,\
 						%f, '%s', %f, '%s')"%(target, entry[0], entry[1], entry[2], entry[3],\
 						entry[4], entry[5], entry[6], entry[7], entry[8]))
 					else:
@@ -287,7 +287,7 @@ class cluster_prune:
 			recurrence_array.sort()
 			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
 			self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
-				go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s', '%s', %f,\
+				go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, %d, '%s', '%s', %f,\
 				%f, '%s', %f, ARRAY%s)"%(self.target_table, entry[0], entry[1], entry[2], entry[3],\
 				entry[4], entry[5], entry[6], entry[7], repr(recurrence_array)))
 			if self.report and i%5000 == 0:
