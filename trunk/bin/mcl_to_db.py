@@ -59,12 +59,20 @@ class mcl_to_db:
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		try:
+			self.curs.execute("drop index splat_id_idx")
+		except psycopg.ProgrammingError, error:
+			conn.rollback()
+			self.curs.execute("set search_path to %s"%schema)
+		self.curs.execute("truncate mcl_result")
+		self.curs.execute("alter sequence mcl_result_mcl_id_seq restart with 1")
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.splat_id = ''
 		self.cluster_set = []
 		self.parameter = ''
-				
+		self.mcl_to_be_inserted = []
+		
 	def submit(self):
 		f_list = os.listdir(self.dir)
 		no = 0
@@ -82,19 +90,20 @@ class mcl_to_db:
 						string_vertex_set = repr(vertex_set)
 						string_vertex_set = string_vertex_set.replace('[','{')
 						string_vertex_set = string_vertex_set.replace(']','}')
-						try:
-							self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter) \
-							values ('%s','%s','%s')"%(self.splat_id, string_vertex_set, self.parameter))
-						
-						except:
-							sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
-							self.conn.rollback()
-							sys.exit(1)
-						
+						self.mcl_to_be_inserted.append([self.splat_id, string_vertex_set, self.parameter])
 						no+=1
 					if self.report:
 						sys.stderr.write('%s%s'%('\x08'*20, no))
 		if self.needcommit:
+			for entry in self.mcl_to_be_inserted:
+				try:
+					self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter) \
+					values ('%s','%s','%s')"%(entry[0], entry[1], entry[2]))
+				except:
+					sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
+					self.conn.rollback()
+					sys.exit(1)
+			self.curs.execute("create index splat_id_idx on mcl_result(splat_id)")
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal clusters: %d\n'%no)
 
