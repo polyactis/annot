@@ -15,7 +15,11 @@ Option:
 Examples:
 	cluster_stat.py -k shu -c
 	cluster_stat.py -k ming1
+		:jasmine's strategy
+	cluster_stat.py -k sc_yh60_splat_5 -b -c
+		:jasmine's strategy + bonferroni correction
 	cluster_stat.py -k sc_yh_60_fp -t fim_result -c -w -b
+		:wu's strategy + bonferroni correction
 
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
@@ -26,6 +30,9 @@ Description:
 	prediciton:  Jasmine's only works on clusters with only one unknown gene.
 		Wu's works on all clusters with any number of unknown genes and needs
 		a cut_off for unknown functional class.
+	It's never true for the above difference(08/23/04). Modified Jasmine's strategy is
+	quite similar to Wu's strategy. If you call gene_stat.py after this version of
+	cluster_stat.py, add the -w parameter to gene_stat.py
 """
 
 import sys,os,psycopg,pickle,getopt
@@ -56,19 +63,13 @@ class cluster_stat:
 		self.cluster_memory = {}
 
 	def dstruc_loadin(self):
-		if self.wu:
-			self.curs.execute("select go_id,go_no,array_upper(gene_array,1) from go")
-		else:
-			self.curs.execute("select go_id,go_no,array_upper(gene_array,1) from go where go_no!=0")
+		self.curs.execute("select go_id,go_no,array_upper(gene_array,1) from go")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.global_go_id_to_no_dict[row[0]] = row[1]
 			self.global_go_no_to_size_dict[row[1]] = row[2]
 		self.no_of_functions = len(self.global_go_no_to_size_dict)
-		if self.wu:
-			self.curs.execute("select gene_no,go_functions from gene")
-		else:
-			self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
+		self.curs.execute("select gene_no,go_functions from gene")
 			
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -144,13 +145,18 @@ class cluster_stat:
 					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
 				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
 					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
-				if self.wu:
-					p_value_vector[go_no] = p_value
-				else:
-					p_value_vector[go_no-1] = p_value
-			#for the unknown class(only wu's strategy), use the ratio instead of p_value, in accordance with mcl_result_stat.py
+				p_value_vector[go_no] = p_value
+			#for the unknown class, use the ratio instead of p_value, in accordance with mcl_result_stat.py
 			if self.wu:
 				p_value_vector[0] = self._local_go_no_dict[0]/float(cluster_size)
+			else:
+				#not wu's strategy, throw away the gene, the cluster_size is down by 1.
+				if self._local_go_no_dict.has_key(0):
+					#after leave_one_out, still unknown genes present
+					p_value_vector[0] = self._local_go_no_dict[0]/float(cluster_size-1)
+				else:
+					#no unknown genes
+					p_value_vector[0] = 1
 			_cluster_memory[gene_no] = p_value_vector				
 			if self.needcommit:
 				self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
