@@ -141,8 +141,34 @@ class accuracy_struc:
 
 class gene_stat:
 	"""
+	dstruc_loadin()
+	run()
+		--core_from_files()
+		or
+		--core()
+			--_gene_stat_leave_one_out()
+				--index_tuple()
+				--match()
+					--direct_match()
+					--L1_match()
+					--common_ancestor_deep_enough()
+				--add_item_to_dict()
+		--gene_prediction_dict_setup()
+			--p_value_dictionary_setup()
+			--p_value_outof_accuracy_cut_off()
+		--final()
+			--return_distinct_functions()
+		--stat_output()
+		--go_no_accuracy()
+		--table_output()
+			--p_value_cut_off_output()
+			--accuracy_cut_off_output()
+			--gene_distinct_functions_output()
+			--_table_output()
+		--submit()
 	02-19-05
 		three old final_xxx() functions are deleted. also their sub-functions, is_L0 and is_L1.
+	
 	"""
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
@@ -1319,7 +1345,7 @@ if __name__ == '__main__':
 			dominant = 1
 		elif opt in ("-s", "--plottype"):
 			plottype = int(arg)
-		elif opt in ("-g", "--subgraph_cut_off="):
+		elif opt in ("-q", "--subgraph_cut_off="):
 			subgraph_cut_off = float(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
