@@ -13,7 +13,7 @@ Option:
 	-h, --help              show this help
 	
 Examples:
-	go_bioprocess.py -k shu -p shu -u yeast_unknown yestprocess2.txt
+	go_bioprocess.py -k shu -p min -u yeast_unknown yestprocess2.txt
 
 Description:
 	This program extracts go functional class information from raw file,
@@ -26,6 +26,7 @@ import pickle,sys,os, psycopg, getopt, csv
 import Martel
 from xml.sax import saxutils
 from Martel import LAX
+from graphlib import Graph, GraphAlgo
 
 termtype = Martel.Str("TERMTYPE:[") + Martel.ToSep("termtype", "]") + Martel.AnyEol()
 id = Martel.Str("id:") + Martel.ToEol("id")
@@ -196,8 +197,12 @@ class go_table_setup:
 		self.vertex_dict = {}
 		#stores all the unknown genes in schema.gene
 		self.unknown_gene_list = []
-		
+		#GO DAG
+		self.go_graph = Graph.Graph()
+
 	def dstruc_loadin(self):
+		sys.stderr.write("Loading Data STructure...")
+
 		#sets up the self.vertex_dict
 		self.curs.execute("select gene_id, gene_no from gene")
 		rows = self.curs.fetchall()
@@ -208,7 +213,19 @@ class go_table_setup:
 		for gene in self._unknown_gene_list:
 			if gene in self.vertex_dict:
 				self.unknown_gene_list.append(self.vertex_dict[gene])
-	
+			
+		#get the non-obsolete biological_process GO DAG
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
+			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
+			t1.term_type='biological_process' and t2.term_type='biological_process' ")
+		rows = self.curs.fetchall()
+		for row in rows:
+		#setup the go_graph structure
+			self.go_graph.add_edge(row[2], row[3])
+
+		sys.stderr.write("Done\n")
+
 	def submit(self):
 		sys.stderr.write("Database transacting...")
 		#following string operations are because of format restrictions of database array input
@@ -218,8 +235,8 @@ class go_table_setup:
 		string_unknown_gene_list = repr(self.unknown_gene_list)
 		string_unknown_gene_list = '{' + string_unknown_gene_list[1:-1] + '}'
 		
-		self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array) \
-			values('%s', %d, %d, '%s', '%s', '%s')"%('GO:0000004', 0, len(self._unknown_gene_list), \
+		self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array, depth) \
+			values('%s', %d, %d, '%s', '%s', '%s', 2)"%('GO:0000004', 0, len(self._unknown_gene_list), \
 			'biological_process unknown', string__unknown_gene_list, string_unknown_gene_list))
 		go_dict = self.parser.parse(self.go_inf, self.vertex_dict)
 		for term in go_dict:
@@ -229,9 +246,10 @@ class go_table_setup:
 			string_whole_gene_array = '{' + string_whole_gene_array[1:-1] + '}'
 			string_gene_array = '{' + string_gene_array[1:-1] + '}'
 			go_dict[term].name = go_dict[term].name.replace("'",'')
-			self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array) \
-				values('%s', %d, %d, '%s', '%s', '%s')"%(term, go_dict[term].no, go_dict[term].no_of_genes,\
-				go_dict[term].name, string_whole_gene_array, string_gene_array))
+			depth = len(GraphAlgo.shortest_path(self.go_graph, 'GO:0008150', term))
+			self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array, depth) \
+				values('%s', %d, %d, '%s', '%s', '%s', %d)"%(term, go_dict[term].no, go_dict[term].no_of_genes,\
+				go_dict[term].name, string_whole_gene_array, string_gene_array, depth))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write("done.\n")
