@@ -15,6 +15,8 @@ class GenePair:
 		back to use r.postscript(), because scipy has fromimage to convert
 		PIL image to numeric array.
 	
+	03-02-05
+		graph_modeling can now judge whether an edge is significant or not, change accordingly.
 	
 	'''
 	def __init__(self, input_file):
@@ -24,6 +26,8 @@ class GenePair:
 		
 		#the gene_pair calculation dictionary
 		self.pairwise_calculate = {'cor': graph_modeling.ind_min_cor}
+		#03-02-05, first cor_cut_off_vector should be setup.
+		graph_modeling.cor_cut_off_vector_construct(0.01, 0.6)
 		#data structure loadin
 		self.dstruc_loadin()
 		#the file to contain the image
@@ -164,7 +168,7 @@ class GenePair:
 			for i in range(len(vector_list)):
 				for j in range(i+1, len(vector_list)):
 					edge_data = self.pairwise_calculate[key](vector_list[i], vector_list[j])
-					sys.stdout.write("%s %s %s: %s\n"%(real_gene_id_list[i], real_gene_id_list[j], key, edge_data.value))
+					sys.stdout.write("%s %s %s: %s, degree: %s, significance: %s\n"%(real_gene_id_list[i], real_gene_id_list[j], key, edge_data.value, edge_data.degree, edge_data.significance))
 		if len(real_gene_id_list)>0:
 			self.plot(vector_list, real_gene_id_list)
 			return self.plot_file
