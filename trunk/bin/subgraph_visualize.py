@@ -321,10 +321,10 @@ class subgraph_visualize:
 				
 				self.r_f.close()
 				r.source(self.r_fname)
-				while 1:
-					no_stop = raw_input("Continue? Y/n:\t")
-					if no_stop == 'n' or no_stop == 'N':
-						sys.exit(3)
+				#asking  to continue or not
+				no_stop = raw_input("Continue? Y/n:\t")
+				if no_stop == 'n' or no_stop == 'N':
+					sys.exit(3)
 				#open it again for the next dataset
 				self.r_f = open(self.r_fname, 'w')
 				self.r_f.write('library("Rgraphviz")\n')
