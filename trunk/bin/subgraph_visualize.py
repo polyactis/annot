@@ -14,15 +14,16 @@ Option:
 	-c ..., --functioncolor=...	'green' or 'red'
 	-n ..., --centralnode=...	a gene_no
 	-l ..., --mcl_id=...	the id corresponding to a mcl_cluster
-	-y ..., --type=...	the type, 1(single graph), 2 (meta_graph)
+	-y ..., --type=...	the type, 1(single graph), 2 (meta_graph), 3
 	-h, --help              show this help
 
 Examples:
 	subgraph_visualize.py -k sc_yh60_splat -t splat_result_sup_3 -m 
-		mcl_result_sup_3_2 -f 45 -c 'red' -n 4096 -l 27 test.R
+		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3 
+		-f 45 -c 'red' -n 4096 -l 27 -y 1 test.R
 	
 	subgraph_visualize.py -k sc_yh60_splat -t splat_result_sup_3 -m 
-		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3
+		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3 -y 2
 		-f 45 -c 'red' -n 4096 test.R
 	
 Description:
@@ -38,8 +39,22 @@ Description:
 import sys, os, psycopg, getopt
 from graphlib import Graph
 from sets import Set
+from rpy import r
 		
 class subgraph_visualize:
+	"""
+	run	--dstruc_loadin
+		--[type==1]
+		--one_graph	--get_subgraph
+		
+		--[type==2]
+		--context_subgraph	--get_subgraph
+		--weighted_subgraph
+
+		--[type==3]
+		--subgraph_in_one_dataset	--get_subgraph
+		--weighted_subgraph
+	"""
 	def __init__(self, hostname, dbname, schema, table, mcl_table,\
 			gene_table, function, functioncolor, centralnode, mcl_id, type, r_fname):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
@@ -53,9 +68,12 @@ class subgraph_visualize:
 		self.centralnode = int(centralnode)
 		self.mcl_id = int(mcl_id)
 		self.type = int(type)
+		self.r_fname = r_fname
 		self.r_f = open(r_fname, 'w')
 		self.r_f.write('library("Rgraphviz")\n')
 
+		#the table for edge_correlation_vector
+		self.edge_table = 'edge_cor_vector'
 		#mapping between go_no and go_id
 		self.go_no2go_id = {}
 		#mapping between go_no and go's name
@@ -98,6 +116,11 @@ class subgraph_visualize:
 			for go_no in go_functions_list:
 				self.global_gene_to_go_dict[row[0]].append(int(go_no))
 		
+		if self.type == 3:
+			self.curs.execute("select array_upper(recurrence_array,1) from %s limit 1"%self.table)
+			rows = self.curs.fetchall()
+			self.no_of_datasets = int(rows[0][0])
+			
 		sys.stderr.write("Done\n")
 	
 	def get_subgraph(self, mcl_id):
@@ -118,16 +141,38 @@ class subgraph_visualize:
 		rows = self.curs.fetchall()
 		for row in rows:
 			edge_set = row[0]
-		
+
 		big_graph = Graph.Graph()
 		edge_list = edge_set[2:-2].split('},{')
 		for edge in edge_list:
 			vertex_list = edge.split(',')
-			big_graph.add_edge(int(vertex_list[0]), int(vertex_list[1]), 1)
+			#set the default edge_data to be 1
+			edge_data = 1
+			#get the correlation vector for an edge
+			if self.type == 3:
+				self.curs.execute("select cor_vector from %s where edge_name='{%s,%s}'"%(self.edge_table, vertex_list[0], vertex_list[1]))
+				rows = self.curs.fetchall()
+				edge_data = rows[0][0][1:-1]
+				edge_data = edge_data.split(',')
+				edge_data = map(float, edge_data)
+			big_graph.add_edge(int(vertex_list[0]), int(vertex_list[1]), edge_data)
 			
 		subgraph = big_graph.subgraph_from_node_list(vertex_set)
 		return subgraph
-		
+	
+	def subgraph_in_one_dataset(self, mcl_id, dataset_no):
+		"""
+		for type 3
+		"""
+		subgraph = self.get_subgraph(mcl_id)
+		sub_subgraph = Graph.Graph()
+		for edge_id in subgraph.edge_list():
+			edge = subgraph.edge_by_id(edge_id)
+			edge_data = subgraph.edges[edge_id][2]
+			sub_subgraph.add_edge(edge[0], edge[1], edge_data[dataset_no])
+		return sub_subgraph
+	
+	
 	def one_graph(self, gene_no, mcl_id):
 		'''
 		write the R script to draw an unweighted subgraph
@@ -256,15 +301,33 @@ class subgraph_visualize:
 		
 	
 	def run(self):
+		self.dstruc_loadin()
 		if self.type == 1:
 			#subgraph = self.get_subgraph(self.mcl_id)
 			#self.weighted_subgraph(subgraph)
 			self.one_graph(self.centralnode, self.mcl_id)
+			self.r_f.close()
+			r.source(self.r_fname)
 		elif self.type == 2:
-		
 			subgraph = self.context_subgraph(self.centralnode, self.function)
 			self.weighted_subgraph(subgraph)
-
+			self.r_f.close()
+			r.source(self.r_fname)
+		elif self.type == 3:
+			for i in range(self.no_of_datasets):
+				sys.stdout.write("Dataset %s\n"%(i+1))
+				sub_subgraph = self.subgraph_in_one_dataset(self.mcl_id, i)
+				self.weighted_subgraph(sub_subgraph)
+				
+				self.r_f.close()
+				r.source(self.r_fname)
+				while 1:
+					no_stop = raw_input("Continue? Y/n:\t")
+					if no_stop == 'n' or no_stop == 'N':
+						sys.exit(3)
+				#open it again for the next dataset
+				self.r_f = open(self.r_fname, 'w')
+				self.r_f.write('library("Rgraphviz")\n')
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -316,10 +379,9 @@ if __name__ == '__main__':
 		elif opt in ("-y", "--type"):
 			type = int(arg)
 			
-	if schema and centralnode and len(args)==1 and gene_table and function and type:
+	if schema and centralnode and len(args)==1 and function and type:
 		instance = subgraph_visualize(hostname, dbname, schema, table, mcl_table,\
 			gene_table, function, functioncolor, centralnode, mcl_id, type, args[0])
-		instance.dstruc_loadin()
 		instance.run()
 	else:
 		print __doc__
