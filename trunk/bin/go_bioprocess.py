@@ -80,6 +80,7 @@ class go_bioprocess_parser:
 		key_list = self.go_dict.keys()
 		key_list.sort()
 		for i in range(len(key_list)):
+			#output in tab delimited format for database import
 			id = key_list[i]
 			string1 = repr(self.go_dict[id].whole_gene_array)
 			string1 = string1.replace('[','{')
