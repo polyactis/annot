@@ -130,6 +130,8 @@ class cluster_prune:
 		self.no_of_bads = len(self.mcl_id_dict) - self.no_of_goods
 		if self.report:
 			sys.stderr.write("\n")
+		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
+		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
 		for mcl_id in self.mcl_id_dict:
 			isgood = self.mcl_id_dict[mcl_id].isgood
 			if isgood == 1:
@@ -184,6 +186,8 @@ class cluster_prune:
 			rows = self.curs.fetchall()
 		if self.report:
 			sys.stderr.write("\n")
+		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
+		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
 		for mcl_id in self.bad_mcl_id_list:
 			self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
 		#self.curs.executemany("delete from "+self.table+" where mcl_id=%d", self.bad_mcl_id_list)
@@ -196,9 +200,6 @@ class cluster_prune:
 			self.prune_on_recurrence_array()
 		if self.needcommit:
 			self.conn.commit()
-			
-		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
-		sys.stderr.write("Total records updated: %d\n"%self.no_of_goods)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
