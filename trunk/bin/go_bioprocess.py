@@ -64,7 +64,35 @@ class go_term:
 		whole_gene_array = None
 		gene_array = None
 
-
+class ming_parser:
+	def __init__(self):
+		self.go_dict = {}
+	
+	def parse(self, inf, vertex_dict):
+		reader = csv.reader(inf, delimiter='\t')
+		for row in reader:
+			go_id = row[0]
+			info = go_term()
+			info.name = row[1]
+			info.whole_gene_array = []
+			for gene in row[2:]:
+				if gene != '':
+					info.whole_gene_array.append(gene)
+			info.no_of_genes = len(info.whole_gene_array)
+			info.gene_array = []
+			for gene in info.whole_gene_array:
+				if gene in vertex_dict:
+					info.gene_array.append(vertex_dict[gene])
+			self.go_dict[go_id] = info
+			
+		key_list = self.go_dict.keys()
+		key_list.sort()
+		for i in range(len(key_list)):
+			id = key_list[i]
+			self.go_dict[id].no = i+1
+		
+		return self.go_dict
+					
 class shu_parser:
 	'''
 	parse the yeast known_gene(GO bioprocess) file,
@@ -93,7 +121,6 @@ class shu_parser:
 		key_list = self.go_dict.keys()
 		key_list.sort()
 		for i in range(len(key_list)):
-			#output in tab delimited format for database import
 			id = key_list[i]
 			self.go_dict[id].no = i+1
 		
@@ -102,7 +129,8 @@ class shu_parser:
 		#parser.setContentHandler(saxutils.XMLGenerator())
 		#parser.parseFile(self.inf)
 
-parser_map = {"shu":shu_parser()}
+parser_map = {"shu":shu_parser(),\
+			"ming":ming_parser()}
 
 class go_table_setup:
 	def __init__(self, fname, dbname, schema, parser, u_fname, orgn, needcommit=0):
