@@ -23,13 +23,16 @@ Description:
 """
 
 import sys, os, getopt
-from codense.common import db_connect
+from codense.common import db_connect, get_go_no2term_id
 
 class gene_p_map_redundancy:
 	"""
 	03-01-05
 		This module merges the p_gene_ids whose predicted functions are
 		parent-child, for each gene in the gene_p table
+	03-03-05
+		fix an important bug
+		
 
 	run()
 		--db_connect()
@@ -128,6 +131,8 @@ class gene_p_map_redundancy:
 			if p_gene_id1 not in p_gene_id_map:
 				#not mapped, first encounter, it's the source, mapp to itself
 				p_gene_id_map[p_gene_id1] = p_gene_id1
+				if self.debug:
+					print "%s not in p_gene_id_map yet,mapped to itself"%p_gene_id1
 				go_no1 = p_gene_id2go_no[p_gene_id1]
 				for j in range(i+1, len(p_gene_id_list)):
 					p_gene_id2 = p_gene_id_list[j]
@@ -139,13 +144,18 @@ class gene_p_map_redundancy:
 						else:
 							key = (go_no2, go_no1)
 						if key in go_no2distance:
-							jasmine_distance = go_no2distance[key]
+							jasmine_distance = go_no2distance[key][2]	#03-03-05 fix an important bug here. [2] was missing
 						else:
 							jasmine_distance = self.get_distance(curs, go_no1,\
 								go_no2, distance_table, go_no2distance, go_no2term_id)
+						if self.debug:
+							print "jasmine_distance of %s and %s is %s"%(go_no1, go_no2, jasmine_distance)
 						if jasmine_distance == 0:
 							#jasmine_distance=0 means they are parent-child
 							p_gene_id_map[p_gene_id2] = p_gene_id1
+							if self.debug:
+								print "%s not in p_gene_id_map, mapped to %s"%(p_gene_id2, p_gene_id1)
+
 					
 			
 			
@@ -189,20 +199,6 @@ class gene_p_map_redundancy:
 				go_no2distance[(go_no2, go_no1)] = (row[0], row[1], row[2])
 		return row[2]
 	
-	def get_go_no2term_id(self, curs, term_table):
-		"""
-		03-01-05
-			get the go_no2term_id dictionary
-		"""
-		sys.stderr.write("Getting go_no2term_id...")
-		go_no2term_id = {}
-		curs.execute("select g.go_no, t.name, t.id from go g, %s t where g.go_id=t.acc"%(term_table))
-		rows = curs.fetchall()
-		for row in rows:
-			go_no2term_id[row[0]] = row[2]
-		sys.stderr.write("Done\n")
-		return go_no2term_id
-	
 	def submit(self, curs, gene_p_table, p_gene_id_map):
 		"""
 		03-01-05
@@ -221,7 +217,7 @@ class gene_p_map_redundancy:
 		"""	
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		curs.execute("begin")	#because of cursor usage
-		self.go_no2term_id = self.get_go_no2term_id(curs, self.term_table)
+		self.go_no2term_id = get_go_no2term_id(curs, self.schema, self.term_table)
 		self.data_fetch(curs, self.p_gene_table, self.gene_p_table)
 		self.p_gene_map(self.gene_no2p_gene, self.p_gene_id_map, curs,\
 			self.distance_table, self.go_no2distance, self.go_no2term_id)
