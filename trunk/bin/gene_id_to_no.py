@@ -9,8 +9,8 @@ Option:
 	-h, --help              show this help
 	
 Examples:
-	gene_id_to_no.py -d mdb -g sc gph_result/
-	gene_id_to_no.py -d mdb -g sc -c 1 gph_result/
+	gene_id_to_no.py -d mdb -g sc datasets/yeast_data/normal
+	gene_id_to_no.py -d mdb -g hs -c 1 datasets/hs
 
 Description:
 	This program extracts all gene_id's from datasets,
