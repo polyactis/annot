@@ -23,38 +23,8 @@ Description:
 """
 
 import pickle,sys,os, psycopg, getopt, csv
-import Martel
-from xml.sax import saxutils
-from Martel import LAX
 from graphlib import Graph, GraphAlgo
 
-termtype = Martel.Str("TERMTYPE:[") + Martel.ToSep("termtype", "]") + Martel.AnyEol()
-id = Martel.Str("id:") + Martel.ToEol("id")
-name = Martel.Str("name:") + Martel.ToEol("name")
-alt_id = Martel.Str("alt_id:") + Martel.ToEol("alt_id")
-namespace = Martel.Str("namespace:") + Martel.ToEol("namespace")
-definition = Martel.Str("def:") + Martel.ToEol("def")
-comment = Martel.Str("comment:") + Martel.ToEol("comment")
-is_a = Martel.Str("is_a:") + Martel.ToEol("is_a")
-no_of_genes = Martel.Digits("no_of_genes")
-genes = Martel.ToEol("genes")
-dataline = Martel.Group("dataline", no_of_genes+\
-												Martel.Str(";")+\
-												genes)
-												
-term = Martel.Group("term",  Martel.Rep(definition)+\
-										Martel.Rep(is_a)+\
-										termtype+\
-										id+\
-										name+\
-										Martel.Rep(alt_id)+\
-										namespace+\
-										Martel.Rep(definition)+\
-										Martel.Rep(comment)+\
-										Martel.Rep(is_a)+\
-										dataline+\
-										Martel.Rep(Martel.AnyEol()) )
-go_bioprocess = Martel.Group("go_bioprocess",  Martel.Rep(term), {"format":"go"} )
 														
 class go_term:
 	'''
@@ -130,44 +100,7 @@ class min_parser:
 		return self.go_dict
 
 
-class shu_parser:
-	'''
-	parse the yeast known_gene(GO bioprocess) file,
-	construct a known-gene dictionary with gene name as key and GO id as value.
-	'''
-	def __init__(self):
-		self.go_dict = {}
-		
-	def parse(self, inf, vertex_dict):
-		self.term_iterator = go_bioprocess.make_iterator("term")
-		self.lax=LAX.LAX()
-		for record in self.term_iterator.iterateFile(inf, self.lax):
-			gene_array = []
-			whole_gene_array = record['genes'][0].split(';')
-			for gene in whole_gene_array:
-				if gene in vertex_dict:
-					gene_array.append(vertex_dict[gene])
-			gene_array.sort()
-			info = go_term()
-			info.name = record['name'][0]
-			info.no_of_genes = int(record['no_of_genes'][0])
-			info.whole_gene_array = whole_gene_array
-			info.gene_array = gene_array
-			self.go_dict[record['id'][0]] = info
-			
-		key_list = self.go_dict.keys()
-		key_list.sort()
-		for i in range(len(key_list)):
-			id = key_list[i]
-			self.go_dict[id].no = i+1
-		
-		return self.go_dict
-		#parser = go_bioprocess.make_parser()
-		#parser.setContentHandler(saxutils.XMLGenerator())
-		#parser.parseFile(self.inf)
-
-parser_map = {"shu":shu_parser(),\
-			"ming":ming_parser(),\
+parser_map = {"ming":ming_parser(),\
 			"min":min_parser()}
 
 class go_table_setup:
