@@ -10,6 +10,12 @@ using namespace std;
 
 typedef vector<float> vf;
 
+//Usage:	'program_name' arg1 arg2 arg3
+//			arg1 is the dataset source file
+//			arg2 is the output file to hold the result
+//			arg3 is the name of the dataset(whatever you like).
+//			example: ./program_name dataset1 dataset1.gph dataset1
+
 class graph_construct
 {
 	vector<vf> gene_array;
