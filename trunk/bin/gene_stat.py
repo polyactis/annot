@@ -469,6 +469,10 @@ class gene_stat:
 		03-15-05
 			add another column lca_list to store the lowest common ancestors between
 			the predicted functions and the assigned ones
+		03-27-05
+			use %s instead of %f when inserting p_value_cut_off and avg_p_value
+			'%f' only preserves 6 float digits. '%s' preserves all and converts
+			long float to scientific representation.
 		"""
 		sys.stderr.write("Creating table %s..."%gene_table)
 		if gene_table!='p_gene':
@@ -517,7 +521,7 @@ class gene_stat:
 					curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 						avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
 						connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id)\
-						values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s)"%\
+						values(%d, %d, %d, %d, %d, %s, %s, ARRAY%s, %s, %s, %s, %s, %s, %s, %s)"%\
 						(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 						p_value, 1, repr([mcl_id]), p_value, recurrence, connectivity, \
 						cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id))
@@ -527,7 +531,7 @@ class gene_stat:
 					curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 						avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
 						connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list)\
-						values(%d, %d, %d, %d, %d, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s, '%s')"%\
+						values(%d, %d, %d, %d, %d, %s, %s, ARRAY%s, %s, %s, %s, %s, %s, %s, %s, '%s')"%\
 						(gene_table, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, \
 						p_value, 1, repr([mcl_id]), p_value, recurrence, connectivity, \
 						cluster_size, unknown_gene_ratio, self.depth_cut_off, mcl_id, lca_list_string))
