@@ -18,8 +18,12 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	go_node_distance.py -k sc_38_all_no_info -l -t node_dist -n -c
-
+	#compute pairwise distance
+	go_node_distance.py -k sc_38_all_no_info -a -t node_dist -n -c
+	
+	#compute the depth
+	go_node_distance.py -z localhost -d graphdb -k sc_go_all -e -r -c -a
+	
 Description:
 	Program to compute three kinds of distances between two GO nodes and
 	store them into a go table.
@@ -101,6 +105,12 @@ class go_node_distance:
 		self.go_id2distance = {}
 		
 	def dstruc_loadin(self):
+		"""
+		03-04-05
+			self.all decides where node_list comes.
+			move the block of getting node_dist from schema.go to
+			the case that self.all is not set.
+		"""
 		sys.stderr.write("Loading Data STructure...")
 		
 		#setup self.go_id2acc
@@ -129,18 +139,18 @@ class go_node_distance:
 		#setup self.go_index2id and self.go_id2index
 		self.go_index_setup()
 
-		#setup the node list
-		#biological_process unknown is not included.
-		self.curs.execute("select t.id from go g, go.term t where g.go_id=t.acc and g.go_no!=0")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.node_list |= self.go_id2index[row[0]]
-		#convert the Set to list
 		if self.all:
 			self.node_list = list(self.index_list)
 		else:
+			#setup the node list
+			#biological_process unknown is not included.
+			self.curs.execute("select t.id from go g, go.term t where g.go_id=t.acc and g.go_no!=0")
+			rows = self.curs.fetchall()
+			for row in rows:
+				self.node_list |= self.go_id2index[row[0]]
+			#convert the Set to list
 			self.node_list = list(self.node_list)
-		
+			
 		sys.stderr.write("Done\n")
 		
 	def go_index_setup(self):
