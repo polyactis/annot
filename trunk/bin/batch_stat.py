@@ -17,6 +17,7 @@ Option:
 	-l, --leave_one_out	use the leave_one_out stat method(gene_stat).
 			default is gene_stat_on_mcl_result.
 	-w, --wu	Ignore it, default is also wu's strategy.
+	-v, --dominant	Only assign the dominant function(s) to a gene.
 	-c, --commit	commit the database transaction, records in table stat_plot_data
 	-h, --help              show this help
 	
@@ -36,11 +37,11 @@ Description:
 
 import sys, os, psycopg, getopt
 from gene_stat import gene_stat
-from gene_stat_on_mcl_result import gene_stat_on_mcl_result
+#from gene_stat_on_mcl_result import gene_stat_on_mcl_result
 
 class batch_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, tag, p_value_list, unknown_list, connectivity_list,\
-			recurrence_list, size_list, leave_one_out=0, wu=0, needcommit=0):
+			recurrence_list, size_list, leave_one_out=0, wu=0, dominant=0, needcommit=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
@@ -56,11 +57,11 @@ class batch_stat:
 		self.cluster_size_list = size_list
 		self.leave_one_out = int(leave_one_out)
 		self.wu = int(wu)
+		self.dominant = int(dominant)
 		self.needcommit = int(needcommit)
 		#a dictionary mapping the user choices to stat classes
-		self.stat_class_dict = {1: gene_stat,
-			0: gene_stat_on_mcl_result}
-		self.limit = 0
+		#self.stat_class_dict = {1: gene_stat,
+		#	0: gene_stat_on_mcl_result}
 		self.stat_data = []
 
 		
@@ -70,8 +71,8 @@ class batch_stat:
 				for recurrence in self.recurrence_list:
 					for size in self.cluster_size_list:
 						for p_value in self.p_value_list:
-							instance = self.stat_class_dict[self.leave_one_out](self.hostname, self.dbname, schema,\
-								table, mcl_table, p_value, unknown, self.limit, connectivity, recurrence, size, self.wu)
+							instance = gene_stat(self.hostname, self.dbname, schema, table, mcl_table, p_value,\
+								unknown, connectivity, recurrence, size, self.leave_one_out, self.wu, self.dominant)
 							instance.dstruc_loadin()
 							instance.run()
 							if self.needcommit:
@@ -90,9 +91,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:g:p:u:n:r:s:lwc", ["help", "hostname=", "dbname=", "schema=", "table=",\
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:g:p:u:n:r:s:lwvc", ["help", "hostname=", "dbname=", "schema=", "table=",\
 			"mcl_table=", "tag=", "p_value_list=", "unknown_list=", "connectivity_list=", "recurrence_list=",\
-			"size_list=", "leave_one_out", "wu", "commit"])
+			"size_list=", "leave_one_out", "wu", "dominant", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -110,6 +111,7 @@ if __name__ == '__main__':
 	size_list = [1000]
 	leave_one_out = 0
 	wu = 1 
+	dominant = 0
 	commit = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -146,6 +148,8 @@ if __name__ == '__main__':
 			leave_one_out = 1
 		elif opt in ("-w", "--wu"):
 			wu = 1
+		elif opt in ("-v", "--dominant"):
+			dominant = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 	
@@ -154,7 +158,7 @@ if __name__ == '__main__':
 			print __doc__
 			sys.exit(2)
 		instance = batch_stat(hostname, dbname, schema, table, mcl_table, tag, p_value_list, unknown_list,\
-			connectivity_list, recurrence_list, size_list, leave_one_out, wu, commit)
+			connectivity_list, recurrence_list, size_list, leave_one_out, wu, dominant, commit)
 		instance.run()
 	else:
 		print __doc__
