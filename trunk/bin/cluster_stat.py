@@ -8,6 +8,9 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-s ..., --source_table=...	which source table, mcl_result(default) or fim_result
 	-t ..., --target_table=...	which target table, cluster_stat(default)
+	-o ..., --offset=...	the number of rows to skip before returning rows, 0 (default)
+	-m ..., --limit=...	the maximum number of rows to return, all (default)
+	-p ..., --output=...	specifiy the filename to output the cluster stat results
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
@@ -43,12 +46,19 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class cluster_stat:
-	def __init__(self, hostname, dbname, schema, source_table, target_table, bonferroni=0, report=0, log=0, wu=0, needcommit=0):
+	def __init__(self, hostname, dbname, schema, source_table, target_table, offset, limit, \
+		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.source_table = source_table
 		self.target_table = target_table
+		self.offset = int(offset)
+		self.limit = limit
+		self.output = output
+		if self.output:
+			#filename exists
+			self.outf = open(self.output, 'w')
 		try:
 			self.curs.execute("drop index %s_connectivity_idx"%(self.target_table))
 			self.curs.execute("drop index %s_mcl_id_idx"%(self.target_table))
@@ -92,6 +102,10 @@ class cluster_stat:
 		self.no_of_genes = len(self.global_gene_to_go_dict)
 		
 	def run(self):
+		if self.output and self.needcommit:
+			sys.stderr.write("output and needcommit are two incompatible options.\n")
+			sys.exit(2)
+	
 		if self.target_table != 'cluster_stat':
 			try:
 				self.curs.execute("create table %s(\
@@ -103,7 +117,8 @@ class cluster_stat:
 			except:
 				sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s"%self.source_table)
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s order by mcl_id offset %d limit %s"%\
+			(self.source_table, self.offset, self.limit))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -127,17 +142,6 @@ class cluster_stat:
 			sys.stderr.write('\n\tNo real updates\n')
 		
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
-		if vertex_set in self.cluster_memory:
-			entry = self.cluster_memory[vertex_set]
-			if self.needcommit:
-				for gene_no in entry:
-					p_value_vector = entry[gene_no]
-					self.curs.execute("insert into %s(mcl_id, leave_one_out, p_value_vector, connectivity)\
-						values(%d, %d, ARRAY%s, %8.6f)"%(self.target_table, mcl_id, gene_no, repr(p_value_vector), connectivity))
-			self.no_of_records += len(entry)
-			return
-		else:
-			_cluster_memory = {}
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
 		for i in range(len(vertex_list_all)):
@@ -181,12 +185,12 @@ class cluster_stat:
 				else:
 					#no unknown genes
 					p_value_vector[0] = 1
-			_cluster_memory[gene_no] = p_value_vector				
-			if self.needcommit:
+			if self.output:
+				self.outf.write('%d\t%d\t%s\t%f\n'%(mcl_id, gene_no, repr(p_value_vector), connectivity))
+			elif self.needcommit:
 				self.curs.execute("insert into %s(mcl_id, leave_one_out, p_value_vector, connectivity)\
 				values(%d, %d, ARRAY%s, %8.6f)"%(self.target_table, mcl_id, gene_no, repr(p_value_vector), connectivity))
 			self.no_of_records += 1
-		self.cluster_memory[vertex_set] = _cluster_memory
 
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
@@ -235,8 +239,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:bcw", \
-			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", "bonferroni", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:bcw", \
+			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", \
+			"offset=", "limit=", "output=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -246,6 +251,9 @@ if __name__ == '__main__':
 	schema = ''
 	source_table = 'mcl_result'
 	target_table = 'cluster_stat'
+	offset = 0
+	limit = 'all'
+	output = None
 	bonferroni = 0
 	commit = 0
 	report = 0
@@ -265,6 +273,12 @@ if __name__ == '__main__':
 			source_table = arg
 		elif opt in ("-t", "--target_table"):
 			target_table = arg
+		elif opt in ("-o", "--offset"):
+			offset = int(arg)
+		elif opt in ("-m", "--limit"):
+			limit = int(arg)
+		elif opt in ("-p", "--output"):
+			output = arg
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -277,7 +291,7 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, bonferroni, report, log, wu, commit)
+		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, offset, limit, output, bonferroni, report, log, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 
