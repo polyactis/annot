@@ -20,7 +20,7 @@ from numarray import *
 class p_value_cor:
 	def __init__(self):
 		self.p_value_list = [0.25, 0.1, 0.05, 0.025, 0.01, 0.005, 0.001, 0.0005, 0.0001]
-		self.df_lower = 6
+		self.df_lower = 5
 		self.df_upper = 100
 		self.result_array = []
 		
