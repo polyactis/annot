@@ -45,7 +45,7 @@ class haiyan_cor_vector2db:
 			edge = dict_map(self.haiyan_no2gene_no, edge)
 			edge.sort()
 			edge = '{'+ repr(edge)[1:-1] + '}'
-			cor_vector = row[2:-1]
+			cor_vector = row[2:]
 			cor_vector = map(divided_by_1000, cor_vector)
 			cor_vector = '{' + ','.join(cor_vector) + '}'
 			new_row = [edge, cor_vector]
