@@ -63,7 +63,7 @@ class kmax_edge2vertex:
 		except:
 			sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set,connectivity,recurrence_array from %s"%self.source_table)
+		self.curs.execute("DECLARE crs CURSOR FOR select splat_id, splat_id, edge_set, connectivity,recurrence_array from %s"%self.source_table)
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -88,14 +88,14 @@ class kmax_edge2vertex:
 			sys.stderr.write('\n\tNo real updates\n')
 
 	def _kmax_edge2vertex(self, row):
-		local_vertex_pool = self.dstruc_from_edge_set(row[1])
+		local_vertex_pool = self.dstruc_from_edge_set(row[2])
 		vertex_list = list(local_vertex_pool)
 		vertex_list.sort()
 		string_vertex_set = '{' + repr(vertex_list)[1:-1] + '}'
-		row[1] = string_vertex_set
+		row[2] = string_vertex_set
 		try:
-			self.curs.execute("insert into " + self.target_table + "(mcl_id, vertex_set, connectivity, recurrence_array)\
-				values (%d, %s, %f, %s)", row)
+			self.curs.execute("insert into " + self.target_table + "(mcl_id, splat_id, vertex_set, connectivity, recurrence_array)\
+				values (%d, %d, %s, %f, %s)", row)
 		except:
 			sys.stderr.write('Error occurred while inserting.\n')
 			sys.exit(1)
