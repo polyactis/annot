@@ -40,57 +40,80 @@ class cluster_prune:
 		self.mcl_id_2_connectivity_dict ={}
 		#store the mcl_id:connectivity pair
 		self.mcl_id_2_recurrence_array_dict = {}
+		self.mcl_id2graph_dict = {}
+		self.mcl_id2vertex_set_dict = {}
 		self.bad_mcl_id_list = []
 		#store the mcl_ids that are going to be deleted.
 		self.good_mcl_id_list = []
 		self.log_file = open("/tmp/cluster_prune.log", 'w')
 		self.no_of_records = 0
+		self.edge_set_dict ={}
 		
 	def dstruc_loadin(self):
-		self.curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.connectivity, s.recurrence_array from %s m, splat_result s\
-			where m.splat_id=s.splat_id"%self.table)
+		if self.report:
+			sys.stderr.write("loading data structure...\n")
+		self.curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.connectivity, m.vertex_set, s.recurrence_array, s.edge_set\
+			from %s m, splat_result s where m.splat_id=s.splat_id"%self.table)
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		i = 0
 		while rows:
 			for row in rows:
-				self.mcl_id_2_connectivity_dict[row[0]] = row[1]
-				recurrence_array = row[2][1:-1].split(',')
+				mcl_id = row[0]
+				self.mcl_id_2_connectivity_dict[mcl_id] = row[1]
+				vertex_set = row[2]
+				recurrence_array = row[3][1:-1].split(',')
+				edge_set = row[3]
 				recurrence_array = map(int, recurrence_array)
-				self.mcl_id_2_recurrence_array_dict[row[0]] = kjSet(recurrence_array)
+				self.mcl_id2vertex_set_dict[mcl_id] = vertex_set
+				self.mcl_id_2_recurrence_array_dict[mcl_id] = kjSet(recurrence_array)
+				self.mcl_id2graph_dict[mcl_id] = self.subgraph_from_edge_set(vertex_set, edge_set)
 				i += 1
 			if self.report:
 				sys.stderr.write("%s%s"%("\x08"*20, i))
 			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
+		del self.edge_set_dict
 		if self.report:
 			sys.stderr.write('\n')
 	
+	def subgraph_from_edge_set(self, vertex_set, edge_set):
+		#in vertex_set, vertices are in ascending order
+		#also each edge of edge_set, vertices are in ascending order
+		if edge_set in self.edge_set_dict:
+			graph = self.edge_set_dict[edge_set]
+		else:
+			graph = kjGraph()
+			edge_list = edge_set[2:-2].split('},{')
+			for edge in edge_list:
+				vertex_list = edge.split(',')
+				graph.add(vertex_list[0], vertex_list[1])
+		vertex_list = vertex_set[1:-1].split(',')
+		no_of_vertices = len(vertex_list)
+		subgraph = kjGraph()
+		for i in range(no_of_vertices):
+			for j in range(i+1, no_of_vertices):
+				if graph.member(vertex_list[i], vertex_list[j]):
+					subgraph.add(vertex_list[i], vertex_list[j])
+		return subgraph
+	
 	def prune_on_edge_set(self):
-		self.curs.execute("DECLARE crs_e CURSOR FOR select m.mcl_id, m.vertex_set, s.edge_set \
-			from %s m, splat_result s where m.splat_id = s.splat_id"%self.table)
-		self.curs.execute("fetch 5000 from crs_e")
-		rows = self.curs.fetchall()
 		i = 0
-		while rows:
-			for row in rows:
-				mcl_id = row[0]
-				vertex_set = row[1]
-				edge_set = row[2]
-				if vertex_set not in self.vertex_set_dict:
-					self.vertex_set_dict[vertex_set] = {}
-				if edge_set not in self.vertex_set_dict[vertex_set]:
-					self.vertex_set_dict[vertex_set][edge_set] = mcl_id
-					self.good_mcl_id_list.append(mcl_id)
-				else:
-					old_mcl_id = self.vertex_set[vertex_set][edge_set]
-					self.log_file.write("%d: %d\n"%(old_mcl_id, mcl_id))
-					self.mcl_id_2_recurrence_array_dict[old_mcl_id] += self.mcl_id_2_recurrence_array_dict[mcl_id]
-				i += 1
+		for mcl_id,vertex_set in self.mcl_id2vertex_set_dict.iteritems():
+			if vertex_set not in self.vertex_set_dict:
+				self.vertex_set_dict[vertex_set] = {}
+			subgraph = self.mcl_id2graph_dict[mcl_id]
+			if subgraph not in self.vertex_set_dict[vertex_set]:
+				self.vertex_set_dict[vertex_set][subgraph] = mcl_id
+				self.good_mcl_id_list.append(mcl_id)
+			else:
+				old_mcl_id = self.vertex_set_dict[vertex_set][subgraph]
+				self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
+				self.mcl_id_2_recurrence_array_dict[old_mcl_id] += self.mcl_id_2_recurrence_array_dict[mcl_id]
+			i += 1
 			if self.report:
-				sys.stderr.write("%sFetching%s"%("\x08"*20,i))
-			self.curs.execute("fetch 5000 from crs_e")
-			rows = self.curs.fetchall()
+				sys.stderr.write("%sPruning%s"%("\x08"*20, i))
+
 		if self.report:
 			sys.stderr.write("\n")
 		for mcl_id in self.good_mcl_id_list:
