@@ -6,7 +6,8 @@ Option:
 	INPUTDIR is the directory containing all the graph files in gspan format.
 	OUTPUTFILE is the file to store the merged graphs also in gspan format.
 	-s ..., --support=...	minimum support for the edge to be kept. 5(default)
-	-t ..., --threshold=...	the size of graph_dict, 1000,000(default)
+	-t ..., --threshold=...	the size of graph_dict, 10000,000(default) 26.5% of 6G memory
+	-r ..., --max_rank=...	the maximum rank of nodes to initiate the program, size-1(default)
 	-h, --help              show this help
 	
 Examples:
@@ -31,17 +32,21 @@ class graph_merge:
 	'''
 	03-13-05
 		the lam/mpi version of graph_merge
+	03-16-05
+		add max_rank to specify which nodes to start off the program
+		or how many nodes used as memory bucket.
 	'''
-	def __init__(self, support, threshold, dir, ofname):
+	def __init__(self, support, threshold, max_rank, dir, ofname):
 		self.support = int(support)
 		self.threshold = int(threshold)
+		self.max_rank = max_rank
 		self.dir = dir
 		self.ofname = ofname
 		#data structure to store the merged graph. key is the edge.
 		#value is the recurrence
 		self.graph_dict = {}
 	
-	def check_edge(self, edge_name, communicator):
+	def check_edge(self, edge_name, communicator, max_rank):
 		"""
 		03-13-05
 			input: an edge
@@ -52,7 +57,7 @@ class graph_merge:
 						not have it, return '1' or '0' indicating whether its graph_dict reaches memory threshold.
 		"""
 		threshold_indicator_list = []
-		for dest in range(1,communicator.size):
+		for dest in range(1,max_rank+1):
 			communicator.send(edge_name, dest, dest)
 			data, source, tag = communicator.receiveString(dest, None)
 			if data=="-1":
@@ -61,7 +66,7 @@ class graph_merge:
 				threshold_indicator_list.append(data)
 		return threshold_indicator_list
 	
-	def add_edge(self, edge_name, threshold_indicator_list, communicator):
+	def add_edge(self, edge_name, threshold_indicator_list, communicator, max_rank):
 		"""
 		03-13-05
 			input: edge_name and threshold_indicator_list
@@ -71,7 +76,7 @@ class graph_merge:
 		"""
 		#default return is "no space"
 		return_value = "no space"
-		for dest in range(1,communicator.size):
+		for dest in range(1, max_rank+1):
 			threshold_indicator = threshold_indicator_list[dest-1]
 			if threshold_indicator=='0':
 				#found one node
@@ -81,7 +86,7 @@ class graph_merge:
 				
 		return return_value
 
-	def output(self, ofname, first_block, support, communicator):
+	def output(self, ofname, first_block, support, communicator, max_rank):
 		"""
 		03-13-05
 			input: first_block, support, communicator
@@ -94,7 +99,7 @@ class graph_merge:
 		of = open(ofname, 'w')
 		of.write(first_block)
 		of.close()
-		for dest in range(1,communicator.size):
+		for dest in range(1, max_rank+1):
 			communicator.send("output", dest, dest)
 			return_value, source, tag = communicator.receiveString(dest, None)
 			if return_value=="1":
@@ -102,7 +107,7 @@ class graph_merge:
 			else:
 				print "%s encounted error: %s in its output"%(source, return_value)
 	
-	def edge_loadin(self, dir, communicator):
+	def edge_loadin(self, dir, communicator, max_rank):
 		#output block put before edges
 		first_block = ''
 		
@@ -123,10 +128,10 @@ class graph_merge:
 						edge = '%s,%s'%(vertex1,vertex2)
 					else:
 						edge = '%s,%s'%(vertex2, vertex1)
-					check_return_value = self.check_edge(edge, communicator)
+					check_return_value = self.check_edge(edge, communicator, max_rank)
 					if check_return_value != '-1':
 						#new edge
-						add_return_value = self.add_edge(edge, check_return_value, communicator)
+						add_return_value = self.add_edge(edge, check_return_value, communicator, max_rank)
 					if add_return_value!='added':
 						sys.stderr.write("Error encounted when adding an edge: %s\n"%add_return_value)
 				elif file_no == 1:
@@ -205,11 +210,13 @@ class graph_merge:
 					--node_output()
 		"""
 		communicator = MPI.world.duplicate()
-		
+		#set the default max_rank
+		if self.max_rank == None or self.max_rank >=communicator.size:
+			self.max_rank = communicator.size-1
 		if communicator.rank == 0:
-			first_block = self.edge_loadin(self.dir, communicator)
-			self.output(self.ofname, first_block, self.support, communicator)
-		else:
+			first_block = self.edge_loadin(self.dir, communicator, self.max_rank)
+			self.output(self.ofname, first_block, self.support, communicator, self.max_rank)
+		elif communicator.rank<=self.max_rank:
 			self.node_loop(self.ofname, self.support, self.threshold, communicator)
 			
 	
@@ -219,25 +226,28 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "s:t:h", ["support=", "threshold=", "help"])
+		opts, args = getopt.getopt(sys.argv[1:], "s:t:r:h", ["support=", "threshold=", "max_rank=", "help"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	support = 5
-	threshold = 1000000
+	threshold = 10000000
+	max_rank = None
 	for opt, arg in opts:
 		if opt in ("-s", "--support"):
 			support = int(arg)
 		elif opt in ("-t", "--threshold"):
 			threshold = int(arg)
+		elif opt in ("-r", "--max_rank"):
+			max_rank = int(arg)
 		elif opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
 
 			
 	if len(args) == 2:
-		instance = graph_merge(support, threshold, args[0], args[1])
+		instance = graph_merge(support, threshold, max_rank, args[0], args[1])
 		instance.run()
 	else:
 		print __doc__
