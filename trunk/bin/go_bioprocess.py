@@ -1,5 +1,27 @@
 #!/usr/bin/env python
-import pickle,sys,os
+"""
+Usage: go_bioprocess.py -d DATABASENAME -k SCHEMA -p PARSER -u UNKNOWNFILE -g ORGANISM [OPTION] go_function_file
+
+Option:
+	-d ..., --dbname=...	the database name
+	-k ..., --schema=...	which schema in the database
+	-c ..., --commit=...	1 or 0(default) specifies commit or not
+	-u ..., --unknown=...	the file containing the unknown gene_ids(seperated by ';')
+	-p ..., --parser=...	which parser to use
+	-g ..., --organism=...	two letter organism abbreviation
+	-h, --help              show this help
+	
+Examples:
+	go_bioprocess.py -d mdb -k shu -p shu  -g sc -u yeast_unknown yestprocess2.txt
+	gene_id_to_no.py -d mdb -k ming -p ming  -g sc -u yeast_unknown -c 1 all.known.genes.informative30.txt
+
+Description:
+	This program extracts go functional class information from raw file,
+	combines the stable unknown gene set and sets up the schema.go
+	table in the database.
+"""
+
+import pickle,sys,os, psycopg, getopt, csv
 import Martel
 from xml.sax import saxutils
 from Martel import LAX
@@ -44,31 +66,23 @@ class go_term:
 		gene_array = None
 
 
-class go_bioprocess_parser:
+class shu_parser:
 	'''
 	parse the yeast known_gene(GO bioprocess) file,
 	construct a known-gene dictionary with gene name as key and GO id as value.
 	'''
-	def __init__(self, infname):
+	def __init__(self):
 		self.go_dict = {}
-		self.global_struc_fname = os.path.join(os.path.expanduser('~'),'pickle/yeast_global_struc')
-		if os.path.isfile(self.global_struc_fname):
-			global_struc = pickle.load(open(self.global_struc_fname,'r'))
-			self.vertex_dict = global_struc['vertex_dict']
-		else:
-			sys.stderr.write('No such file: %s.\n'%self.global_struc_fname)
-			sys.exit(1)
-		self.inf = open(infname, 'r')
 		
-	def parse(self):
+	def parse(self, inf, vertex_dict):
 		self.term_iterator = go_bioprocess.make_iterator("term")
 		self.lax=LAX.LAX()
-		for record in self.term_iterator.iterateFile(self.inf, self.lax):
+		for record in self.term_iterator.iterateFile(inf, self.lax):
 			gene_array = []
 			whole_gene_array = record['genes'][0].split(';')
 			for gene in whole_gene_array:
-				if gene in self.vertex_dict:
-					gene_array.append(self.vertex_dict[gene])
+				if gene in vertex_dict:
+					gene_array.append(vertex_dict[gene])
 			gene_array.sort()
 			info = go_term()
 			info.name = record['name'][0]
@@ -82,32 +96,101 @@ class go_bioprocess_parser:
 		for i in range(len(key_list)):
 			#output in tab delimited format for database import
 			id = key_list[i]
-			string1 = repr(self.go_dict[id].whole_gene_array)
-			string1 = string1.replace('[','{')
-			string1 = string1.replace(']','}')
-			string1 = string1.replace("'",'"')
-			string2 = repr(self.go_dict[id].gene_array)
-			string2 = string2.replace('[','{')
-			string2 = string2.replace(']','}')
-			print "%s\t%d\t%d\t%s\t%s\t%s"%\
-				(id,\
-				i+1,\
-				self.go_dict[id].no_of_genes,\
-				self.go_dict[id].name,\
-				string1,\
-				string2)
+			self.go_dict[id].no = i+1
+		
+		return self.go_dict
 		#parser = go_bioprocess.make_parser()
 		#parser.setContentHandler(saxutils.XMLGenerator())
 		#parser.parseFile(self.inf)
 
-if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-	argv[1] specifies the go bioprocess raw file.\n\
-		output will be dumped on stdout.\n')
+parser_map = {"shu":shu_parser()}
 
-	if len(sys.argv) == 2:
-		instance = go_bioprocess_parser(sys.argv[1])
-		instance.parse()
+class go_table_setup:
+	def __init__(self, fname, dbname, schema, parser, u_fname, orgn, needcommit=0):
+		self.go_inf = open(fname, 'r')
+		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to %s"%schema)
+		self.parser = parser_map[parser]
+		self.reader = csv.reader(open(u_fname, 'r'), delimiter=';')
+		self.needcommit = int(needcommit)
+		self.org_short2long = {'at':'Arabidopsis thaliana',
+			'ce':'Caenorhabditis elegans',
+			'dm':'Drosophila melanogaster',
+			'hs':'Homo sapiens',
+			'mm':'Mus musculus',
+			'sc':'Saccharomyces cerevisiae',
+			'Arabidopsis thaliana':'Arabidopsis thaliana',
+			'Caenorhabditis elegans':'Caenorhabditis elegans',
+			'Drosophila melanogaster':'Drosophila melanogaster',
+			'Homo sapiens':'Homo sapiens',
+			'Mus musculus':'Mus musculus',
+			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
+			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
+		self.organism = self.org_short2long[orgn]
+		self.vertex_dict = {}
+		self.unknown_gene_list = []
+		
+	def dstruc_loadin(self):
+		self.curs.execute("select gene_id, gene_no from graph.gene_id_to_no where organism='%s' "%self.organism)
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.vertex_dict[row[0]] = row[1]
+		
+		self._unknown_gene_list = self.reader.next()
+		for gene in self._unknown_gene_list:
+			if gene in self.vertex_dict:
+				self.unknown_gene_list.append(self.vertex_dict[gene])
+	
+	def submit(self):
+		self.curs.execute("insert into go values('%s', %d, %d, '%s', ARRAY%s, ARRAY%s)"%\
+			('GO:0000004', 0, len(self._unknown_gene_list), 'biological_process unknown', repr(self._unknown_gene_list), repr(self.unknown_gene_list) ))
+		go_dict = self.parser.parse(self.go_inf, self.vertex_dict)
+		for term in go_dict:
+			self.curs.execute("insert into go values('%s', %d, %d, '%s', ARRAY%s, ARRAY%s)"%\
+				(term, go_dict[term].no, go_dict[term].no_of_genes, go_dict[term].name,\
+				repr(go_dict[term].whole_gene_array), repr(go_dict[term].gene_array) ))
+		if self.needcommit:
+			self.conn.commit()
+			
+if __name__ == '__main__':
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+		
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:c:u:p:g:", ["help", "dbname=", "schema=", "commit=", "unknown=","parser=","organism="])
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = ''
+	schema = ''
+	commit = 0
+	unknown = ''
+	parser = ''
+	organism = ''
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-c", "--commit"):
+			commit = int(arg)
+		elif opt in ("-u", "-unknown"):
+			unknown = arg
+		elif opt in ("-p", "-parser"):
+			parser = arg
+		elif opt in ("-g", "-organism"):
+			organism = arg
+			
+	if dbname and schema and unknown and parser and organism and len(args)>0:
+		instance = go_table_setup(args[0], dbname, schema, parser, unknown, organism, commit)
+		instance.dstruc_loadin()
+		instance.submit()
 	else:
-		helper()
+		print __doc__
+		sys.exit(2)
