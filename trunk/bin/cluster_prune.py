@@ -6,31 +6,33 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	the database table storing the clusters, mcl_result(default)
+	-s ..., --source_table=...	which source table
+	-t ..., --target_table=...	which target table
 	-p ..., --prune_type=...	0(prune_on_edge_set, default), 1(prune_on_recurrence_array)
 		2(prune_on_vertex_set)
-	-s ..., --threshhold=...	the memory threshhold, default is 1e6.
+	-e ..., --threshhold=...	the memory threshhold, default is 1e6.
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
-	cluster_prune.py -k shu -c -s 3e6 -r
+	cluster_prune.py -k shu -c -e 3e6 -r -s splat_result -t mcl_result
 		:prune_on_edge_set, threshhold 3e6, on table mcl_result
-	cluster_prune.py -k ming1 -p 1 -r
+	cluster_prune.py -k ming1 -p 1 -r -t mcl_result
 		:prune_on_recurrence_array, on table mcl_result
-	cluster_prune.py -k shu_whole -p 2 -t mcl_result2 -r -c
+	cluster_prune.py -k shu_whole -p 2 -s mcl_result -t mcl_result2 -r -c
 		:prune_on_vertex_set and on table mcl_result2
 
 Description:
 	THis program will discard redundant clusters.
 	Three types of pruning:
 	1. clusters with same vertex_set and edge_set, choose an arbitrary one to
-	retain and update its recurrence_array.
+	retain and update its recurrence_array. source_table is a splat table.
+	target_table is a MCL table.
 	2. Among clusters with same vertex_set and same recurrence_pattern,
-	retain the one with highest connectivity.
+	retain the one with highest connectivity. Only target_table(MCL) is needed.
 	3. clusters with same vertex_set will be merged. THIS should be carried upon
-	a new table, like mcl_result2 and after above two prunings.
+	a new table, like mcl_result2 and after above two prunings. source_table is 
 	
 """
 
@@ -51,11 +53,12 @@ class mcl_id_struc:
 
 class cluster_prune:
 
-	def __init__(self, hostname, dbname, schema, table, prune_type, threshhold, report, needcommit=0):
+	def __init__(self, hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
-		self.table = table
+		self.source_table = source_table
+		self.target_table = target_table
 		self.prune_type = int(prune_type)
 		self.threshhold = float(threshhold)
 		self.report = int(report)
@@ -113,7 +116,7 @@ class cluster_prune:
 		sys.stderr.write("Run No.%d\n"%self.run_no)
 
 		self.curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.vertex_set, s.recurrence_array, s.edge_set\
-			from %s m, splat_result s where m.splat_id=s.splat_id and m.recurrence_array isnull"%(self.table))
+			from %s m, %s s where m.splat_id=s.splat_id and m.recurrence_array isnull"%(self.target_table, self.source_table))
 		#m.recurrence_array notnull means the clusters which have same vertex_set
 		#and edge_set as m.mcl_id have all been merged into this mcl_id.
 		self.curs.execute("fetch 5000 from crs")
@@ -172,15 +175,18 @@ class cluster_prune:
 			recurrence_array.sort()
 			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
 			self.curs.execute("update %s set recurrence_array = ARRAY%s where mcl_id =%d"%\
-				(self.table, repr(recurrence_array), mcl_id))
+				(self.target_table, repr(recurrence_array), mcl_id))
 		#delete the bad mcl_ids
 		for mcl_id in self.bad_mcl_id_list:
-			self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
+			self.curs.execute("delete from %s where mcl_id=%d"%(self.target_table, mcl_id))
 		sys.stderr.write("\tDone\n")
 		self.no_of_goods += len(self.good_mcl_id_dict)
 		self.no_of_bads += len(self.bad_mcl_id_list)
 
 	def prune_on_edge_set(self):
+		if self.source_table == '':
+			sys.stderr.write("Please specify the source_table(a Splat table).\n")
+			sys.exit(2)
 		sys.stderr.write("Pruning based on edge_set...\n")
 		while self.remaining != 0:
 			self._prune_on_edge_set()
@@ -282,7 +288,7 @@ class cluster_prune:
 			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
 			self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
 				go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s', '%s', %f,\
-				%f, '%s', %f, ARRAY%s)"%(self.table, entry[0], entry[1], entry[2], entry[3],\
+				%f, '%s', %f, ARRAY%s)"%(self.target_table, entry[0], entry[1], entry[2], entry[3],\
 				entry[4], entry[5], entry[6], entry[7], repr(recurrence_array)))
 			if self.report and i%5000 == 0:
 				sys.stderr.write("%s\t%s"%("\x08"*20, i))
@@ -296,9 +302,9 @@ class cluster_prune:
 		'''
 		First off, clone a temp table from mcl_result. Based on the this temp table, do the pruning.
 		'''
-		#make sure no stupid choice
-		if self.table == 'mcl_result':
-			sys.stderr.write("Not for %s. Please choose mcl_result2.\n"%self.table)
+
+		if self.source_table == '':
+			sys.stderr.write("Please specify the source_table(a MCL table).\n")
 			sys.exit(2)
 		#create the table structure from mcl_result
 		try:
@@ -306,14 +312,14 @@ class cluster_prune:
 			self.curs.execute("create temp table %s(like mcl_result)"%self.src_table)
 			self.curs.execute("create temp table %s(like mcl_result)"%self.tg_table)
 			#if not commit, self.table will disappear.
-			self.curs.execute("create table %s(like mcl_result)"%self.table)
+			self.curs.execute("create table %s(like mcl_result)"%self.target_table)
 		except psycopg.ProgrammingError, error:
 			sys.stderr.write('%s\n'%error)
 			sys.exit(2)
 
 		sys.stderr.write("Pruning based on vertex_set...\n")
 		#'mcl_result' is the first source.
-		self._prune_on_vertex_set('mcl_result', self.src_table)
+		self._prune_on_vertex_set(self.source_table, self.src_table)
 		while self.remaining != 0:
 			self._prune_on_vertex_set(self.src_table, self.tg_table)
 			#exchange the direction of data flow.
@@ -324,17 +330,18 @@ class cluster_prune:
 		sys.stderr.write("Total records deleted: %d\n"%self.no_of_bads)
 
 	def prune_on_recurrence_array(self):
-		self.curs.execute("select mcl_id, connectivity from %s"%self.table)
+		if self.report:
+			sys.stderr.write("Pruning based on recurrence_array...\n")
+		self.curs.execute("select mcl_id, connectivity from %s"%self.target_table)
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.mcl_id2connectivity_dict[row[0]] = row[1]
 		
 		self.curs.execute("DECLARE crs_r CURSOR FOR select mcl_id, vertex_set, recurrence_array \
-			from %s where recurrence_array notnull"%self.table)
+			from %s where recurrence_array notnull"%self.target_table)
 		self.curs.execute("fetch 5000 from crs_r")
 		rows = self.curs.fetchall()
-		if self.report:
-			sys.stderr.write("Pruning based on recurrence_array...\n")
+
 		i = 0
 		while rows:
 			for row in rows:
@@ -368,7 +375,7 @@ class cluster_prune:
 		sys.stderr.write("Total records to be updated: %d\n"%self.no_of_goods)
 		sys.stderr.write("Database transacting...")
 		for mcl_id in self.bad_mcl_id_list:
-			self.curs.execute("delete from %s where mcl_id=%d"%(self.table, mcl_id))
+			self.curs.execute("delete from %s where mcl_id=%d"%(self.target_table, mcl_id))
 		#self.curs.executemany("delete from "+self.table+" where mcl_id=%d", self.bad_mcl_id_list)
 		sys.stderr.write("Done\n")
 	
@@ -383,7 +390,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:p:s:ct:", ["help", "report", "hostname=", "dbname=", "schema=", "prune_type=", "threshhold=", "commit", "table="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:s:t:p:e:c", \
+			["help", "report", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", "prune_type=", "threshhold=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -391,11 +399,12 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	source_table = ''
+	target_table = ''
 	prune_type = 0
 	threshhold = 1e6
 	commit = 0
 	report = 0
-	table = 'mcl_result'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -406,19 +415,21 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-s", "--source_table"):
+			source_table = arg
+		elif opt in ("-t", "--target_table"):
+			target_table = arg
 		elif opt in ("-p", "--prune_type"):
 			prune_type = int(arg)
-		elif opt in ("-s", "--threshhold"):
+		elif opt in ("-e", "--threshhold"):
 			threshhold = float(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
-		elif opt in ("-t", "--table"):
-			table = arg
 
-	if schema:
-		instance = cluster_prune(hostname, dbname, schema, table, prune_type, threshhold, report, commit)
+	if schema and target_table:
+		instance = cluster_prune(hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, commit)
 		instance.run()
 
 	else:
