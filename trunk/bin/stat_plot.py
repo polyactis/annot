@@ -73,7 +73,7 @@ class stat_plot:
 	
 	def single_plot(self):
 		#this function deals with 4 fixed parameters and 1 varying parameter
-		r.jpeg('%s'%self.ofname)
+		r.png('%s'%self.ofname)
 		x_list = []
 		y_list = []
 		self.curs.execute("select  tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn from\
@@ -105,8 +105,8 @@ class stat_plot:
 			x_list.append(tp)
 			y_list.append(float(tp)/(tp+fp))
 		
-		r.plot(x_list, y_list, type='o',pch='*',xlab='true positive',xlim=self.x_range,ylim=self.y_range, \
-				ylab='ratio', main='%s'%(self.option_num_dict[4].label), col=1)
+		r.plot(x_list, y_list, type='o',pch='*',xlab='consistent predictions',xlim=self.x_range,ylim=self.y_range, \
+				ylab='percentage', main='%s'%(self.option_num_dict[4].label), col=1)
 		r.dev_off()
 		
 	def plot(self):
@@ -118,7 +118,7 @@ class stat_plot:
 			self.option_num_dict[1].label, self.option_num_dict[1].value, self.option_num_dict[2].label, \
 			self.option_num_dict[2].value, self.tag, self.option_num_dict[3].label))
 		rows = self.curs.fetchall()
-		r.jpeg('%s'%self.ofname)
+		r.png('%s'%self.ofname)
 		for row in rows:
 			#position 0,1,2 are fixed values, 3 is varying value, 4 is the tag value.
 			self._plot(row)
@@ -160,8 +160,8 @@ class stat_plot:
 			y_list.append(float(tp)/(tp+fp))
 
 		if self.no_of_curves==1:
-			r.plot(x_list, y_list, type='o',pch='*',xlab='true positive',xlim=self.x_range,ylim=self.y_range, \
-			ylab='ratio', main='%s'%(self.option_num_dict[3].label), col=self.no_of_curves)
+			r.plot(x_list, y_list, type='o',pch='*',xlab='consistent predictions',xlim=self.x_range,ylim=self.y_range, \
+			ylab='percentage', main='%s'%(self.option_num_dict[3].label), col=self.no_of_curves)
 		else:
 			r.lines(x_list, y_list, type='o',pch='*',col=self.no_of_curves)
 
