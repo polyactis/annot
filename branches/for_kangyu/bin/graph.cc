@@ -5,7 +5,7 @@
 #include <cmath>
 #define GENE_CUT_OFF 8
 #define JK_CUT_OFF 7
-#define COR_CUT_OFF 0.6
+#define COR_CUT_OFF 0
 using namespace std;
 
 typedef vector<float> vf;
@@ -21,9 +21,11 @@ class graph_construct
 	vector<vf> gene_array;
 	vector<bit_vector> mask_vector;
 	vector<string> gene_labels_vector;
+	vector<int> trans_fac_index_vector;
 	char* graph_name;
 	int no_of_genes;
 	int no_of_cols;
+	int no_of_trans_facs;
 	ifstream in;
 	ofstream out;
 	public:
@@ -62,6 +64,7 @@ void graph_construct::input()
 	}
 	no_of_genes = gene_array.size();
 	no_of_cols = gene_array[0].size();
+	no_of_trans_facs = trans_fac_index_vector.size();
 }
 
 void graph_construct::split(string line)
@@ -72,6 +75,7 @@ void graph_construct::split(string line)
 
 	int no_of_tabs = 0;
 	int no_of_nas = 0;
+	bool is_trans_fac = false;
 	string tmp = "";
 
 	for(int i=0; i< line.size(); i++)
@@ -80,7 +84,14 @@ void graph_construct::split(string line)
 		{
 			no_of_tabs++;
 			if (no_of_tabs==1)
-				gene_label = tmp;
+				if (tmp[0]=='t')
+				{
+					tmp.erase(0,1);
+					is_trans_fac = true;
+					gene_label = tmp;
+				}
+				else
+					gene_label = tmp;
 			else
 			{
 				if (tmp=="NA")
@@ -120,19 +131,25 @@ void graph_construct::split(string line)
 	{
 		gene_labels_vector.push_back(gene_label);
 		mask_vector.push_back(bv);
+		if (is_trans_fac)
+			trans_fac_index_vector.push_back(gene_array.size());
+			// index is 1 less than size.
 		gene_array.push_back(gene_vector);
 	}
 }
 
 void graph_construct::edge_construct()
 {
-	int i,j,k;
+	int i,j,k,pre_j;
 	float tmp_cor, min_cor = 1.1;
 	
 	out<<"t\t#\t"<<graph_name<<endl;
 	for ( i=0; i<no_of_genes; i++)
-		for ( j=i+1; j<no_of_genes; j++)
-		{	
+		for ( pre_j=0; pre_j<no_of_trans_facs; pre_j++)
+		{
+			j = trans_fac_index_vector[pre_j];
+			if(j==i)
+				continue;
 			min_cor = 1.1;
 			for (k=0; k<no_of_cols; k++)
 			{
@@ -144,7 +161,13 @@ void graph_construct::edge_construct()
 			}
 			//cerr<<endl;
 			if ( (abs(min_cor) >= COR_CUT_OFF) && (abs(min_cor)<=1.0) )
-				out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+			{
+				if (i<j)
+					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+				else
+					out<<"e\t"<<gene_labels_vector[j]<<'\t'<<gene_labels_vector[i]<<'\t'<<min_cor<<endl;
+
+			}
 		}			
 }
 
@@ -161,9 +184,10 @@ void graph_construct::output()
 		out<<endl;
 		for (int j=0; j<no_of_cols; j++)
 			out<<gene_array[i][j]<<'\t';
-	
-	out<<endl;
+		out<<endl;
 	}
+	for (i=0; i<no_of_trans_facs; i++)
+		out<<gene_labels_vector[trans_fac_index_vector[i]]<<endl;
 
 }
 
