@@ -5,6 +5,7 @@ functions or classes common to all programs
 """
 
 import csv
+import psycopg
 
 def index_plus_one(i):
 	'''
@@ -45,3 +46,14 @@ def dict_map(dict, ls):
 	for item in ls:
 		new_list.append(dict[item])
 	return new_list
+
+def db_connect(hostname, dbname, schema):
+	"""
+	02-28-05
+		establish database connection, return (conn, curs).
+		copied from CrackSplat.py
+	"""
+	conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
+	curs = conn.cursor()
+	curs.execute("set search_path to %s"%schema)
+	return (conn, curs)
