@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import sys,os,cStringIO,psycopg
 
 class splat_result_iterator:
