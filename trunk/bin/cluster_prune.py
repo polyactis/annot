@@ -111,13 +111,12 @@ class cluster_prune:
 		self.run_no += 1
 		#data structure initialization
 		sys.stderr.write("Run No.%d\n"%self.run_no)
-		self.crs = 'crs%d'%self.run_no
-		#in one transaction, multiple cursors to avoid cursor name collision
-		self.curs.execute("DECLARE %s CURSOR FOR select m.mcl_id, m.vertex_set, s.recurrence_array, s.edge_set\
-			from %s m, splat_result s where m.splat_id=s.splat_id and m.recurrence_array isnull"%(self.crs, self.table))
+
+		self.curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.vertex_set, s.recurrence_array, s.edge_set\
+			from %s m, splat_result s where m.splat_id=s.splat_id and m.recurrence_array isnull"%(self.table))
 		#m.recurrence_array notnull means the clusters which have same vertex_set
 		#and edge_set as m.mcl_id have all been merged into this mcl_id.
-		self.curs.execute("fetch 5000 from %s"%self.crs)
+		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		i = 0
 		while rows:
@@ -158,8 +157,10 @@ class cluster_prune:
 				i += 1
 			if self.report:
 				sys.stderr.write("%s\t%s"%("\x08"*20, i))
-			self.curs.execute("fetch 5000 from %s"%self.crs)
+			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
+		#close the cursor
+		self.curs.execute("close crs")
 		if self.report:
 			sys.stderr.write('\n')
 		sys.stderr.write("\trecords to be updated: %d\n"%len(self.good_mcl_id_dict))
@@ -201,13 +202,11 @@ class cluster_prune:
 		#truncate the target table first.
 		self.curs.execute("truncate %s"%target)
 		
-		self.crs = 'crs%d'%self.run_no
-		#in one transaction, multiple cursors to avoid cursor name collision
-		self.curs.execute("DECLARE %s CURSOR FOR select mcl_id, recurrence_array, \
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, recurrence_array, \
 			splat_id, vertex_set, parameter, connectivity, p_value_min, \
-			go_no_vector, unknown_gene_ratio from %s"%(self.crs,source))
+			go_no_vector, unknown_gene_ratio from %s"%(source))
 
-		self.curs.execute("fetch 5000 from %s"%self.crs)
+		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		i = 0
 		while rows:
@@ -250,7 +249,7 @@ class cluster_prune:
 						#replace the kjSet with the original database output(recurrence_array)
 						entry[8] = row[1]
 						self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
-i						go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s', '%s', %f,\
+						go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s', '%s', %f,\
 						%f, '%s', %f, '%s')"%(target, entry[0], entry[1], entry[2], entry[3],\
 						entry[4], entry[5], entry[6], entry[7], entry[8]))
 					else:
@@ -262,8 +261,11 @@ i						go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, '%s', '%s'
 				i += 1
 			if self.report:
 				sys.stderr.write("%s\t%s"%("\x08"*20, i))
-			self.curs.execute("fetch 5000 from %s"%self.crs)
+			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
+		#close the cursor
+		self.curs.execute("close crs")
+		
 		if self.report:
 			sys.stderr.write('\n')
 		sys.stderr.write("\tgood records: %d\n"%len(self.good_mcl_id_dict))
