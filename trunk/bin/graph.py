@@ -248,6 +248,8 @@ class graph_reorganize:
 	def __init__(self):
 		self.global_vertex_list = []
 		self.global_graph_list = []
+		self.global_vertex_dict = {}
+		self.global_graph_dict = {}
 		self.pickle_fname = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
 		self.vertex_block = ''
 		
@@ -263,21 +265,17 @@ class graph_reorganize:
 			list = line[:-1].split('\t')
 			if line[0] == 't':
 				graph_label = list[2]
-				if graph_label in self.global_graph_list:
+				if graph_label in self.global_graph_dict:
 					sys.stderr.write('Error. graph with this name, "%s" appears twice\n'%graph_label)
-				self.global_graph_list.append(graph_label)
+				self.global_graph_dict[graph_label]=1
 			if line[0] == 'e':
 				vertex1_label = list[1]
 				vertex2_label = list[2]
-				if vertex1_label not in self.global_vertex_list:
-					self.global_vertex_list.append(vertex1_label)
-				if vertex2_label not in self.global_vertex_list:
-					self.global_vertex_list.append(vertex2_label)
+				if vertex1_label not in self.global_vertex_dict:
+					self.global_vertex_dict[vertex1_label] = 1
+				if vertex2_label not in self.global_vertex_dict:
+					self.global_vertex_dict[vertex2_label] = 1
 			line = inf.readline()
-		self.global_vertex_list.sort()
-		global_struc = {'vertex_list': self.global_vertex_list,
-										'graph_list': self.global_graph_list}
-		pickle.dump(global_struc, open(self.pickle_fname, 'w') )
 
 	def dstruc_loadin(self):
 		'''
@@ -352,6 +350,13 @@ def mapping_batch(dir):
 		inf = open(pathname, 'r')
 		instance.global_mapping_construct(inf)
 		inf.close()
+
+	instance.global_vertex_list = instance.global_vertex_dict.keys()
+	instance.global_vertex_list.sort()
+	instance.global_graph_list = instance.global_graph_dict.keys()
+	global_struc = {'vertex_list': instance.global_vertex_list,
+			'graph_list': instance.global_graph_list}
+	pickle.dump(global_struc, open(instance.pickle_fname, 'w') )
 
 if __name__ == '__main__':
 	'''
