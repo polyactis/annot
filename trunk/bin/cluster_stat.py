@@ -51,6 +51,7 @@ class cluster_stat:
 		self.target_table = target_table
 		try:
 			self.curs.execute("drop index %s_connectivity_idx"%(self.target_table))
+			self.curs.execute("drop index %s_mcl_id_idx"%(self.target_table))
 		except psycopg.ProgrammingError, error:
 			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
@@ -118,6 +119,7 @@ class cluster_stat:
 			rows = self.curs.fetchall()
 		if self.needcommit:
 			self.curs.execute("create index %s_connectivity_idx on %s(connectivity)"%(self.target_table, self.target_table))
+			self.curs.execute("create index %s_mcl_id_idx on %s(mcl_id)"%(self.target_table, self.target_table))
 			self.curs.execute("end")
 			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
 		else:
