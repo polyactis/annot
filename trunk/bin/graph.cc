@@ -158,17 +158,17 @@ void graph_construct::edge_construct()
 				}
 			}
 			//cerr<<endl;
-			abs_min_cor = abs(min_cor);
-			if (abs_min_cor<=1.0)
+			//abs_min_cor = abs(min_cor);
+			if (min_cor<=1.0)
 			{
 				
-				if ( abs_min_cor >= COR_CUT_OFF)
+				if ( min_cor >= COR_CUT_OFF)
 					no_of_cor6++;
-				if ( abs_min_cor >= cor_array[(df-5)][0] )
+				if ( min_cor >= cor_array[(df-5)][0] )
 					no_of_05++;
-				if ( abs_min_cor >= cor_array[(df-5)][1] )
+				if ( min_cor >= cor_array[(df-5)][1] )
 					no_of_025++;
-				if ( abs_min_cor >= cor_array[(df-5)][2] )
+				if ( min_cor >= cor_array[(df-5)][2] )
 				{
 					no_of_01++;
 					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
