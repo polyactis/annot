@@ -1,4 +1,4 @@
-#!/usr/bin/env mpipython
+#!/usr/bin/env python
 """
 Usage: batch_haiyan_lam.py --mp=FILEPREFIX [OPTIONS]
 
@@ -29,45 +29,46 @@ Option:
 	--op=...	output file prefix, default is 
 		TypeMpGMin_graph_sizeEMin_edge_freqDFirst_density_cutoffQSecond_density_cutoffSMax_pre_graph_sizeCConn_perc
 		Note: those floats are taken the tenth and hundredth digit. i.e. 0.4 -> 40.
-	--rr=...	rank range, default is from 0 to size-1. i.e. 0-3 means useing 0,1,2,3
+	--rr=...	rank range, i.e. 0-3,5,7-9 means useing 0,1,2,3,5,7,8,9
 		This is used to specify the nodes to use.
+	--js=...	job file starting no, 0 (default)
 	-h, --help              show this help
 	
 Examples:
 	#simplest:
-	batch_haiyan_lam.py --mp='sc_54_6661_merge_6'
+	batch_haiyan_lam.py --mp='sc_54_6661_merge_6' --rr=0-3
 
 	#normal:
 	batch_haiyan_lam.py --mp='sc_54_6661_merge_6' -n 6661 -p 805939 -l 54
-		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --rr=4-6
+		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --rr=0-3,5,7-9
 	
-	#better to use mpirun or mpiexec to control nodes
-	mpirun c4-6 batch_haiyan_lam.py --mp='sc_54_6661_merge_6' -n 6661 
-		-p 805939 -l 54 -e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1
 	
 Description:
 	This program is used to start several codense or copath, with different settings
 	on several nodes via lam/mpi.
-	
-	NOTICE:
-		Number of nodes specified by rank_range >= number of parameter settings.
+
 
 """
 
 
-from Scientific import MPI
-import sys, os, math, getopt
+#from Scientific import MPI
+import sys, os, math, getopt, time, csv
 
 class batch_haiyan_lam:
 	"""
 	03-16-05
 		parameters passed to coden or copath should be in string form.
+	03-19-05
+		It's not a mpipython program anymore. It uses at to schedule job files which
+		are like ~/qjob/batch_haiyan_lam#.sh and these files call lam_sub.py(a mpipython program)
+		to submit jobs separately. The drawback of mpipython program is that it exits
+		once one job stops abnormally.
 	"""
 	def __init__(self, run_mode='0', genenum='6661', svnum='805939', sv_length='54',\
 		ttablefile='ttableFromMatlabt1p-3.txt', cut_loop_num_list=['2'], min_graph_size_list=['5'], \
 		min_edge_freq_list=['6'], first_density_cutoff_list=['0.4'], second_density_cutoff_list=['0.4'],\
 		max_pre_graph_size_list=['80'], conn_perc_list=['0.5'], max_degree='500', type=0, \
-		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None):
+		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None, js=0):
 		"""
 		03-16-05
 			those None's in the argument list will be given default values
@@ -92,6 +93,7 @@ class batch_haiyan_lam:
 		self.mp = mp
 		self.op = op
 		self.rank_range = rank_range
+		self.js = int(js)
 
 	def parameter_list_init(self, comm):
 		"""
@@ -102,6 +104,12 @@ class batch_haiyan_lam:
 			some other class wide parameters, self.input_matrix_file....
 			
 			initialization for other arguments and parameter list to call codense or copath
+		03-17-05
+		
+		03-19-05
+			1. no default for rank_range, must be specified by user
+			2. program_path is parameter_list[0]
+			
 		"""
 		#None arguments
 		if self.id == None:
@@ -110,8 +118,7 @@ class batch_haiyan_lam:
 			self.od = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/data/output')
 		if self.bd == None:
 			self.bd = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/bin')
-		if self.rank_range == None:
-			self.rank_range = [0, comm.size-1]
+		
 		#additional class wide parameters
 		self.input_matrix_file = os.path.join(self.id, self.mp+'.matrix')
 		self.input_sv_file = os.path.join(self.id, self.mp+'.cor_vector')
@@ -120,7 +127,7 @@ class batch_haiyan_lam:
 			self.binary = 'coden'
 		elif self.type==1:
 			self.binary = 'copath'
-
+		program_path = os.path.join(self.bd, self.binary)
 		
 		parameter_list = []
 		for cut_loop_num in self.cut_loop_num_list:
@@ -139,14 +146,14 @@ class batch_haiyan_lam:
 										op = self.binary+self.mp+'G%sE%sD%sQ%sS%sC%s'%\
 		(min_graph_size, min_edge_freq, int_first_density_cutoff, int_second_density_cutoff, max_pre_graph_size, int_conn_perc)
 									if self.type==0:
-										parameter_list.append([self.binary,\
+										parameter_list.append([program_path,\
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file,\
 		'-p', self.svnum, '-l', self.sv_length, '-t', self.input_ttable_file, '-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
 		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree])
 									elif self.type==1:
 										#cut_loop_num is the difference
-										parameter_list.append([self.binary, '-r', cut_loop_num,\
+										parameter_list.append([program_path, '-r', cut_loop_num,\
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file,\
 		'-p', self.svnum, '-l', self.sv_length, '-t', self.input_ttable_file, '-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
@@ -161,55 +168,74 @@ class batch_haiyan_lam:
 			output: print process information
 			
 			each node fires some jobs based on its own rank
+		03-19-05
+			not a mpipython program anymore
 		"""
-		#map parameters to each node_rank
-		node_rank2parameter_setting = {}
-		for i in range(len(parameter_list)):
-			#remainder is the node_rank
-			index = int(math.fmod(i, len(node_rank_list)))
-			node_rank = node_rank_list[index]
-			if node_rank not in node_rank2parameter_setting:
-				node_rank2parameter_setting[node_rank] = [parameter_list[i]]
-			else:
-				node_rank2parameter_setting[node_rank].append(parameter_list[i])
 
-		#the node's rank
-		node_rank = comm.rank
-		if node_rank in node_rank2parameter_setting:
-			#some nodes will be idle if there're more nodes than jobs
-			for parameter in node_rank2parameter_setting[node_rank]:
-				print "node: %s running... parameter: %s"%\
-					(node_rank, repr(parameter))
-				os.execvp(program_path, parameter)
-				#spawn version fails here. 
-				
 
 	def run(self):
 		"""
 		03-16-05
 			distribute coden or copath along the nodes
+		
+		03-19-05
+			no communicator anymore
+		"""
+		comm = None
 		"""
 		#a communicator
 		comm = MPI.world.duplicate()
-		parameter_list = self.parameter_list_init(comm)
 		if self.rank_range[0] > comm.size or self.rank_range[1] > comm.size:
 			sys.stderr.write("Error: invalid rank range: %s"%repr(self.rank_range))
 			sys.exit(2)
+		"""
+		parameter_list = self.parameter_list_init(comm)
+		#hour:minute, minute is current_minute + 2, if time is like 11:61, it's fine.
+		time_tuple = time.localtime()
+		time_to_run_jobs = "%s:%s"%(time_tuple[3], time_tuple[4]+2)
+		#the path of lam_sub.py
+		lam_sub_path = '~/script/annot/bin/lam_sub.py'
 		
-			
-		node_rank_list = range(self.rank_range[0], self.rank_range[1]+1)		
-		#change to the ouput directory first, because copath and coden output to the current directory
-		os.chdir(self.od)
-		
-		program_path = os.path.join(self.bd, self.binary)
 		"""
 		testing
 
 		program_path = 'ls'
 		parameter_list = [['ls'], ['ls', '/'], ['ls', '/usr/local']]
 		"""
-		self._node_fire(comm, program_path, parameter_list, node_rank_list)
 		
+		#map parameters to each node_rank
+		node_rank2parameter_setting = {}
+		for i in range(len(parameter_list)):
+			#remainder is the node_rank
+			index = int(math.fmod(i, len(self.rank_range)))
+			node_rank = self.rank_range[index]
+			if node_rank not in node_rank2parameter_setting:
+				node_rank2parameter_setting[node_rank] = [parameter_list[i]]
+			else:
+				node_rank2parameter_setting[node_rank].append(parameter_list[i])
+		job_number = self.js
+		for node_rank in node_rank2parameter_setting:
+			#some nodes will be idle if there're more nodes than jobs
+			for parameter in node_rank2parameter_setting[node_rank]:
+				job_fname = os.path.join(os.path.expanduser('~'), 'qjob/batch_haiyan_lam%s.sh'%job_number)
+				job_f = open(job_fname, 'w')
+				writer = csv.writer(job_f, delimiter=' ')
+				#change to the ouput directory first, because copath and coden output to the current directory
+				writer.writerow(['cd', self.od, ' '])	#the endline is attached to self.od and cd says an error
+				jobrow = ['mpirun', 'n%s'%node_rank, lam_sub_path] + parameter
+				writer.writerow(['echo']+jobrow)	#print the commandline
+				writer.writerow(jobrow)
+				#close the file
+				del writer
+				job_f.close()
+				
+				print "node: %s, at %s, parameter: %s"%(node_rank, time_to_run_jobs, repr(parameter))
+				#schedule it
+				wl = ['at', '-mf', job_fname, time_to_run_jobs]	#-m, even if no output, mail me.
+				os.spawnvp(os.P_WAIT, 'at', wl)
+				
+				job_number+=1
+						
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -221,7 +247,7 @@ if __name__ == '__main__':
 			"genenum=", "svnum=", "sv_length=", "ttablefile=", "cut_loop_num_list=", "min_graph_size_list=",\
 			"min_edge_freq_list=", "first_density_cutoff_list=", "second_density_cutoff_list=", \
 			"max_pre_graph_size_list=", "conn_perc_list=", "max_degree=", "type=", "id=", "od=", \
-			"bd=", "mp=", "op=", "rr="])
+			"bd=", "mp=", "op=", "rr=", "js="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -245,7 +271,8 @@ if __name__ == '__main__':
 	bd = None
 	mp = None
 	op = None
-	rr = None
+	rank_range = []
+	js = 0
 	
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -292,17 +319,24 @@ if __name__ == '__main__':
 		elif opt in ("--op"):
 			op = arg
 		elif opt in ("--rr"):
-			rr = arg.split('-')
-			rr = map(int, rr)
-		
+			#a sample rr is like '3-5,6,8-10'
+			rr = arg.split(',')
+			for rank in rr:
+				rank = rank.split('-')
+				rank = map(int, rank)
+				if len(rank)==2:
+					rank_range += range(rank[0], rank[1]+1)
+				else:
+					rank_range += rank			
+		elif opt in ("--js"):
+			js = int(arg)
 			
-			
-	if mp:
+	if mp and len(rank_range)>0:
 		instance = batch_haiyan_lam(run_mode, genenum, svnum, sv_length,\
 			ttablefile, cut_loop_num_list, min_graph_size_list, \
 			min_edge_freq_list, first_density_cutoff_list, second_density_cutoff_list,\
 			max_pre_graph_size_list, conn_perc_list, max_degree, type,\
-			id, od, bd, mp, op, rr)
+			id, od, bd, mp, op, rank_range, js)
 		
 		instance.run()
 		
