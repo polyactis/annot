@@ -18,6 +18,7 @@ def divided_by_1000(i):
 
 
 def get_haiyan_no2gene_no(table_file):
+	sys.stderr.write("Getting haiyan_no2gene_no...")
 	reader = csv.reader(file(table_file), delimiter='\t')
 	haiyan_no2gene_no={}
 	no = 0
@@ -26,10 +27,12 @@ def get_haiyan_no2gene_no(table_file):
 		haiyan_no2gene_no[no] = gene_no
 		no += 1
 	del reader
+	sys.stderr.write("Done\n")
 	return haiyan_no2gene_no
 
 
 def get_haiyan_no2gene_id(table_file):
+	sys.stderr.write("Getting haiyan_no2gene_id...")
 	reader = csv.reader(file(table_file), delimiter='\t')
 	haiyan_no2gene_id={}
 	no = 0
@@ -38,13 +41,16 @@ def get_haiyan_no2gene_id(table_file):
 		haiyan_no2gene_id[no] = gene_id
 		no += 1
 	del reader
+	sys.stderr.write("Done\n")
 	return haiyan_no2gene_id
 
 
 def dict_map(dict, ls):
 	new_list = []
 	for item in ls:
-		new_list.append(dict.get(item))
+		value = dict.get(item)
+		if value:
+			new_list.append(value)
 	return new_list
 
 def db_connect(hostname, dbname, schema):
@@ -94,6 +100,24 @@ def get_gene_no2gene_id(curs, schema=None, table='gene'):
 		gene_no2gene_id[row[0]] = row[1]
 	sys.stderr.write("Done\n")
 	return gene_no2gene_id
+
+
+def get_gene_id2gene_no(curs, schema=None, table='gene'):
+	"""
+	03-02-05
+		return gene_id2gene_no
+	"""
+	sys.stderr.write("Getting gene_id2gene_no...")
+	gene_id2gene_no = {}
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	curs.execute("select gene_no, gene_id from %s"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id2gene_no[row[1]] = row[0]
+	sys.stderr.write("Done\n")
+	return gene_id2gene_no
+
 
 def get_go_no2go_id(curs, schema=None, table='go'):
 	"""
