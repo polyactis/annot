@@ -19,7 +19,7 @@ Option:
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
 	-v, --dominant	Only assign the dominant function(s) to a gene.
-	-s ..., plottype	0, 1, 2(default). 0 is true positive. 1 is false positive. 2 is all.
+	-s ..., plottype	0, 1, 2(default). 0 is false positive. 1 is true positive. 2 is all.
 	-h, --help              show this help
 
 Examples:
@@ -99,12 +99,19 @@ class gene_stat:
 		self.go_no2go_id = {}
 		#data structures for plotting, key is go_no and value is a Set of genes of clusters
 		self.go_no2gene = {}
+		self.go_no2gene_fp = {}
 		self.go_no2cluster = {}
+		self.go_no2cluster_fp = {}
 		self.cluster_size2cluster = {}
+		self.cluster_size2cluster_fp = {}
 		self.cluster_size2go_no = {}
+		self.cluster_size2go_no_fp = {}
 		self.dataset_no2cluster = {}
+		self.dataset_no2cluster_fp = {}
 		self.dataset_no2go_no = {}
+		self.dataset_no2go_no_fp = {}
 		self.gene_no2cluster = {}
+		self.gene_no2cluster_fp = {}
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -187,6 +194,14 @@ class gene_stat:
 		self.hist_plot(self.dataset_no2go_no, 'dataset_no2go_no.png', 'dataset_no', 'number of go_nos')
 		self.hist_plot(self.gene_no2cluster, 'gene_no2cluster.png', 'gene_no', 'number of clusters')
 
+		self.hist_plot_ratio(self.go_no2cluster, self.go_no2cluster_fp, 'go_no2cluster_ratio.png', 'go_no', 'number of clusters(ratio)')
+		self.hist_plot_ratio(self.go_no2gene, self.go_no2gene_fp, 'go_no2gene_ratio.png', 'go_no', 'number of genes(ratio)')
+		self.hist_plot_ratio(self.cluster_size2cluster, self.cluster_size2cluster_fp, 'cluster_size2cluster_ratio.png', 'cluster_size', 'number of clusters(ratio)')
+		self.hist_plot_ratio(self.cluster_size2go_no, self.cluster_size2go_no_fp, 'cluster_size2go_no_ratio.png', 'cluster_size', 'number of go_nos(ratio)')
+		self.hist_plot_ratio(self.dataset_no2cluster, self.dataset_no2cluster_fp, 'dataset_no2cluster_ratio.png', 'dataset_no', 'number of clusters(ratio)')
+		self.hist_plot_ratio(self.dataset_no2go_no, self.dataset_no2go_no_fp, 'dataset_no2go_no_ratio.png', 'dataset_no', 'number of go_nos(ratio)')
+		self.hist_plot_ratio(self.gene_no2cluster, self.gene_no2cluster_fp, 'gene_no2cluster_ratio.png', 'gene_no', 'number of clusters(ratio)')
+
 	def _gene_stat_leave_one_out(self, row):
 		p_value_vector = row[2][1:-1].split(',')
 		recurrence_array = row[3][1:-1].split(',')
@@ -245,7 +260,17 @@ class gene_stat:
 				self.add_item_to_dict(self.dataset_no2cluster, dataset_no, mcl_id)
 				self.add_item_to_dict(self.dataset_no2go_no, dataset_no, go_no)
 			self.add_item_to_dict(self.gene_no2cluster, gene_no, mcl_id)
-
+		if tp == 0:
+			cluster_size = len(vertex_set)
+			self.add_item_to_dict(self.cluster_size2cluster_fp, cluster_size, mcl_id)
+			self.add_item_to_dict(self.cluster_size2go_no_fp, cluster_size, go_no)
+			self.add_item_to_dict(self.go_no2cluster_fp, go_no, mcl_id)
+			self.add_item_to_dict(self.go_no2gene_fp, go_no, gene_no)
+			for dataset_no in recurrence_array:
+				self.add_item_to_dict(self.dataset_no2cluster_fp, dataset_no, mcl_id)
+				self.add_item_to_dict(self.dataset_no2go_no_fp, dataset_no, go_no)
+			self.add_item_to_dict(self.gene_no2cluster_fp, gene_no, mcl_id)
+		
 	def _gene_stat_no_leave_one_out(self, row):
 		mcl_id = row[0]
 		vertex_set = row[1][1:-1].split(',')
@@ -454,7 +479,22 @@ class gene_stat:
 			y_list.append(len(value))
 		r.plot(x_list, y_list, type='h', xlab=xlabel, ylab=ylabel, main='%s v.s. %s'%(ylabel, xlabel))
 		r.dev_off()
-	
+
+	def hist_plot_ratio(self, dict1, dict2, filename, xlabel, ylabel):
+		#convert self.go_no2cluster and self.go_no2gene into histograms
+		r.png('%s'%filename)
+		x_list = []
+		y_list = []
+		keys = Set(dict1.keys()).union( Set(dict2.keys()) )
+		for key in keys:
+			value1 = dict1.get(key, [])
+			value2 = dict2.get(key, [])
+			ratio = float(len(value1))/(len(value1)+len(value2))
+			x_list.append(key)
+			y_list.append(ratio)
+		r.plot(x_list, y_list, type='h', xlab=xlabel, ylab=ylabel, main='%s v.s. %s'%(ylabel, xlabel))
+		r.dev_off()
+		
 	def add_item_to_dict(self, dict, key, value):
 		if key not in dict:
 			dict[key] = Set([value])
