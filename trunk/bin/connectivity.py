@@ -96,6 +96,9 @@ class compute_connectivity:
 	def mcl_atom_update(self, splat_id, edge_set):
 		'''
 		Compute the connectivity of all mcl clusters pertaining to the same splat_id.
+		02-25-05
+			check the order of the vertices in the edge tuple
+			map the vertex_list to int
 		'''
 		self.dstruc_from_edge_set(edge_set)
 		self.curs.execute("select mcl_id, vertex_set from %s where splat_id=%d"%\
@@ -105,11 +108,15 @@ class compute_connectivity:
 			mcl_id = row[0]
 			vertex_set = row[1][1:-1]
 			vertex_list = vertex_set.split(',')
+			vertex_list = map(int, vertex_list)
 			no_of_vertices = len(vertex_list)
 			no_of_edges = 0
 			for i in xrange(no_of_vertices):
 				for j in xrange(i+1, no_of_vertices):
-					tuple = (vertex_list[i],vertex_list[j])
+					if vertex_list[i] < vertex_list[j]:
+						tuple = (vertex_list[i],vertex_list[j])
+					else:
+						tuple = (vertex_list[j], vertex_list[i])
 					if self.edge_dict.has_key(tuple) or self.edge_dict.has_key(tuple):
 						no_of_edges += 1
 			connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
@@ -135,11 +142,16 @@ class compute_connectivity:
 		self.no_of_records += 1
 	
 	def dstruc_from_edge_set(self, edge_set):
+		"""
+		02-25-05
+			map the vertex_list to int
+		"""
 		self.edge_dict = {}
 		self.vertex_dict = {}
 		edge_list = edge_set[2:-2].split('},{')
 		for edge in edge_list:
 			vertex_list = edge.split(',')
+			vertex_list = map(int, vertex_list)
 			vertex_list = (vertex_list[0], vertex_list[1])
 			self.edge_dict[vertex_list] = 1
 			vertex1 = vertex_list[0]
