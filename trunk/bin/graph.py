@@ -131,10 +131,107 @@ class graph_construct:
 		out.write( 't\t#\t%s\n'%os.path.basename(self.raw_dataset_source))
 		for i in  self.graph_dict:
 			out.write( 'e\t%s\t%s\t%f\n'%(i[0], i[1] , self.graph_dict[i],))
+
+class vertex_attributes:
+	"a class wrapping the attributes of a vertex"
+	def __init__(self, no = None):
+		self.freq = 1
+		self.no = no
+	
+	def inc_freq(self):
+		self.freq += 1
+
+class graph_attributes:
+	"a class wrapping the attributes of a graph"
+	def __init__(self, no=None):
+		self.no = no
+		self.graph_dict = {}
+		self.vertex_set = {} #key stores vertex's label, value is a list which stores the adjacent vertices.
+	def vertex_set_init(self):
+		for i in self.graph_dict:
+			if self.vertex_set.has_key(i[0]):
+				self.vertex_set[i[0]].append(i[1])
+			if i[0] not in self.vertex_set:
+				self.vertex_set[i[0]] = []
+			if self.vertex_set.has_key(i[1]):
+				self.vertex_set[i[1]].append(i[0])
+			if i[1] not in self.vertex_set:
+				self.vertex_set[i[1]] = []
+				
+class graph_reorganize:
+	'''
+	Read the output from graph_construct class(above), convert it to gSpan or Splat input format.
+	Store the mapping of vertex_label v.s. number and graph_label v.s. number in file no_label_map in user's home directory.
+	Based on this class, optimization of all the graphs is possible.
+	'''
+	def __init__(self):
+		self.vertex_list_dict = {}
+		self.graph_list_dict = {}
+		self.vertex_block=''		#a block of vertices in the output file. "v M L" means the Mth vertex with L label.
 		
+	def init(self):
+		self.vertex_list_dict = {}
+		self.graph_list_dict = {}
+		self.vertex_block = ''
+		
+	def parse(self, inf, outf):
+		self.init()
+		line = inf.readline()
+		while line:
+			if line[0] == 't':
+				graph_label = line.split()[2]
+				no_of_graphs = len(self.graph_list_dict)
+				self.graph_list_dict[graph_label] = graph_attributes(no=no_of_graphs)
+			if line[0] == 'e':
+				list = line.split()
+				vertex1 = list[1]
+				vertex2 = list[2]
+				self.graph_list_dict[graph_label].graph_dict[(vertex1,vertex2)] = float(list[3])
+			line = inf.readline()
+		
+		for graph_label in self.graph_list_dict:
+			graph_attr = self.graph_list_dict[graph_label]
+			graph_attr.vertex_set_init()
+			for vertex in graph_attr.vertex_set:
+				if self.vertex_list_dict.has_key(vertex):
+					self.vertex_list_dict[vertex].inc_freq()
+				else:
+					no_of_vertices = len(self.vertex_list_dict)
+					self.vertex_list_dict[vertex] = vertex_attributes(no=no_of_vertices)
+					self.vertex_block+='v %d %d\n'%(no_of_vertices,no_of_vertices,)
+		self.output(outf)
+		
+	def output(self, outf):
+		import os
+		no_label_map_filename = os.path.join(os.path.expanduser('~'),'no_label_map')
+		map_fhandler = open(no_label_map_filename, 'w')
+		map_fhandler.write('>no_graphlabel_mapping\n')
+		for graph_label in self.graph_list_dict:
+			graph_attr = self.graph_list_dict[graph_label]
+			outf.write('t # %d\n'%graph_attr.no)
+			
+			map_fhandler.write('%d\t%s\n'%(graph_attr.no, graph_label,))
+			
+			outf.write(self.vertex_block)
+			for edge in graph_attr.graph_dict:
+				vertex1_no = self.vertex_list_dict[edge[0]].no
+				vertex2_no = self.vertex_list_dict[edge[1]].no
+				outf.write('e %d %d %f\n'%(vertex1_no, vertex2_no, graph_attr.graph_dict[edge],))
+		
+		map_fhandler.write('>no_vertexlabel_mapping\n')
+		for vertex_label in self.vertex_list_dict:
+			vertex_attr = self.vertex_list_dict[vertex_label]
+			map_fhandler.write('%d\t%s\n'%(vertex_attr.no, vertex_label,))
+			
 if __name__ == '__main__':
+	'''
 	instance = graph_construct(sys.argv[1])
 	instance.mask_array_construct()
 	instance.edge_construct()
 	instance.cleanup()
 	instance.output()
+	'''
+	instance = graph_reorganize()
+	inf = open(sys.argv[1], 'r')
+	outf = open(sys.argv[2], 'w')
+	instance.parse(inf, outf)
