@@ -75,9 +75,9 @@ class mcl_to_db:
 		cluster_begin = 0
 		while line:
 			if line.find('(splat_id') == 0:
-				self.splat_id = line[10:-2]
+				self.splat_id = line[10:-3]
 			if line.find('(parameter') == 0:
-				self.parameter = line[11:-2]
+				self.parameter = line[11:-3]
 			if line == 'begin\n':
 				cluster_begin = 1
 			if cluster_begin and (line == ')\n'):
