@@ -28,7 +28,9 @@ class p_value_cor:
 		for df in range(self.df_lower, self.df_upper+1):
 			cor_list = []
 			for p_value in self.p_value_list:
-				cor_list.append( r.qt(p_value, df, lower_tail=r.FALSE)/r.sqrt(df) )
+				t=r.qt(p_value,df,lower_tail=r.FALSE)
+				cor = r.sqrt(t*t/(t*t+df))
+				cor_list.append(cor)
 			self.result_array.append(cor_list)
 	
 	def output(self, of=sys.stdout):
@@ -40,9 +42,9 @@ class p_value_cor:
 			cor_list = map(str, cor_list)
 			of.write('%d\t%s\n'%(df, '\t'.join(cor_list)))
 			df += 1
-		r.png('p_value_cor.png')
-		cor_list = self.matrix[:,2]
-		p_value_label = self.p_value_list[2]
+		r.pdf('p_value_cor.pdf')
+		cor_list = self.matrix[:,3]
+		p_value_label = self.p_value_list[3]
 		df_list = range(self.df_lower, self.df_upper+1)
 		r.plot(df_list, cor_list, type='o', pch='*', xlab='df', ylab='correlation', main='p_value: %s'%p_value_label)
 		r.dev_off()
