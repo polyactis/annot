@@ -1,10 +1,23 @@
 #!/usr/bin/env python
+""""
+Usage: AnnotTest.py -y TestCaseType [OPTIONS]
+
+Option:
+	-y ..., --type=...	which test case should be invoked.
+	-h, --help              show this help
+
+Examples:
+	AnnotTest.py -y 2
+
+02-17-05
+	1: unittest for gene_stat_plot.
+
+02-20-05
+	2: unittest for subgraph_visualize
 """
-(02-17-05)
-	unittest for gene_stat_plot.
-"""
-import unittest
+import unittest, os, sys, getopt
 from gene_stat_plot import gene_stat
+from visualize.subgraph_visualize import subgraph_visualize
 
 class TestGeneStat(unittest.TestCase):
 	def setUp(self):
@@ -38,12 +51,13 @@ class TestGeneStat(unittest.TestCase):
 			leave_one_out, wu, report, \
 			log, judger_type, depth_cut_off, dir_files, commit, gene_table, dominant, plottype, \
 			stat_table_fname, subgraph_cut_off, debug, accuracy_cut_off)
-		self.instance.dstruc_loadin()
 		
 	def test_return_distinct_functions(self):
 		"""
 		02-17-05
 		"""
+		#loadin data structures used in return_distinct_functions()
+		self.instance.dstruc_loadin()
 		self.instance.debug_return_distinct_functions = 1
 		#1029 is father of 824, 824 is father of 1030
 		go_no_list = [824, 1029, 1030]
@@ -55,6 +69,8 @@ class TestGeneStat(unittest.TestCase):
 		"""
 		02-17-05
 		"""
+		#loadin data structures used in L1_match()
+		self.instance.dstruc_loadin()
 		self.instance.debug_L1_match =1
 		#it's GO:0006512
 		go_no = 449
@@ -76,6 +92,8 @@ class TestGeneStat(unittest.TestCase):
 		"""
 		02-17-05
 		"""
+		#loadin data structures used in common_ancestor_deep_enough()
+		self.instance.dstruc_loadin()
 		self.instance.debug_common_ancestor_deep_enough =1
 		#it's GO:0006512
 		go_no = 449
@@ -84,16 +102,92 @@ class TestGeneStat(unittest.TestCase):
 		k_functions_set = self.instance.known_genes_dict[gene_no]
 		is_correct = self.instance.common_ancestor_deep_enough(go_no, k_functions_set)
 		print "common_ancestor_deep_enough result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
+	
+	def test_submit(self):
+		"""
+		02-20-05
+			testing the new submit()
+		"""
+		#setting the testing gene_table and flag the needcommit
+		self.instance.gene_table = 'p_gene_test'
+		self.instance.needcommit = 1
+		#construct a testing prediction_tuple2list
+		tuple = (3,  4)	#(recurrence, connectivity)
+		unit = [0.001, 3, 5000, 50, 0]	#[p-value, mcl_id, gene_no, go_no, is_correct]
+		prediction_list = [unit]
+		self.instance.prediction_tuple2list[tuple] = prediction_list
+		#to get the cluster size.
+		self.instance.mcl_id2vertex_set[3] = [1,2,3,4,5,6,7]
+		self.instance.submit()
+
+class TestSubgraphVisualize(unittest.TestCase):
+	def setUp(self):
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		table = 'splat_result_1'
+		mcl_table = 'mcl_result_1'
+		gene_table = 'p_gene_1'
+		function = 393
+		functioncolor = 'green'
+		centralnode = 3
+		mcl_id = 0
+		#context subgraph
+		type = 2
+		r_fname = '/tmp/AnnotTest.R'
+		self.instance = subgraph_visualize(hostname, dbname, schema, table, mcl_table,\
+			gene_table, function, functioncolor, centralnode, mcl_id, type, r_fname)
+		self.instance.dstruc_loadin()
+	
+	def test_type2(self):
+		"""
+		02-20-05
+			test the capability to draw context_subgraph
+		"""
+		self.instance.centralnode = 6166
+		self.instance.function = 704
+		subgraph = self.instance.context_subgraph(self.instance.centralnode, self.instance.function)
+		self.instance.weighted_subgraph(subgraph)
+		self.instance.r_f.close()
+		
+		
 		
 if __name__ == '__main__':
-	suite = unittest.TestSuite()
-	"""
-	add one by one
-	"""
-	#suite.addTest(TestGeneStat("test_return_distinct_functions"))
-	#suite.addTest(TestGeneStat("test_L1_match"))
-	"""
-	add all
-	"""
-	suite.addTest(unittest.makeSuite(TestGeneStat))
-	unittest.TextTestRunner(verbosity=2).run(suite)
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+	
+	long_options_list = ["help", "type="]
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hy:", long_options_list)
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	TestCaseDict = {1:TestGeneStat,
+		2: TestSubgraphVisualize}
+	type = 0
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-y", "--type"):
+			type = int(arg)
+			
+	if type:
+		suite = unittest.TestSuite()
+		"""
+		add one by one
+		"""
+		#suite.addTest(TestGeneStat("test_return_distinct_functions"))
+		#suite.addTest(TestGeneStat("test_L1_match"))
+		#suite.addTest(TestGeneStat("test_submit"))
+		"""
+		add all
+		"""
+		suite.addTest(unittest.makeSuite(TestCaseDict[type]))
+		unittest.TextTestRunner(verbosity=2).run(suite)
+
+	else:
+		print __doc__
+		sys.exit(2)
