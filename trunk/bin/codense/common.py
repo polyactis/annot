@@ -182,7 +182,7 @@ def get_gene_no2go_no(curs, schema=None, gene_table='gene'):
 	
 	gene_no2go_no = {}
 	
-	curs.execute("select gene_no,go_functions from gene")
+	curs.execute("select gene_no,go_functions from %s"%gene_table)
 	rows = curs.fetchall()
 	for row in rows:
 		gene_no2go_no[row[0]] = []
@@ -211,3 +211,53 @@ def get_known_genes_dict(curs, schema=None, gene_table='gene'):
 			known_genes_dict[row[0]].add(int(go_no))
 	sys.stderr.write("Done\n")
 	return known_genes_dict
+
+def get_go_no2depth(curs, schema=None, table='go'):
+	"""
+	03-14-05
+		get the go_no2depth
+	"""
+	sys.stderr.write("Getting go_no2depth...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	go_no2depth = {}
+	curs.execute("select go_no, depth from %s"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_no2depth[row[0]] = row[1]
+	sys.stderr.write("Done\n")
+	return go_no2depth
+
+def get_go_term_id2go_no(curs, schema=None, go_table='go', term_table='go.term'):
+	"""
+	03-14-05
+		get go_term_id2go_no
+	"""
+	sys.stderr.write("Getting go_term_id2go_no...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	go_term_id2go_no = {}
+	curs.execute("select g.go_no, t.name, t.id from %s g, %s t where g.go_id=t.acc"%(go_table, term_table))
+	rows = curs.fetchall()
+	for row in rows:
+		go_term_id2go_no[row[2]] = row[0]
+	
+	sys.stderr.write("Done\n")
+	return go_term_id2go_no
+	
+def get_go_term_id2depth(curs, schema=None, term_table='go.term'):
+	"""
+	03-14-05
+		get go_term_id2depth
+	"""
+	sys.stderr.write("Getting go_term_id2depth...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	go_term_id2depth = {}
+	curs.execute("select id, depth from %s where depth NOTNULL"%(term_table))
+	rows = curs.fetchall()
+	for row in rows:
+		go_term_id2depth[row[0]] = row[1]
+	
+	sys.stderr.write("Done\n")
+	return go_term_id2depth
