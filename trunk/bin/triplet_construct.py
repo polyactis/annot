@@ -103,4 +103,4 @@ def triplet_batch(dir, ofname):
 if __name__ == '__main__':
 	triplet_batch(sys.argv[1], sys.argv[2])
 	# argv[1] specifies which directory contains results from graph construction
-	# the resultant triplet dictionary will be stored in '~/pickle/yeast_triplet'.
+	# argv[2] relative path for the file to store the resultant triplet dictionary, eg. 'pickle/yeast_triplet'.
