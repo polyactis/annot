@@ -159,6 +159,9 @@ def get_go_no2term_id(curs, schema=None, term_table='go.term'):
 	"""
 	03-04-05
 		get the go_no2term_id dictionary
+	03-22-05
+		there're GO synonyms in table term_synonym,
+		which should be linked to the source term_id of table term.
 	"""
 	sys.stderr.write("Getting go_no2term_id...")
 	if schema:
@@ -168,6 +171,11 @@ def get_go_no2term_id(curs, schema=None, term_table='go.term'):
 	rows = curs.fetchall()
 	for row in rows:
 		go_no2term_id[row[0]] = row[2]
+	#acc_synonym => term_id
+	curs.execute("select g.go_no, t.term_id from go.term_synonym t, go g where g.go_id=t.acc_synonym")
+	rows = curs.fetchall()
+	for row in rows:
+		go_no2term_id[row[0]] = row[1]
 	sys.stderr.write("Done\n")
 	return go_no2term_id
 
