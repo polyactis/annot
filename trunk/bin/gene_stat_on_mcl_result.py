@@ -8,6 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	 Ignore it, interface compatibility.
 	-m ..., --mcl_table=...	mcl_result(default)
+	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_gene_ratio_cut_off, 0.25(default)
 	-l ..., --limit=...,	IGNORE it, interface relics.
@@ -22,7 +23,7 @@ Option:
 Examples:
 	gene_stat_on_mcl_result.py -k shu -p 0.001
 	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7
-	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c -m fim_result
+	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c -m fim_result -g p_gene_fim_result
 
 Description:
 
@@ -45,7 +46,7 @@ class gene_prediction:
 
 class gene_stat_on_mcl_result:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
-		limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report=0, needcommit=0):
+		limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report=0, needcommit=0, gene_table='p_gene'):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -60,6 +61,7 @@ class gene_stat_on_mcl_result:
 		self.wu = int(wu)
 		self.report = int(report)
 		self.needcommit = int(needcommit)
+		self.gene_table = gene_table
 		self.tp = 0.0
 		self.tp_m = 0.0
 		self.tp1 = 0.0
@@ -235,6 +237,18 @@ class gene_stat_on_mcl_result:
 	
 	def submit(self):
 		sys.stderr.write("Database transacting...")
+		if self.gene_table!='p_gene':
+			#create the table if it's not 'p_gene'
+			self.curs.execute("create table %s(\
+				gene_no integer,\
+				cluster_array integer[],\
+				tp integer[],\
+				tp1 integer[],\
+				tn integer,\
+				fp integer[],\
+				fn integer[],\
+				p_functions integer[]\
+				)"%self.gene_table)
 		self.curs.execute("select gene_no from gene")
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -247,18 +261,14 @@ class gene_stat_on_mcl_result:
 				string_fp = self.list_stringlist(entry.fp.keys())
 				string_fn = self.list_stringlist(entry.fn.keys())
 				if gene_no in self.known_genes_dict:
-					self.curs.execute("update gene set cluster_array=ARRAY%s,\
-						tp='%s',tp1='%s',tn=%d,fp='%s',fn='%s',p_functions=ARRAY%s where gene_no=%d"%\
-						(repr(entry.mcl_id_list),string_tp,string_tp1,entry.tn,string_fp,\
-						string_fn,repr(p_functions),gene_no))
+					self.curs.execute("insert into %s(gene_no, cluster_array, tp, tp1, tn, fp, fn, p_functions)\
+						values(%d, ARRAY%s, '%s', '%s', %d, '%s', '%s', ARRAY%s)"%\
+						(self.gene_table, gene_no, repr(entry.mcl_id_list),string_tp,string_tp1,\
+						entry.tn, string_fp, string_fn,repr(p_functions)))
 				else:
-					self.curs.execute("update gene set cluster_array=ARRAY%s,\
-						p_functions=ARRAY%s where gene_no=%d"%\
-						(repr(entry.mcl_id_list),repr(p_functions),gene_no))
-			else:
-			#cleanup for other genes predicted previously
-				self.curs.execute("update gene set cluster_array=null, tp=null, tp1=null, tn=null,\
-					fp=null, fn=null, p_functions=null where gene_no=%d"%gene_no)
+					self.curs.execute("insert into %s(gene_no, cluster_array, p_functions)\
+						values(%d, ARRAY%s, ARRAY%s)"%\
+						(self.gene_table, gene_no, repr(entry.mcl_id_list),repr(p_functions)))
 		if self.needcommit:				
 			self.curs.execute("end")	
 		sys.stderr.write("done.\n")
@@ -295,9 +305,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
-		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
+		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit", "gene_table="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrcg:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -308,6 +318,7 @@ if __name__ == '__main__':
 	table = 'mcl_result'
 	mcl_table = 'mcl_result'
 	p_value_cut_off = None
+	unknown_cut_off = 0.25
 	limit = 0
 	connectivity_cut_off = 0.8
 	recurrence_cut_off = 5
@@ -315,7 +326,7 @@ if __name__ == '__main__':
 	wu = 0
 	report = 0
 	commit = 0
-	unknown_cut_off = 0.25
+	gene_table = 'p_gene'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -348,10 +359,12 @@ if __name__ == '__main__':
 			report = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
+		elif opt in ("-g", "--gene_table"):
+			gene_table = arg
 	
 	if schema and p_value_cut_off:
 		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
-			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit, gene_table)
 		instance.dstruc_loadin()
 		instance.run()
 	else:

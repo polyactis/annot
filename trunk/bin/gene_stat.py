@@ -8,6 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	cluster_stat(default)
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
+	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.25(default), for wu's
 	-l ..., --limit=...,	OBSOLETE, accepted for backwards compatibility
@@ -24,6 +25,7 @@ Examples:
 	gene_stat.py -k shu -p 0.001 -n 0.7 -w -r
 	gene_stat.py -k shu -p 0.001 -n 0.7 -u 0.80 -w
 	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -w
+	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -w -c -g p_gene_cluster_stat2
 
 Description:
 	This program is mainly for validation purpose. Run after cluster_stat.py.
@@ -40,9 +42,9 @@ from gene_stat_on_mcl_result import gene_stat_on_mcl_result, gene_prediction
 
 class gene_stat(gene_stat_on_mcl_result):
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, limit, \
-			connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu=0, report=0, needcommit=0):
+			connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu=0, report=0, needcommit=0, gene_table='p_gene'):
 		gene_stat_on_mcl_result.__init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, \
-			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit)
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit, gene_table)
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -150,9 +152,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
-		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
+		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit", "gene_table="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrcg:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -171,6 +173,7 @@ if __name__ == '__main__':
 	report = 0
 	commit = 0
 	unknown_cut_off = 0.25
+	gene_table = 'p_gene'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -203,10 +206,12 @@ if __name__ == '__main__':
 			report = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
+		elif opt in ("-g", "--gene_table"):
+			gene_table = arg
 	
 	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
-			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit, gene_table)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
