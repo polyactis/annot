@@ -651,13 +651,13 @@ class gene_stat:
 		
 		for ancestor in ancestor_set:
 			depth = self.go_term_id2depth[ancestor]
-			if depth > self.depth_cut_off:
+			if depth >= self.depth_cut_off:
 				if self.log:
 					self.log_file.write("%s's common_ancestor %s\n"%(self.go_no2go_id[p_go_no], \
 						self.go_no2go_id[self.go_term_id2go_no[ancestor]]))
 				#pre-stop the loop
 				break
-		if depth > self.depth_cut_off:
+		if depth >= self.depth_cut_off:
 			return 1
 		else:
 			return 0
