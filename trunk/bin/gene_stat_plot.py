@@ -83,6 +83,26 @@ Description:
 		in each cell of the recurrence-connectivity grid. 
 		Second, gene_prediction_dict[gene_no].p_functions_dict is used to store a list of distinct
 		functions of this gene_no.
+	02-19-05
+	In gene_distinct_functions_output()
+		total predictions = len(self.prediction_tuple2list[tuple]) is totally wrong.
+		prediction_tuple2list also contains some predictions that are below that p-value cutoff.
+		So remove this column. To see total predictions for each tuple, look up the database
+		table.
+	02-19-05
+	in function submit()
+		Changes to table p_gene,
+		1. one row means one gene, one cluster, one function. No merging of the clusters.
+		2. avg_p_value is the real p-value.
+		3. cluster_context and cluster_array loses its meaning. But I kept cluster_array
+			because it's easy.
+			context_specific.py and subgraph_visualize.py are going to be changed.
+		4. p_value_cut_off is the real p_value(same as avg_p_value).
+		5. recurrence_cut_off is the real recurrence of the cluster.
+		6. connectivity_cut_off is the real connectivity of the cluster.
+		7. cluster_size_cut_off is the real size of the cluster.
+		8. all the predictions are kept, no any cutoff.
+		9. add one field, mcl_id to the end of table p_gene to ease table linking.
 """
 
 import sys, os, psycopg, getopt, csv, fileinput, math
@@ -120,6 +140,10 @@ class accuracy_struc:
 		self.ratio = 0
 
 class gene_stat:
+	"""
+	02-19-05
+		three old final_xxx() functions are deleted. also their sub-functions, is_L0 and is_L1.
+	"""
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
 		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
 		log=0, judger_type=0, depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene', \
@@ -140,10 +164,6 @@ class gene_stat:
 		self.report = int(report)
 		
 		self.log = int(log)
-		self.final_dict = {0: self.final_direct_match,
-			1: self.final_L0,
-			2: self.final_common_ancestor}
-		#self.final = self.final_dict[judger_type]
 		self.match_dict = {0: self.direct_match,
 			1: self.L1_match,
 			2: self.common_ancestor_deep_enough}
@@ -935,206 +955,27 @@ class gene_stat:
 			print "\t\t##leave return_distinct_functions()"
 		return go_no_list_to_return
 
-	def final_L0(self):
-		if self.dominant:
-			#get the dominant function among all the functions predicted for one gene
-			for gene_no in self.gene_prediction_dict:
-				entry = self.gene_prediction_dict[gene_no]
-				#the biggest support is what the dominant function needs
-				dominant_support = max(entry.p_functions_dict.values())
-				#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept.
-				for go_no in entry.p_functions_dict.keys():
-					if entry.p_functions_dict[go_no] < dominant_support:
-						del entry.p_functions_dict[go_no]
-		for gene_no in self.gene_prediction_dict:
-			#initialize three data structures
-			L0_dict = {}
-			L1_dict = {}
-			#L0 or L1 are all good known functions
-			good_k_functions_dict = {}
-			#each entry is a gene_prediction class
-			entry = self.gene_prediction_dict[gene_no]
-			p_functions_dict = entry.p_functions_dict.copy()
-			p_functions = p_functions_dict.keys()
-			if gene_no not in self.known_genes_dict:
-				#if self.log:
-					#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
-				continue
-			k_functions_list = self.known_genes_dict[gene_no]
-			self.no_of_p_known += 1
-			#compare the known go_no with the predicted go_no to see if they match
-			#L0 level or L1 level
-			for p_go_no in p_functions_dict:
-				for k_go_no in k_functions_list:
-					if self.is_L0(p_go_no, k_go_no):
-						L0_dict[p_go_no] = p_functions_dict[p_go_no]
-						good_k_functions_dict[k_go_no] = 1
-					elif self.is_L1(p_go_no, k_go_no):
-						L1_dict[p_go_no] = p_functions_dict[p_go_no]
-						good_k_functions_dict[k_go_no] = 1
-			#if one L1 is also counted as L0, remove it from L1_dict.
-			#this case happens when one known function has both L0 and L1 matches in the predicted functions
-			for go_no in L0_dict:
-				if go_no in L1_dict:
-					del L1_dict[go_no]
-			entry.tp = L0_dict
-			entry.tp1 = L1_dict
-			for k_go_no in k_functions_list:
-				if k_go_no not in good_k_functions_dict:
-					entry.fn[k_go_no] = 1
-			for p_go_no in p_functions_dict:
-				if p_go_no not in L0_dict and p_go_no not in L1_dict:
-					entry.fp[p_go_no] = p_functions_dict[p_go_no]
-			
-			entry.tn = self.no_of_functions - (len(entry.tp)+len(entry.tp1)+len(entry.fp)+len(entry.fn))
-			self.tp += len(entry.tp)
-			self.tp_m += sum(entry.tp.values())
-			self.tp1 += len(entry.tp1)
-			self.tp1_m += sum(entry.tp1.values())
-			self.tn += entry.tn
-			self.fp += len(entry.fp)
-			self.fp_m += sum(entry.fp.values())
-			self.fn += sum(entry.fn.values())
 
-	def final_common_ancestor(self):
-		if self.dominant:
-			#get the dominant function among all the functions predicted for one gene
-			for gene_no in self.gene_prediction_dict:
-				entry = self.gene_prediction_dict[gene_no]
-				#the biggest support is what the dominant function needs
-				dominant_support = max(entry.p_functions_dict.values())
-				#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept.
-				for go_no in entry.p_functions_dict.keys():
-					if entry.p_functions_dict[go_no] < dominant_support:
-						del entry.p_functions_dict[go_no]
-		for gene_no in self.gene_prediction_dict:
-			#initialize three data structures
-			L0_dict = {}
-			L1_dict = {}
-			#each entry is a gene_prediction class
-			entry = self.gene_prediction_dict[gene_no]
-			#copy is important to dictionary to avoid direct change.
-			p_functions_dict = entry.p_functions_dict.copy()
-			if gene_no not in self.known_genes_dict:
-				#unknown genes are not validatable. Ignore.
-				#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
-				continue
-			
-			#!!copy()!!. Set is implemented by dictionary.
-			k_functions_set = self.known_genes_dict[gene_no].copy()
-			self.no_of_p_known += 1
-			#compare the known go_no with the predicted go_no to see if they match
-
-			for p_go_no in entry.p_functions_dict:
-				if p_go_no in k_functions_set:
-					L0_dict[p_go_no] = p_functions_dict[p_go_no]
-					self.gene_prediction_dict[gene_no].p_functions_struc_dict[p_go_no].is_correct = 1
-					del p_functions_dict[p_go_no]
-					k_functions_set.remove(p_go_no)
-				elif self.common_ancestor_deep_enough(p_go_no, k_functions_set):
-					#Jasmine's advice.
-					if self.log:
-						self.log_file.write('%s\t%s\t'%(self.gene_no2gene_id[gene_no], repr(k_functions_set)))
-					L0_dict[p_go_no] = 1
-					self.gene_prediction_dict[gene_no].p_functions_struc_dict[p_go_no].is_correct = 1
-					del p_functions_dict[p_go_no]
-			
-			#remaining function categories in k_functions_set are false negatives
-			entry.fn = k_functions_set
-
-			entry.tp = L0_dict
-			entry.tp1 = L1_dict
-			#the p_go_no's left in p_functions_dict are false positive's
-			entry.fp = p_functions_dict
-			
-			entry.tn = self.no_of_functions - (len(entry.tp)+len(entry.tp1)+len(entry.fp)+len(entry.fn))
-			self.tp += len(entry.tp)
-			self.tp_m += sum(entry.tp.values())
-			self.tp1 += len(entry.tp1)
-			self.tp1_m += sum(entry.tp1.values())
-			self.tn += entry.tn
-			self.fp += len(entry.fp)
-			self.fp_m += sum(entry.fp.values())
-			self.fn += len(entry.fn)
-			#self.log_file.write('known: %d %s %s %d %s %s %s %s\n'%(gene_no, repr(entry.tp),repr(entry.tp1),\
-			#	entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
-
-	def final_direct_match(self):
-		if self.dominant:
-			#get the dominant function among all the functions predicted for one gene
-			for gene_no in self.gene_prediction_dict:
-				entry = self.gene_prediction_dict[gene_no]
-				#the biggest support is what the dominant function needs
-				dominant_support = max(entry.p_functions_dict.values())
-				#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept.
-				for go_no in entry.p_functions_dict.keys():
-					if entry.p_functions_dict[go_no] < dominant_support:
-						del entry.p_functions_dict[go_no]
-		for gene_no in self.gene_prediction_dict:
-			#matched predictions
-			L0_dict = {}
-			#each entry is a gene_prediction class
-			entry = self.gene_prediction_dict[gene_no]
-			p_functions_dict = entry.p_functions_dict.copy()
-			if gene_no not in self.known_genes_dict:
-				#unknown genes are not validatable. Ignore.
-				#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
-				continue
-			k_functions_set = self.known_genes_dict[gene_no]
-			self.no_of_p_known += 1
-			#compare the known go_no with the predicted go_no to see if they match
-
-			for k_go_no in k_functions_set:
-				if k_go_no in p_functions_dict:
-					L0_dict[k_go_no] = p_functions_dict[k_go_no]
-					self.gene_prediction_dict[gene_no].p_functions_struc_dict[k_go_no].is_correct = 1
-					del p_functions_dict[k_go_no]
-				else:
-					entry.fn[k_go_no] = 1
-
-
-			entry.tp = L0_dict
-			#the p_go_no's left in p_functions_dict are false positive's
-			entry.fp = p_functions_dict
-			
-			entry.tn = self.no_of_functions - (len(entry.tp)+len(entry.fp)+len(entry.fn))
-			self.tp += len(entry.tp)
-			self.tp_m += sum(entry.tp.values())
-			self.tn += entry.tn
-			self.fp += len(entry.fp)
-			self.fp_m += sum(entry.fp.values())
-			self.fn += sum(entry.fn.values())
-			#self.log_file.write('known: %d %s %s %d %s %s %s %s\n'%(gene_no, repr(entry.tp),repr(entry.tp1),\
-			#	entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
-
-	def is_L0(self, p_go_no, k_go_no):
-		k_go_id = self.go_no2go_id[k_go_no]
-		p_go_id = self.go_no2go_id[p_go_no]
-		k_go_family = Set(self.go_graph.forw_bfs(k_go_id))
-		if p_go_id in k_go_family:
-			#self.log_file.write('%d is L0 of %d:: %s %s\n'%(p_go_no, k_go_no, p_go_id, k_go_id))
-			return 1
-		else:
-			return 0
-		
-	def is_L1(self, p_go_no, k_go_no):
-		k_go_id = self.go_no2go_id[k_go_no]
-		p_go_id = self.go_no2go_id[p_go_no]
-		k_go_inc_nbrs = Set(self.go_graph.inc_nbrs(k_go_id))
-		if p_go_id in k_go_inc_nbrs:
-			#self.log_file.write("%d is direct parent of %d:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))	
-			return 1
-		for k_go_inc_nbr in k_go_inc_nbrs:
-			k_go_inc_nbr_out_nbrs = Set(self.go_graph.out_nbrs(k_go_inc_nbr))
-			if p_go_id in k_go_inc_nbr_out_nbrs:
-				#self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_go_id, k_go_id))			
-				return 1
-		return 0
-	
 	def list_stringlist(self, list):
 		return '{' + repr(list)[1:-1] + '}'
 	
 	def submit(self):
+		"""
+		02-19-05
+			Changes to table p_gene,
+			1. one row means one gene, one cluster, one function. No merging of the clusters.
+			2. avg_p_value is the real p-value.
+			3. cluster_context and cluster_array loses its meaning. But I kept cluster_array
+				because it's easy.
+				context_specific.py and subgraph_visualize.py are going to be changed.
+			4. p_value_cut_off is the real p_value(same as avg_p_value).
+			5. recurrence_cut_off is the real recurrence of the cluster.
+			6. connectivity_cut_off is the real connectivity of the cluster.
+			7. cluster_size_cut_off is the real size of the cluster.
+			8. all the predictions are kept, no any cutoff.
+			9. add one field, mcl_id to the end of table p_gene to ease table linking.
+			
+		"""
 		sys.stderr.write("Database transacting...")
 		if self.gene_table!='p_gene':
 			#create the table if it's not 'p_gene'
@@ -1153,9 +994,36 @@ class gene_stat:
 				connectivity_cut_off    float,\
 				cluster_size_cut_off    integer,\
 				unknown_cut_off      float,\
-				depth_cut_off integer\
+				depth_cut_off integer,\
+				mcl_id integer\
 				)"%self.gene_table)
-
+		
+		"""the value of self.prediction_tuple2list, [[p_value, cluster_id, gene_no, go_no, correct], ... ] """
+		for (tuple, prediction_list)  in self.prediction_tuple2list.iteritems():
+			recurrence = tuple[0]
+			connectivity = tuple[1]
+			for unit in prediction_list:
+				p_value = unit[0]
+				mcl_id = unit[1]
+				gene_no = unit[2]
+				go_no = unit[3]
+				is_correct = unit[4]
+				if go_no not in self.go_no2accuracy:
+					#There's possibility that one function can not be validated.
+					#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
+					#
+					e_accuracy = -1.0
+				else:
+					e_accuracy = self.go_no2accuracy[go_no].ratio
+				self.curs.execute("insert into %s(gene_no, go_no, is_correct, avg_p_value, e_accuracy,\
+					no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off,\
+					connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id)\
+					values(%d, %d, %d, %f, %f, %s, ARRAY%s, %f, %s, %s, %s, %s, %s, %s)"%\
+					(self.gene_table, gene_no, go_no, is_correct, p_value, e_accuracy,\
+					1, repr([mcl_id]), p_value, recurrence,\
+					connectivity, len(self.mcl_id2vertex_set[mcl_id]), self.unknown_cut_off, self.depth_cut_off, mcl_id))
+		"""
+		#replaced by codes above, see function documentation
 		for gene_no in self.gene_prediction_dict:
 			unit = self.gene_prediction_dict[gene_no].p_functions_struc_dict
 			for go_no in unit:
@@ -1168,9 +1036,9 @@ class gene_stat:
 					no_of_containing_clusters = unit[go_no].context_dict[member]
 					context_list.append('%s/%d'%(member, no_of_containing_clusters ))
 				if go_no not in self.go_no2accuracy:
-				#There's possibility that one function can not be validated.
-				#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
-				#
+					#There's possibility that one function can not be validated.
+					#Because after masking a known gene to be unknown, the representative function of a cluster might be changed.
+					#
 					e_accuracy = -1.0
 				else:
 					e_accuracy = self.go_no2accuracy[go_no].ratio
@@ -1182,9 +1050,9 @@ class gene_stat:
 					e_accuracy, no_of_clusters, ';'.join(context_list),\
 					repr(unit[go_no].cluster_array), self.p_value_cut_off, self.recurrence_cut_off,\
 					self.connectivity_cut_off, self.cluster_size_cut_off, self.unknown_cut_off, self.depth_cut_off))
-		
-		if self.needcommit:				
-			self.curs.execute("end")	
+		"""
+		if self.needcommit:
+			self.curs.execute("end")
 		sys.stderr.write("done.\n")
 
 	def stat_output(self):
@@ -1349,9 +1217,16 @@ class gene_stat:
 			f_handler.writerow([tuple[0],tuple[1],self.prediction_tuple2p_value_cut_off[tuple]])
 
 	def accuracy_cut_off_output(self, f_handler):
-		f_handler.writerow(['recurrence', 'connectivity', 'accuracy', 'total predictions'])
+		"""
+		02-19-05
+			total predictions = len(self.prediction_tuple2list[tuple]) is totally wrong.
+			prediction_tuple2list also contains some predictions that are below that p-value cutoff.
+			So remove this column. To see total predictions for each tuple, look up the database
+			table.
+		"""
+		f_handler.writerow(['recurrence', 'connectivity', 'accuracy'])
 		for tuple in self.prediction_tuple2accuracy:
-			f_handler.writerow([tuple[0],tuple[1],self.prediction_tuple2accuracy[tuple], len(self.prediction_tuple2list[tuple]) ])
+			f_handler.writerow([tuple[0],tuple[1],self.prediction_tuple2accuracy[tuple]])
 	
 	def gene_distinct_functions_output(self, f_handler):
 		f_handler.writerow(['gene_id', 'go_no_list', '#'])
