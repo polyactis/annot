@@ -1,77 +1,116 @@
 #!/usr/bin/env python
 """
-Usage: stat_plot.py -c CONNECTIVITY -l LIMIT -t TAG [options]
+Usage: stat_plot.py -f FIXED -v VARYING -t TAG [options] OFNAME
 
 Options:
-  -d ..., --dbname=...		database to connect, graphdb(default)
-  -c ..., --connectivity=...	connectivity_cut_off
-  -l ..., --limit=...	max no. of clusters related to one gene
-  -t ..., --tag=...	just tag
-  -x ..., --xlim=...	the range for the x axis, 0.0-1.0(default)
-  -y ..., --ylim=...	the range for the y axis, 0.0-1.0(default)
-  -o ..., --output=...	output file name
-  -h, --help		show this help
+	-z ..., --hostname=...	the hostname, zhoudb(default)
+	-d ..., --dbname=...		database to connect, graphdb(default)
+	-f ..., --fixed=...	fixed parameter values, like urs:0.25,8,8
+	-v ..., --var=...	varying parameter, one of unrs
+	-t ..., --tag=...	just tag
+	-x ..., --xlim=...	the range for the x axis, 0.0-1000(default)
+	-y ..., --ylim=...	the range for the y axis, 0.0-1.0(default)
+	-c, --based_on_clusters	default is based_on_functions
+	-l, --l1	L1(sibling) is counted as true positive.
+	-h, --help		show this help
 
 Examples:
-  stat_plot.py -c 0.8 -l 10 -t sc_known
-  stat_plot.py -c 0.8-0.9 -l 10 -t sc_known
-  stat_plot.py -c 0.8-0.9 -l 5-10 -t sc_known
-  stat_plot.py -x 0.2-0.8 -y 0.3-0.6 -l 0 -t sc_shu_known
+	stat_plot.py -t sc_known
+
+Description:
+	unrs: u denotes unknown_cut_off, n denotes connectivity_cut_off
+		r denotes recurrence_cut_off, s denotes cluster_size_cut_off
+		
 """
 
-import sys, os, cStringIO, psycopg, getopt
+import sys, os, psycopg, getopt
 from rpy import r
 
+class option_attr:
+	def __init__(self, label=None, value=None):
+		self.label = label
+		self.value = value
+
 class stat_plot:
-	def __init__(self, dbname, c_range, l_range, tag, xlim, ylim, ofname):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, l1, ofname):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to graph")
+		(self.fixed_label, self.fixed_value) = fixed.split(':')
+		self.fixed_value_list = self.fixed_value.split(',')
+		self.var = var
+		self.tag = tag
 		self.x_range = xlim.split('-')
 		self.x_range = map(float, self.x_range)
 		self.y_range = ylim.split('-')
 		self.y_range = map(float, self.y_range)
-		self.c_range = c_range.split('-')
-		if len(self.c_range) == 1:
-			self.c_range.append(self.c_range[0])
-		self.l_range = l_range.split('-')
-		if len(self.l_range) == 1:
-			self.l_range.append(self.l_range[0])
-		self.tag = tag
+		self.based_on_clusters = int(based_on_clusters)
+		self.l1 = int(l1)
 		self.ofname = ofname
+		self.option_label_dict = {'u': 'unknown_cut_off',
+			'n':'connectivity_cut_off',
+			'r':'recurrence_cut_off',
+			's':'cluster_size_cut_off'}
+		self.option_num_dict = {}
 		self.stat_data = []
 		self.no_of_curves = 0
-		
+	
+	def option_parsing(self):
+		for i in range(len(self.fixed_label)):
+			label = self.option_label_dict[self.fixed_label[i]]
+			self.option_num_dict[i] = option_attr(label, self.fixed_value_list[i])
+		self.option_num_dict[3] = option_attr(self.option_label_dict[self.var])
+
 	def run(self):
-		self.curs.execute("select distinct connectivity, limit_of_cluster, tag from\
-			stat_plot_data where connectivity >= %f and\
-			connectivity <= %f and limit_of_cluster >= %d and limit_of_cluster <= %d and\
-			tag='%s' order by connectivity, limit_of_cluster\
-			"%(float(self.c_range[0]), float(self.c_range[1]),\
-			int(self.l_range[0]), int(self.l_range[1]), self.tag))
+		self.option_parsing()
+		self.curs.execute("select distinct %s, %s, %s, %s, tag from\
+			stat_plot_data where %s=%s and %s=%s and %s=%s and tag='%s' order by %s \
+			"%(self.option_num_dict[0].label, self.option_num_dict[1].label, self.option_num_dict[2].label,\
+			self.option_num_dict[3].label, self.option_num_dict[0].label, self.option_num_dict[0].value, \
+			self.option_num_dict[1].label, self.option_num_dict[1].value, self.option_num_dict[2].label, \
+			self.option_num_dict[2].value, self.tag, self.option_num_dict[3].label))
 		rows = self.curs.fetchall()
-		r.pdf('%s.pdf'%self.ofname)
-		for connectivity,limit,tag in rows:
-			self.plot(connectivity,limit,tag)
+		r.png('%s'%self.ofname)
+		for row in rows:
+			self.plot(row)
 		r.dev_off()
 		
-	def plot(self, connectivity, limit, tag):
+	def plot(self, row):
 		self.no_of_curves += 1
-		sensitivity_list = []
-		positive_predictive_value_list = []
-		self.curs.execute("select tp,tn,fp,fn from stat_plot_data where\
-			connectivity=%f and limit_of_cluster=%d and tag='%s' order by p_value_cut_off"%\
-			(connectivity, limit, tag))
+		x_list = []
+		y_list = []
+		self.curs.execute("select tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn from stat_plot_data where\
+			%s=%s and %s=%s and %s=%s and %s=%s and tag='%s' order by p_value_cut_off"%\
+			(self.option_num_dict[0].label, row[0], self.option_num_dict[1].label, row[1], self.option_num_dict[2].label,\
+			row[2], self.option_num_dict[3].label, row[3], row[4]))
 		plot_data = self.curs.fetchall()
 		for entry in plot_data:
-			sensitivity_list.append(float(entry[0])/(entry[0]+entry[3]))
-			positive_predictive_value_list.append(float(entry[0])/(entry[0]+entry[2]))
+			tn = entry[4]
+			fn = entry[7]
+			if self.based_on_clusters:
+				#using the tp_m, tp1_m and fp_m
+				tp = entry[1]
+				tp1 = entry[3]
+				fp = entry[6]
+			else:
+				#using the tp, tp1, fp
+				tp = entry[0]
+				tp1 = entry[2]
+				fp = entry[5]
+			if self.l1:
+				#tp1 is counted as true positive
+				tp += tp1
+			else:
+				#tp1 is counted as false positive
+				fp += tp1
+			x_list.append(tp)
+			y_list.append(float(tp)/(tp+fp))
 
 		if self.no_of_curves==1:
-			r.plot(sensitivity_list, positive_predictive_value_list, type='o',pch='*',xlab='sensitivity',xlim=self.x_range,ylim=self.y_range, \
-			ylab='positive_predictive_value', main='Connectivity: %s  Limit: %s'%(repr(self.c_range),repr(self.l_range)), col=self.no_of_curves)
+			r.plot(x_list, y_list, type='o',pch='*',xlab='true positive',xlim=self.x_range,ylim=self.y_range, \
+			ylab='ratio', main='%s'%(self.option_num_dict[3].label), col=self.no_of_curves)
 		else:
-			r.lines(sensitivity_list, positive_predictive_value_list, type='o',pch='*',col=self.no_of_curves)
+			r.lines(x_list, y_list, type='o',pch='*',col=self.no_of_curves)
 
 
 if __name__ == '__main__':
@@ -79,43 +118,47 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_option_list = ["help", "dbname=", "connectivity=", "limit=", "tag=", "xlim=", "ylim=", "output="]
+	long_option_list = ["help", "hostname=", "dbname=", "fixed=", "var=", "tag=", "xlim=", "ylim=", "based_on_clusters", "l1"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:c:l:t:x:y:o:", long_option_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:f:v:t:x:y:cl", long_option_list)
 	except:
 		print __doc__
 		sys.exit(2)
-	
+		
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
-	connectivity = None
-	limit = None
+	fixed = None
+	var = None
 	tag = None
-	xlim = '0.0-1.0'
+	xlim = '0.0-1000'
 	ylim = '0.0-1.0'
-	output =''
+	based_on_clusters = 0
+	l1 = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
-		elif opt in ("-c", "--connectivity"):
-			connectivity = arg
-		elif opt in ("-l", "--limit"):
-			limit = arg
+		elif opt in ("-f", "--fixed"):
+			fixed = arg
+		elif opt in ("-v", "--var"):
+			var = arg
 		elif opt in ("-t", "--tag"):
 			tag = arg
 		elif opt in ("-x", "--xlim"):
 			xlim = arg
 		elif opt in ("-y", "--ylim"):
 			ylim = arg
-		elif opt in ("-o", "--output"):
-			output = arg
+		elif opt in ("-c", "--based_on_clusters"):
+			based_on_clusters = 1
+		elif opt in ("-l", "--l1"):
+			l1 = 1
 	
-	if connectivity and limit and tag:
-		if output=='':
-			output = '%s_%s_%s'%(tag,connectivity,limit)
-		instance = stat_plot(dbname, connectivity, limit, tag, xlim, ylim, output)
+	if fixed and var and tag and len(args)==1:
+		instance = stat_plot(hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, l1, args[0])
 		instance.run()
 	else:
 		print __doc__
