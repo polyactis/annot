@@ -29,11 +29,11 @@ from rpy import *
 class gene_prediction:
 	# class holding prediction information of a gene
 	def __init__(self):
-		self.tp = 0
-		self.tp1 = 0
+		self.tp = {}
+		self.tp1 = {}
 		self.tn = 0
-		self.fp = 0
-		self.fn = 0
+		self.fp = {}
+		self.fn = {}
 		self.p_functions_dict = {}
 		self.mcl_id_list = []
 
@@ -50,9 +50,12 @@ class gene_stat_on_mcl_result:
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.tp = 0.0
+		self.tp_m = 0.0
 		self.tp1 = 0.0
+		self.tp1_m = 0.0
 		self.tn = 0.0
 		self.fp = 0.0
+		self.fp_m =0.0
 		self.fn = 0.0
 		self.known_genes_dict = {}
 		self.no_of_records = 0
@@ -109,24 +112,19 @@ class gene_stat_on_mcl_result:
 				if gene_no in self.gene_prediction_dict:
 					entry = self.gene_prediction_dict[gene_no]
 					p_functions = entry.p_functions_dict.keys()
+					string_tp = self.list_stringlist(entry.tp.keys())
+					string_tp1 = self.list_stringlist(entry.tp1.keys())
+					string_fp = self.list_stringlist(entry.fp.keys())
+					string_fn = self.list_stringlist(entry.fn.keys())
 					if gene_no in self.known_genes_dict:
-						if p_functions:
-							self.curs.execute("update gene set cluster_array=ARRAY%s,\
-							tp=%d,tp1=%d,tn=%d,fp=%d,fn=%d,p_functions=ARRAY%s where gene_no=%d"%\
-							(repr(entry.mcl_id_list),entry.tp,entry.tp1,entry.tn,entry.fp,entry.fn,repr(p_functions),gene_no))
-						else:
-							self.curs.execute("update gene set cluster_array=ARRAY%s,\
-							tp=%d,tp1=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
-							(repr(entry.mcl_id_list),entry.tp,entry.tp1,entry.tn,entry.fp,entry.fn,gene_no))
+						self.curs.execute("update gene set cluster_array=ARRAY%s,\
+							tp='%s',tp1='%s',tn=%d,fp='%s',fn='%s',p_functions=ARRAY%s where gene_no=%d"%\
+							(repr(entry.mcl_id_list),string_tp,string_tp1,entry.tn,string_fp,\
+							string_fn,repr(p_functions),gene_no))
 					else:
-						if p_functions:
-							self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						self.curs.execute("update gene set cluster_array=ARRAY%s,\
 							p_functions=ARRAY%s where gene_no=%d"%\
 							(repr(entry.mcl_id_list),repr(p_functions),gene_no))
-						else:
-							self.curs.execute("update gene set cluster_array=ARRAY%s \
-							where gene_no=%d"%\
-							(repr(entry.mcl_id_list),gene_no))
 				else:
 				#cleanup for other genes predicted previously
 					self.curs.execute("update gene set cluster_array=null, tp=null, tp1=null, tn=null,\
@@ -137,10 +135,11 @@ class gene_stat_on_mcl_result:
 		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
 		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
 		sys.stderr.write('\tWhole Sensitvity: %f\n'%((self.tp+self.tp1)/(self.tp+self.tp1+self.fn)))
-		sys.stderr.write('\tTP0: %d  TP1: %d\n'%(self.tp, self.tp1))
+		sys.stderr.write('\tTP0: %d  TP1: %d  TN: %d  FP: %d  FN: %d\n'%(self.tp, self.tp1, self.tn, self.fp, self.fn))
+		sys.stderr.write('\tTP0_M: %d  TP1_M: %d  FP_M: %d\n'%(self.tp_m, self.tp1_m, self.fp_m))
 		sys.stderr.write('\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
-		sys.stderr.write('\tFalse Positive Ratio: %f\n'%(self.fp/(self.tp+self.tp1+self.fp)))
-			
+		sys.stderr.write('\tFalse Positive Ratio: %f\n'%(self.fp_m/(self.tp_m+self.tp1_m+self.fp_m)))
+		
 	def _gene_stat(self, row):
 		mcl_id = row[0]
 		vertex_set = row[1][1:-1].split(',')
@@ -151,7 +150,6 @@ class gene_stat_on_mcl_result:
 		unknown_gene_ratio = row[4]
 		if p_value_min>self.p_value_cut_off or unknown_gene_ratio>self.unknown_cut_off:
 			return
-		self.log_file.write('%d, %f, %f \n'%(mcl_id, p_value_min, unknown_gene_ratio))
 		self.no_of_records += 1
 		for gene_no in vertex_set:
 			if gene_no not in self.gene_prediction_dict:
@@ -159,44 +157,55 @@ class gene_stat_on_mcl_result:
 				self.gene_prediction_dict[gene_no] = item
 			self.gene_prediction_dict[gene_no].mcl_id_list.append(mcl_id)
 			for go_no in go_no_vector:
-				self.gene_prediction_dict[gene_no].p_functions_dict[go_no] = 1
+				if go_no not in self.gene_prediction_dict[gene_no].p_functions_dict:
+					self.gene_prediction_dict[gene_no].p_functions_dict[go_no] = 1
+				else:
+					self.gene_prediction_dict[gene_no].p_functions_dict[go_no] += 1
 
 	def final(self):
 		for gene_no in self.gene_prediction_dict:
 			L0_dict = {}
 			L1_dict = {}
-			good_p_functions_dict = {}
+			good_k_functions_dict = {}
 			entry = self.gene_prediction_dict[gene_no]
 			p_functions_dict = entry.p_functions_dict.copy()
 			p_functions = p_functions_dict.keys()
 			if gene_no not in self.known_genes_dict:
-				self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions),repr(entry.mcl_id_list)))
+				self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
 				continue
-			k_functions_dict = self.known_genes_dict[gene_no]
+			k_functions_list = self.known_genes_dict[gene_no]
 			self.no_of_p_known += 1
 			for p_go_no in p_functions_dict:
-				for k_go_no in k_functions_dict:
+				for k_go_no in k_functions_list:
 					if self.is_L0(p_go_no, k_go_no):
-						L0_dict[k_go_no] = 1
-						good_p_functions_dict[p_go_no] = 1
+						L0_dict[p_go_no] = p_functions_dict[p_go_no]
+						good_k_functions_dict[k_go_no] = 1
 					elif self.is_L1(p_go_no, k_go_no):
-						L1_dict[k_go_no] = 1
-						good_p_functions_dict[p_go_no] = 1
+						L1_dict[p_go_no] = p_functions_dict[p_go_no]
+						good_k_functions_dict[k_go_no] = 1
 			for go_no in L0_dict:
 				if go_no in L1_dict:
 					del L1_dict[go_no]
-			entry.tp = len(L0_dict)
-			entry.tp1 = len(L1_dict)
-			entry.fn = len(k_functions_dict) - entry.tp - entry.tp1
-			entry.fp = len(p_functions_dict) - len(good_p_functions_dict)
-			entry.tn = self.no_of_functions - (entry.tp+entry.tp1+entry.fp+entry.fn)
-
-			self.tp += entry.tp
-			self.tp1 += entry.tp1
+			entry.tp = L0_dict
+			entry.tp1 = L1_dict
+			for k_go_no in k_functions_list:
+				if k_go_no not in good_k_functions_dict:
+					entry.fn[k_go_no] = 1
+			for p_go_no in p_functions_dict:
+				if p_go_no not in L0_dict and p_go_no not in L1_dict:
+					entry.fp[p_go_no] = p_functions_dict[p_go_no]
+			
+			entry.tn = self.no_of_functions - (len(entry.tp)+len(entry.tp1)+len(entry.fp)+len(entry.fn))
+			self.tp += len(entry.tp)
+			self.tp_m += sum(entry.tp.values())
+			self.tp1 += len(entry.tp1)
+			self.tp1_m += sum(entry.tp1.values())
 			self.tn += entry.tn
-			self.fp += entry.fp
-			self.fn += entry.fn
-			self.log_file.write('known: %d %d %d %d %d %d %s %s\n'%(gene_no, entry.tp,entry.tp1,entry.tn,entry.fp,entry.fn,repr(p_functions),repr(entry.mcl_id_list)))
+			self.fp += len(entry.fp)
+			self.fp_m += sum(entry.fp.values())
+			self.fn += sum(entry.fn.values())
+			self.log_file.write('known: %d %s %s %d %s %s %s %s\n'%(gene_no, repr(entry.tp),repr(entry.tp1),\
+				entry.tn,repr(entry.fp),repr(entry.fn),repr(p_functions),repr(entry.mcl_id_list)))
 	
 	def is_L0(self, p_go_no, k_go_no):
 		k_go_index_list = self.gono_goindex_dict[k_go_no]
@@ -226,7 +235,10 @@ class gene_stat_on_mcl_result:
 					self.log_file.write("%d and %d are siblings:: %s %s\n"%(p_go_no, k_go_no, p_index_m, k_index_m))
 					return 1
 		return 0
-		
+	
+	def list_stringlist(self, list):
+		return '{' + repr(list)[1:-1] + '}'
+	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
