@@ -219,10 +219,16 @@ class graph_reorganize:
 			map_fhandler.write('%d\t%s\n'%(graph_attr.no, graph_label,))
 			
 			outf.write(self.vertex_block)
+			i = 0
 			for edge in graph_attr.graph_dict:
 				vertex1_no = self.vertex_list_dict[edge[0]].no
 				vertex2_no = self.vertex_list_dict[edge[1]].no
-				outf.write('e %d %d %f\n'%(vertex1_no, vertex2_no, graph_attr.graph_dict[edge],))
+				if vertex1_no < vertex2_no:
+					outf.write('e %d %d %d\n'%(vertex1_no, vertex2_no, i, ))
+				else:
+					outf.write('e %d %d %d\n'%(vertex2_no, vertex1_no, i, ))
+				#outf.write('e %d %d %f\n'%(vertex1_no, vertex2_no, graph_attr.graph_dict[edge],))
+				i += 1
 			outf.close()
 
 		map_fhandler.write('>no_vertexlabel_mapping\n')
