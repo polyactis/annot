@@ -74,10 +74,10 @@ def batch(dir, of_name):
 		inf.close()
 		
 	pickle.dump ( instance.global_tirplet_dict, of )
-	triplet_list = instance.global_tirplet_dict.keys()
-	triplet_list.sort()
-	for triplet in triplet_list:
-		sys.stderr.write('%s\t%d\n'%(triplet, instance.global_tirplet_dict[triplet],))
+	#triplet_list = instance.global_tirplet_dict.keys()
+	#triplet_list.sort()
+	#for triplet in triplet_list:
+	#	sys.stderr.write('%s\t%d\n'%(triplet, instance.global_tirplet_dict[triplet],))
 	
 if __name__ == '__main__':
 	batch(sys.argv[1],sys.argv[2])

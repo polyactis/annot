@@ -81,8 +81,8 @@ class yeast_two_way_filter:
 				self.known_genes_outf.write(line)
 			if line[0] == 'e':
 				list = line[:-1].split('\t')
-				list[1] = list[1][1:-2]
-				list[2] = list[2][1:-2]
+				list[1] = list[1][1:-1]
+				list[2] = list[2][1:-1]
 				vertex1 = list[1]
 				vertex2 = list[2]
 				self.normal_outf.write('%s\n'%'\t'.join(list))
