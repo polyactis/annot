@@ -56,21 +56,21 @@ class subgraph_visualize:
 		--dstruc_loadin
 		--[type==1]
 		--get_subgraph
-		--weighted_subgraph_output
+		--subgraph_output
 		
 		--[type==2]
 		--context_subgraph
 			--get_subgraph
-		--weighted_subgraph_output
+		--subgraph_output
 
 		--[type==3]
 		--subgraph_in_one_dataset
 			--get_subgraph
-		--weighted_subgraph_output
+		--subgraph_output
 	
 	02-20-05
-	one_graph()
-	weighted_subgraph_output()
+	unweighted_subgraph_output()
+	subgraph_output()
 		offer choices on how to draw clusters, "dot", "neato" or "twopi"
 	
 	02-20-05
@@ -191,48 +191,51 @@ class subgraph_visualize:
 		return sub_subgraph
 	
 	
-	def single_graph_output(self, subgraph, gene_no, mcl_id):
+	def unweighted_subgraph_output(self, output_f, subgraph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot', weighted=0):
 		'''
 		write the R script to draw an unweighted subgraph
 		03-09-05
-			defunct, use weighted_subgraph_output() instead.
+			defunct, use subgraph_output() instead.
 		
 		'''
-		self.r_f.write('library("Rgraphviz")\n')
+		output_f.write('library("Rgraphviz")\n')
 		vertex_set = subgraph.node_list()
 		vertex_labels = []
 		for vertex in vertex_set:
-			vertex_labels.append('"%s"'%self.gene_no2gene_id[vertex])
-		self.r_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
-		self.r_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
-		self.r_f.write("names(edL2) <- V\n")
+			vertex_labels.append('"%s"'%label_dict[vertex])
+		output_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
+		output_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
+		output_f.write("names(edL2) <- V\n")
 		for i in range(len(vertex_set)):
 			vertex = vertex_set[i]
 			nbrs = subgraph.inc_nbrs(vertex) + subgraph.out_nbrs(vertex)
 			nbr_list = []
 			for neighbor in nbrs:
 				nbr_list.append(vertex_set.index(neighbor)+1)
-			self.r_f.write('edL2[[%d]] <- list(edges=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list))))
+			output_f.write('edL2[[%d]] <- list(edges=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list))))
 		
-		self.r_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
-		self.r_f.write('nAttrs = list()\n')
-		#self.r_f.write('eAttrs = list()\n')
-		self.r_f.write("defAttrs = getDefaultAttrs()\n")
-		self.r_f.write('defAttrs$node$color <- "black"\n')
-		self.r_f.write('defAttrs$node$fillcolor <- "transparent"\n')
-		self.r_f.write('defAttrs$node$shape <- "ellipse"\n')
+		output_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
+		output_f.write('nAttrs = list()\n')
+		#output_f.write('eAttrs = list()\n')
+		output_f.write("defAttrs = getDefaultAttrs()\n")
+		output_f.write('defAttrs$node$color <- "black"\n')
+		output_f.write('defAttrs$node$fillcolor <- "transparent"\n')
+		output_f.write('defAttrs$node$shape <- "ellipse"\n')
 		color_list = []
+		central_label = None
 		for vertex in vertex_set:
-			gene_id = self.gene_no2gene_id[vertex]
-			if self.function in self.global_gene_to_go_dict[vertex]:
-				color_list.append('"%s"="%s"'%(gene_id, self.functioncolor))
-		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
-		gene_id = self.gene_no2gene_id[gene_no]
-		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
-		self.r_f.write('nAttrs$shape <- c("%s"="box")\n'%gene_id)
-		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, "%s")\n'%self.plot_type)
+			gene_id = label_dict[vertex]
+			if function in gene_no2go_no[vertex]:
+				color_list.append('"%s"="%s"'%(gene_id, functioncolor))
+			if vertex==centralnode:
+				central_label = label_dict[centralnode]
+		output_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
+		if central_label:
+			output_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%central_label)
+			output_f.write('nAttrs$shape <- c("%s"="box")\n'%central_label)
+		output_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, "%s")\n'%plot_type)
 	
-	def weighted_subgraph_output(self, output_f, subgraph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot'):
+	def subgraph_output(self, output_f, subgraph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot', weighted=1):
 		'''
 		write the R script to draw a weighted subgraph
 		
@@ -240,6 +243,10 @@ class subgraph_visualize:
 			make it class-independent
 			
 			Not giving the centralnode or function is ok.
+			
+			change name from weighted_subgraph_output to subgraph_output
+			
+			add a parameter to specify weighted or not
 		'''
 		sys.stderr.write("Outputing subgraph...")
 		output_f.write('library("Rgraphviz")\n')
@@ -263,20 +270,24 @@ class subgraph_visualize:
 				weight_list.append(subgraph.edges[edge][2])
 				#Note +1 to index
 				nbr_list.append(vertex_set.index(neighbor)+1)
-			#Note: +1 to i
-			output_f.write('edL2[[%d]] <- list(edges=c(%s), weights=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list)), ','.join(map(repr,weight_list)) ))
+			if weighted:
+				#Note: +1 to i
+				output_f.write('edL2[[%d]] <- list(edges=c(%s), weights=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list)), ','.join(map(repr,weight_list)) ))
+			else:
+				output_f.write('edL2[[%d]] <- list(edges=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list))))
 		
 		output_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
 		output_f.write('nAttrs = list()\n')
 		output_f.write('eAttrs = list()\n')
-		#this block adds weights to the edges, copied from 'Rgraphviz.pdf'
-		output_f.write('ew <- edgeWeights(gR2)\n')
-		output_f.write('lw <- unlist(unlist(ew))\n')
-		output_f.write('toRemove <- removedEdges(gR2)\n')
-		output_f.write('if (length(toRemove) > 0) lw <- lw[-toRemove]\n')
-		output_f.write('names(lw) <- edgeNames(gR2)\n')
-		output_f.write('eAttrs$label <- lw\n')
-		
+		if weighted:
+			#this block adds weights to the edges, copied from 'Rgraphviz.pdf'
+			output_f.write('ew <- edgeWeights(gR2)\n')
+			output_f.write('lw <- unlist(unlist(ew))\n')
+			output_f.write('toRemove <- removedEdges(gR2)\n')
+			output_f.write('if (length(toRemove) > 0) lw <- lw[-toRemove]\n')
+			output_f.write('names(lw) <- edgeNames(gR2)\n')
+			output_f.write('eAttrs$label <- lw\n')
+			
 		output_f.write("defAttrs = getDefaultAttrs()\n")
 		output_f.write('defAttrs$node$color <- "black"\n')
 		output_f.write('defAttrs$node$fillcolor <- "transparent"\n')
@@ -354,8 +365,10 @@ class subgraph_visualize:
 			self.r_f = open(self.r_fname, 'w')
 		if self.type == 1:
 			subgraph = self.get_subgraph(curs, self.table, self.mcl_table, self.mcl_id)
-			self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
-				self.centralnode, self.function, self.functioncolor, self.plot_type)
+			#unweighted
+			weighted=0
+			self.subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+				self.centralnode, self.function, self.functioncolor, self.plot_type, weighted)
 			self.r_f.close()
 			r.source(self.r_fname)
 			raw_input("Pause:\t")
@@ -365,7 +378,7 @@ class subgraph_visualize:
 				sys.exit(2)
 			subgraph = self.context_subgraph(curs, self.table, self.mcl_table, self.gene_p_table, self.gene_table, \
 				self.centralnode, self.function)
-			self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+			self.subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
 				self.centralnode, self.function, self.functioncolor, self.plot_type)
 			self.r_f.close()
 			r.source(self.r_fname)
@@ -378,7 +391,7 @@ class subgraph_visualize:
 					sys.exit(2)
 					
 				sub_subgraph = self.subgraph_in_one_dataset(curs, self.table, self.mcl_table, self.edge_table, self.mcl_id, i)
-				self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+				self.subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
 					self.centralnode, self.function, self.functioncolor, self.plot_type)
 				
 				self.r_f.close()
