@@ -1,11 +1,16 @@
 #!/usr/bin/env python
 
-import os, sys, pygtk
+import os, sys, pygtk, Image
 pygtk.require('2.0')
 
 import gtk, gtk.glade
 from GenePair import GenePair
-
+from scipy import fromimage
+"""
+02-19-05 
+	use fromimage to convert a PIL's Image to a numeric array and 
+	pass the array to gtk.gdk.pixbuf_new_from_array.
+"""
 def foreach_cb(model, path, iter, pathlist):
 	pathlist.append(path)	
 
@@ -119,9 +124,17 @@ class GenePairGui:
 
 	def show_plot(self, filename):
 		textbuffer = self.textview2.get_buffer()
-		pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
+		im = Image.open(filename)
+		#r.postscript() gives an image with a strange direction, rotate it back
+		im = im.rotate(-90)
+		ar = fromimage(im)
+		pixbuf = gtk.gdk.pixbuf_new_from_array(ar, gtk.gdk.COLORSPACE_RGB, 8)
 		startiter = textbuffer.get_start_iter()
 		textbuffer.insert_pixbuf(startiter, pixbuf)
+		#cleanup the temporary files and others
+		del im
+		del ar
+		os.remove(filename)
 		
 	def destroy(self, widget):
 		gtk.main_quit()

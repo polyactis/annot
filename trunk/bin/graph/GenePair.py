@@ -3,7 +3,7 @@
 The backend for the GenePairGui_*.py programs.
 
 """
-import sys, os, getopt, csv
+import sys, os, getopt, csv, time
 import graph_modeling
 from rpy import r
 from array import array    # need arrays to pass to ROOT
@@ -11,7 +11,11 @@ from array import array    # need arrays to pass to ROOT
 
 class GenePair:
 	'''
-
+	02-19-05
+		back to use r.postscript(), because scipy has fromimage to convert
+		PIL image to numeric array.
+	
+	
 	'''
 	def __init__(self, input_file):
 		self.input_file = input_file
@@ -23,7 +27,7 @@ class GenePair:
 		#data structure loadin
 		self.dstruc_loadin()
 		#the file to contain the image
-		self.plot_file = '/tmp/genepair.png'
+		self.plot_file = '/tmp/%s.ps'%(time.time())
 
 	def dstruc_loadin(self):
 		'''
@@ -104,7 +108,7 @@ class GenePair:
 		self.no_of_curves = 0
 		x_range = (1, len(vector_list[0]))
 		y_range = self.get_min_max(vector_list)
-		r.png("%s"%self.plot_file)
+		r.postscript("%s"%self.plot_file)
 		for vector in vector_list:
 			(x_list, y_list) = self.xy_list_return(vector)
 			self._plot(x_list, y_list, x_range, y_range)
