@@ -25,6 +25,8 @@ Examples:
 	7: unittest for p_gene_analysis
 03-01-05
 	8: unittest for gene_p_map_redundancy
+03-02-05
+	9: graph_modeling
 """
 import unittest, os, sys, getopt
 
@@ -500,6 +502,45 @@ class TestGenePMapRedundancy(unittest.TestCase):
 		self.instance.gene_no2p_gene_setup(row)
 		print self.instance.gene_no2p_gene
 	
+class TestGraphModeling(unittest.TestCase):
+	"""
+	03-02-05
+	"""
+	def setUp(self):
+		from graph import graph_modeling
+		self.instance = graph_modeling
+		self.instance.cor_cut_off_vector_construct(0.01, 0.6)
+		
+	def test_ind_min_cor(self):
+		"""
+		03-02-05
+		"""
+		v1 = [0.1,0.2,0.3,0.4,0.6, 0.7, 0.8, 0.9]
+		v2 = [0.2, 0.3, 0.35, 0.4, 0.6, 0.7, 0.8, 0.9]
+		data = self.instance.ind_min_cor(v1, v2)
+		self.assertEqual(data.value, 0.99447262287139893)
+		self.assertEqual(data.degree, 5)
+		self.assertEqual(data.significance, 1)
+		print
+		print "min jackknife correlation: %s"%data.value
+		print "degree: %s"%data.degree
+		print "significance: %s"%data.significance
+	
+	def test_ind_cor(self):
+		"""
+		03-02-05
+		"""
+		v1 = [0.1,0.2,0.3,0.4,0.6, 0.7, 0.8, 0.9]
+		v2 = [0.2, 0.3, 0.35, 0.5, 0.7, 0.8, 0.9, 1.0]
+		data = self.instance.ind_cor(v1,v2, 2)
+		self.assertEqual(data.value, 1.0)
+		self.assertEqual(data.degree, 5)
+		self.assertEqual(data.significance, 0)
+		print 
+		print "correlation: %s"%data.value
+		print "degree: %s"%data.degree
+		print "significance: %s"%data.significance
+	
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -520,7 +561,8 @@ if __name__ == '__main__':
 		5: TestLinearModel,
 		6: TestPGeneLm,
 		7: TestPGeneAnalysis,
-		8: TestGenePMapRedundancy}
+		8: TestGenePMapRedundancy,
+		9: TestGraphModeling}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
