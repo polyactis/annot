@@ -33,7 +33,8 @@ Description:
 import sys, os, psycopg, getopt, csv, math
 from sets import Set
 from rpy import r
-from numarray import *
+from numarray import array
+from numarray import searchsorted
 from codense.common import db_connect
 
 class prediction_space_attr:
@@ -56,7 +57,14 @@ class prediction_space_attr:
 	
 	def return_is_correct_ratio_average(self):
 		return self.get_average(self.prediction_pair_ratio_dict.values())
-		
+
+def get_average(array_2d, which_column):
+	"""
+	03-31-05
+	"""
+	array_1d = array_2d[:,which_column]
+	return sum(array_1d)/float(len(array_1d))
+
 class p_gene_factor:
 	"""
 	03-30-05
@@ -112,11 +120,8 @@ class p_gene_factor:
 		#data structures to be created
 		self.go_no2prediction_space = {}
 		self.prediction_space2attr = {}
-		self.prediction_pair2attr = {}
-		self.go_no2accuracy = {}
-		self.go_no2lm_results = {}
-		self.general_lm_results = None
-		self.gene_p_list = []
+		
+		self.prediction_data = []
 	
 	def data_fetch(self, curs, gene_table):
 		"""
@@ -141,7 +146,10 @@ class p_gene_factor:
 			
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
+		
 		sys.stderr.write("Done\n")		
+	
+	
 	
 	def _p_gene_analysis(self, row):
 		"""
@@ -158,6 +166,7 @@ class p_gene_factor:
 		lca_list = row[9]
 		p_gene_id = row[10]
 		mcl_id = row[11]
+		
 		if lca_list and is_correct ==1:
 			lca_list = lca_list[1:-1].split(',')
 			lca_list = map(int,lca_list)
@@ -174,52 +183,76 @@ class p_gene_factor:
 		#-log transforms p_value
 		p_value = -math.log(p_value)
 		
-		p_value = int(math.floor(p_value/self.p_value_gap_size)*self.p_value_gap_size)
-
-		#take the floor of the recurrence
-		recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
-		#take the floor of the connectivity *10
-		connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
 		
-		cluster_size = int(math.floor(cluster_size/self.cluster_size_gap_size)*self.cluster_size_gap_size)
-		unknown = int(math.floor(unknown*10/self.unknown_gap_size)*self.unknown_gap_size)
+		self.prediction_data.append([gene_no, go_no, is_correct, is_correct_ratio, p_value, recurrence, \
+			connectivity, cluster_size, unknown, p_gene_id, mcl_id])
+
 		
-		#do not distinguish go_no
-		go_no = -1
-
-		prediction_space = (go_no, p_value, recurrence)
-
+	def group_data(self, data_list_2d, key_column=0, no_of_groups=6, cluster_column=-1):
 		"""
-		1 deal with self.prediction_space2attr
+		03-30-05
+			output: a dictionary
+			group the data based on the key_column, but each key has similar amount of clusters
+			from cluster_column. idea is similar to equal.count().
 		"""
-		if prediction_space not in self.prediction_space2attr:
-			#initalize its attribute if it doesn't exist
-			self.prediction_space2attr[prediction_space] = prediction_space_attr()
+		data_array = array(data_list_2d)
+		cluster_list = list(data_array[:,cluster_column])
+		cluster_set = Set(cluster_list)
+		unit_length = len(cluster_set)/no_of_groups
 		
-		#pass the value to a value, ease programming
-		unit = self.prediction_space2attr[prediction_space]
+		key2cluster_set = {}
+		for i in range(len(data_array)):
+			key = data_array[i,key_column]
+			cluster_id = data_array[i, cluster_column]
+			if key not in key2cluster_set:
+				key2cluster_set[key] = Set()
+			key2cluster_set[key].add(cluster_id)
 		
-		prediction_pair = (gene_no, go_no)
-		unit.prediction_pair_dict[prediction_pair] = is_correct
-		unit.prediction_pair_ratio_dict[prediction_pair] = is_correct_ratio
-		unit.is_correct_list.append(is_correct)
-		unit.is_correct_ratio_list.append(is_correct_ratio)
-		unit.p_gene_id_list.append(p_gene_id)
-		unit.mcl_id_set.add(mcl_id)
+		key_cluster_2d_list = []
+		for key,cluster_set in key2cluster_set.iteritems():
+			key_cluster_2d_list.append([key,cluster_set])
+		key_cluster_2d_list.sort()
+		
+		bin_boundaries = [key_cluster_2d_list[0][0]]	#first key is already pushed in
+		bin_set = Set()
+		for key,cluster_set in key_cluster_2d_list:
+			if len(bin_set) < unit_length:
+				#the limit hasn't been reached.
+				bin_set |= cluster_set
+			else:
+				#restart
+				bin_boundaries.append(key)
+				bin_set = cluster_set
+		
+		key2data_array = {}
+		for entry in data_list_2d:
+			key = entry[key_column]
+			bin_key_index = searchsorted(bin_boundaries, key)	#the trick is that the range is (...]. my bin_boundaries is [...)
+													#transform below
+			if bin_key_index==len(bin_boundaries):
+				bin_key = bin_boundaries[bin_key_index-1]
+			elif bin_boundaries[bin_key_index] == key:
+				bin_key = key
+			else:
+				bin_key = bin_boundaries[bin_key_index-1]
+			if bin_key not in key2data_array:
+				key2data_array[bin_key] = []
+			key2data_array[bin_key].append(entry)
+		
+		return key2data_array
 	
 	def prediction_space_output(self, outf, prediction_space2attr):
 		writer = csv.writer(outf, delimiter='\t')
-		writer.writerow(['go_no', 'p_value', 'recurrence', 'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no'])
+		writer.writerow(['p_value', 'recurrence', 'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no'])
 		for (prediction_space,unit) in prediction_space2attr.iteritems():
-			if len(unit.mcl_id_set)>0:
-				#minimum number of clusters
-				row = list(prediction_space)
-				row.append(unit.return_is_correct_average())
-				row.append(unit.return_is_correct_ratio_average())
-				row.append(len(unit.prediction_pair_dict))
-				#row.append(repr(unit.p_gene_id_list))
-				row.append(len(unit.mcl_id_set))
-				writer.writerow(row)
+			unit_array = array(unit)
+
+			row = list(prediction_space)
+			row.append(get_average(unit_array,2))	#average is_correct
+			row.append(get_average(unit_array, 3))	#average is_correct_ratio
+			row.append(len(unit_array))	#no of predictions
+			row.append(len(Set(unit_array[:,-1])))	#no of clusters
+			writer.writerow(row)
 		del writer
 		
 	def run(self):
@@ -232,6 +265,11 @@ class p_gene_factor:
 		self.go_no2depth = get_go_no2depth(curs)
 		
 		self.data_fetch(curs, self.gene_table)
+		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=4, no_of_groups=4)	#4 is p_value
+		for key, unit in local_prediction_space2attr.iteritems():
+			local_prediction_space2attr_2 = self.group_data(unit, key_column=5, no_of_groups=5)	#5 is recurrence
+			for key2, unit2 in local_prediction_space2attr_2.iteritems():
+				self.prediction_space2attr[(key,key2)] = unit2
 		#open a file
 		if self.stat_table_fname:
 			stat_table_f = open(self.stat_table_fname, 'w')
