@@ -6,6 +6,7 @@ functions or classes common to all programs
 
 import csv, sys
 import psycopg
+from sets import Set
 
 def index_plus_one(i):
 	'''
@@ -190,3 +191,23 @@ def get_gene_no2go_no(curs, schema=None, gene_table='gene'):
 			gene_no2go_no[row[0]].append(int(go_no))
 	sys.stderr.write("Done\n")
 	return gene_no2go_no
+
+def get_known_genes_dict(curs, schema=None, gene_table='gene'):
+	"""
+	03-09-05
+		get the known_genes_dict
+	"""
+	sys.stderr.write("Getting known_genes_dict...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+
+	known_genes_dict = {}
+	curs.execute("select gene_no,go_functions from %s where known=TRUE"%gene_table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_functions_list = row[1][1:-1].split(',')
+		known_genes_dict[row[0]] = Set()
+		for go_no in go_functions_list:
+			known_genes_dict[row[0]].add(int(go_no))
+	sys.stderr.write("Done\n")
+	return known_genes_dict
