@@ -259,8 +259,8 @@ class mcl_to_db:
 		line = inf.readline()
 		splat_id = int(line[2:-1])
 		#second line contains the parameter, old kMax_batch_run.py doesn't output the parameter
-		#line = inf.readline()
-		#parameter = line[2:-1]
+		line = inf.readline()
+		parameter = line[2:-1]
 		inf2 = cStringIO.StringIO(inf.read())
 		iter = splat_result_iterator(inf2)
 		for pattern in iter:
