@@ -200,7 +200,7 @@ class graph_reorganize:
 			self.curs.execute("select gene_id, gene_no from gene order by gene_no")
 		if self.type == 2:
 			self.curs.execute("select gene_id, gene_no from graph.gene_id_to_no \
-				where organism=%s order by gene_no"%self.organism)
+				where organism='%s' order by gene_no"%self.organism)
 			
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -224,7 +224,8 @@ class graph_reorganize:
 			if line[0] == 'e':
 				vertex1_label = list[1]
 				vertex2_label = list[2]
-				outf.write('e %d %d %s\n'% \
+				if vertex1_label in self.global_vertex_dict and vertex2_label in self.global_vertex_dict:
+					outf.write('e %d %d %s\n'% \
 								(self.global_vertex_dict[vertex1_label], \
 								self.global_vertex_dict[vertex2_label], \
 								list[3],)
