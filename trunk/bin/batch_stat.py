@@ -47,6 +47,7 @@ class batch_stat:
 			recurrence_list, size_list, leave_one_out, wu, judger_type, depth_list, dir_files=None, dominant=0, needcommit=0):
 		self.hostname = hostname
 		self.dbname = dbname
+		self.schema = schema
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
