@@ -21,24 +21,31 @@ Description:
 
 
 import sys, os, re, getopt
-from kjbuckets import *
+from codense.common import db_connect
 
 class graph_merge:
 	'''
 	02-26-05
 		use the kjDict to reduce the memory usage, but no effect.
+	03-08-05
+		use a database table to handle 
 	'''
 	def __init__(self, support, dir, ofname):
 		self.support = int(support)
 		self.dir = dir
 		self.of = open(ofname, 'w')
-
+		
+		self.hostname = 'zhoudb'
+		self.dbname = 'template1'
+		self.schema = 'public'
+		self.counter_table = 'counter_table'
 	
 	def dstruc_loadin(self, dir):
 		#output block put before edges
 		first_block = ''
 		#data structure to store the merged graph. key is the edge.
 		#value is the recurrence
+		from kjbuckets import kjDict
 		graph_dict = kjDict()
 		
 		files = os.listdir(dir)
@@ -75,10 +82,108 @@ class graph_merge:
 			recurrence = graph_dict[edge]
 			if recurrence >= support:
 				self.of.write("e %d %d %d\n"%(edge[0], edge[1], recurrence))
+
+	def loadin_edges(self, dir, curs, counter_table):
+		#output block put before edges
+		first_block = ''
+
+		files = os.listdir(dir)
+		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
+		for f in files:
+			pathname = os.path.join(dir, f)
+			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
+			file_no = files.index(f)+1
+			inf = open(pathname, 'r')
+			for line in inf:
+				if line[0] == 'e':
+					#edge here, like 'e 3807 3859 0.804645'
+					line_list = line[:-1].split()
+					vertex1 = int(line_list[1])
+					vertex2 = int(line_list[2])
+					edge = [vertex1, vertex2]
+					self.add_one_edge(curs, counter_table, edge)
+				elif file_no == 1:
+					first_block += line
+			inf.close()
+		return first_block
+
+	def create_counter_table(self, curs, counter_table):
+		"""
+		03-08-05
+			create a counter table
+		"""
+		curs.execute("create table %s(\
+			edge integer[] primary key,\
+			frequency	integer)"%counter_table)
 	
-	def run(self):
+	def add_one_edge(self, curs, counter_table, edge):
+		"""
+		03-08-05
+			add an edge to the table, if edge already exists, increase its frequency
+		"""
+		#keep in ascending order
+		if edge[0]>edge[1]:
+			edge.reverse()
+		#format the edge
+		edge = '{%s,%s}'%(edge[0], edge[1])
+		curs.execute("select frequency from %s where edge='%s'"%(counter_table, edge))
+		rows = curs.fetchall()
+		if len(rows)==1:
+			frequency = rows[0][0]
+			#increase it by 1
+			curs.execute("update %s set frequency=%d where edge='%s'"%(counter_table, frequency+1, edge))
+		elif len(rows)==0:
+			#insert it
+			curs.execute("insert into %s(edge, frequency) values('%s', %d)"%(counter_table, edge, 1))
+		else:
+			sys.stderr.write("The edge, %s gets more than one frequency in the table.\n"%edge)
+			sys.exit(1)
+	
+	def output_from_db(self, curs, counter_table, first_block, support):
+		"""
+		03-08-05
+			output the merged graph by getting edges from database
+		"""
+		sys.stderr.write("Outputting merged graph...")
+		#output the preceding block first
+		self.of.write(first_block)
+		
+		curs.execute("DECLARE crs CURSOR FOR select edge, frequency \
+			from %s"%(counter_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		while rows:
+			for row in rows:
+				edge = row[0][1:-1].split(',')
+				frequency = row[1]
+				if frequency>=support:
+					self.of.write("e %s %s %d\n"%(edge[0], edge[1], frequency))
+			
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		sys.stderr.write("Done\n")
+		
+	
+	def old_run(self):
 		(first_block, graph_dict) = self.dstruc_loadin(self.dir)
 		self.output(first_block, graph_dict, self.support)
+	
+	def run(self):
+		"""
+		03-08-05
+			new run(), database approach to store the frequency of edges.
+		
+		--db_connect()
+		--create_counter_table()
+		--loadin_edges()
+			--add_one_edge()
+		--output_from_db()
+		"""
+		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+		self.create_counter_table(curs, self.counter_table)
+		first_block = self.loadin_edges(self.dir, curs, self.counter_table)
+		self.output_from_db(curs, self.counter_table, first_block, self.support)
+		
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
