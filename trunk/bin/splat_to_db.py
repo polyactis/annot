@@ -94,7 +94,7 @@ class splat_to_db:
 			string_recurrence_array = '{'+string_recurrence_array[1:-1]+'}'
 			try:
 				self.curs.execute("insert into splat_result(no_of_edges, \
-							recurrence_pattern, recurrence_array, edge_set) values ('%s',%d,B'%s','%s','%s')"%\
+							recurrence_pattern, recurrence_array, edge_set) values (%d,B'%s','%s','%s')"%\
 							(self.no_of_edges, self.recurrence_pattern,\
 							string_recurrence_array, string_edge_set ))
 			except:
