@@ -1,63 +1,102 @@
 #!/usr/bin/env python
+"""
+Usage: gene_stat.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION]
 
-import sys, os,psycopg
+Option:
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-p ..., --p_value_cut_off=...	p_value_cut_off
+	-l ..., --limit=...,	maximum number of clusters related to one gene, 10(default)
+	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
+	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
+	-r, --report	report the progress(a number)
+	-c, --commit	commit the database transaction, records in table gene.
+	-h, --help              show this help
+
+Examples:
+	gene_stat.py -k shu -p 0.001
+	gene_stat.py -k shu -l 0 -p 0.001 -n 0.7
+
+Description:
+	This program is mainly for validation purpose. Run after cluster_stat.py.
+	Implements both Jasmine and Wu's strategy.
+"""
+
+import sys, os, psycopg, getopt
 from rpy import *
-#import numarray.ma as ma
 
 
 class gene_stat:
-	def __init__(self, dbname, p_value_cut_off, limit=10, connectivity_cut_off=0.9,needcommit=0):
+	def __init__(self, dbname, schema, p_value_cut_off, limit=10, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to graph")
-		self.limit = int(limit)
-		self.needcommit = int(needcommit)
+		self.curs.execute("set search_path to %s"%schema)
 		self.p_value_cut_off = float(p_value_cut_off)
+		self.limit = int(limit)
 		self.connectivity_cut_off = float(connectivity_cut_off)
+		self.wu = int(wu)
+		self.report = int(report)
+		self.needcommit = int(needcommit)
 		self.tp = 0.0
 		self.tn = 0.0
 		self.fp = 0.0
 		self.fn = 0.0
 		self.known_genes_dict = {}
 		self.no_of_records = 0
-		self.sc_gene_to_be_updated = []
+		self.gene_to_be_updated = []
 		self.log_file = open('/tmp/gene_stat.log','w')
 		
 	def dstruc_loadin(self):
-		self.curs.execute("select gene_no,go_functions from sc_gene where known=TRUE")
+		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
 		rows = self.curs.fetchall()
 		for row in rows:
 			go_functions_list = row[1][1:-1].split(',')
 			self.known_genes_dict[row[0]] = []
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].append(int(go_no))
+		if self.wu:
+			self.curs.execute("select count(go_no) from go")
+		else:
+			self.curs.execute("select count(go_no) from go where go_no!=0")
+		rows = self.curs.fetchall()
+		self.no_of_functions = rows[0][0]
+
 	def run(self):
 		for gene_no in self.known_genes_dict:
 			mcl_id_list = []
 			self.log_file.write('%d '%gene_no)
-			self.curs.execute("select c.mcl_id, c.p_value_vector \
-				from sc_cluster_stat c, mcl_result m where c.leave_one_out=%d \
-				and c.mcl_id=m.mcl_id and m.connectivity>=%f limit %d"%(gene_no, self.connectivity_cut_off,self.limit))
+			if self.limit == 0:
+				self.curs.execute("select mcl_id, p_value_vector \
+					from cluster_stat where leave_one_out=%d \
+					and connectivity>=%f"%(gene_no, self.connectivity_cut_off))
+			else:
+				self.curs.execute("select mcl_id, p_value_vector \
+					from cluster_stat where leave_one_out=%d \
+					and connectivity>=%f limit %d"%(gene_no, self.connectivity_cut_off, self.limit))
 			rows = self.curs.fetchall()
 			p_functions_dict = {}
 			for row in rows:
 				mcl_id_list.append(row[0])
 				p_value_vector = row[1][1:-1].split(',')
-				for i in range(83):
+				for i in range(self.no_of_functions):
 					if float(p_value_vector[i]) <= self.p_value_cut_off:
-						p_functions_dict[i+1] = 1
+						if self.wu:
+							p_functions_dict[i] = 1
+						else:
+							p_functions_dict[i+1] = 1
 			if rows:
 				self._gene_stat(gene_no, mcl_id_list, p_functions_dict)
 				self.no_of_records += 1
-				sys.stderr.write('%s%s'%('\x08'*10, self.no_of_records))
+				if self.report:
+					sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 		if self.needcommit:
-			for entry in self.sc_gene_to_be_updated:
+			for entry in self.gene_to_be_updated:
 				if entry[6]:
-					self.curs.execute("update sc_gene set cluster_array=ARRAY%s,\
+					self.curs.execute("update gene set cluster_array=ARRAY%s,\
 					tp=%d,tn=%d,fp=%d,fn=%d,p_functions=ARRAY%s where gene_no=%d"%\
 					(repr(entry[1]),entry[2],entry[3],entry[4],entry[5],repr(entry[6]),entry[0]))
 				else:
-					self.curs.execute("update sc_gene set cluster_array=ARRAY%s,\
+					self.curs.execute("update gene set cluster_array=ARRAY%s,\
 					tp=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
 					(repr(entry[1]),entry[2],entry[3],entry[4],entry[5],entry[0]))
 			self.conn.commit()
@@ -79,40 +118,60 @@ class gene_stat:
 			else:
 				fn += 1
 		fp = len(p_functions_dict)
-		tn = 83 - (tp+fp+fn)
+		tn = self.no_of_functions - (tp+fp+fn)
 		self.tp += tp
 		self.tn += tn
 		self.fp += fp
 		self.fn += fn
 		self.log_file.write('%d %d %d %d %s %s\n'%(tp,tn,fp,fn,repr(p_functions),repr(mcl_id_list)))
-		self.sc_gene_to_be_updated.append([gene_no,mcl_id_list,tp,tn,fp,fn,p_functions])
+		self.gene_to_be_updated.append([gene_no,mcl_id_list,tp,tn,fp,fn,p_functions])
 
 
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-	argv[1] is the database name\n\
-	argv[2] is p_value_cut_off.\n\
-	argv[3] specifies the maximum number of clusters related to one gene.\n\
-		Default is 10.\n\
-	argv[4] is the connectivity_cut_off.Default is 0.9.\n\
-	argv[5] is 1 or 0 indicating whether to commit or not. Default is 0.\n')
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
 	
-	if len(sys.argv) == 3:
-		instance = gene_stat(sys.argv[1], sys.argv[2])
-		instance.dstruc_loadin()
-		instance.run()
-	elif len(sys.argv) == 4:
-		instance = gene_stat(sys.argv[1], sys.argv[2],sys.argv[3])
-		instance.dstruc_loadin()
-		instance.run()
-	elif len(sys.argv) == 5:
-		instance = gene_stat(sys.argv[1], sys.argv[2],sys.argv[3],sys.argv[4])
-		instance.dstruc_loadin()
-		instance.run()
-	elif len(sys.argv) == 6:
-		instance = gene_stat(sys.argv[1], sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
+	long_options_list = ["help", "dbname=", "schema=", "p_value_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:l:n:wrc", long_options_list)
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = 'graphdb'
+	schema = ''
+	p_value_cut_off = None
+	limit = 10
+	connectivity_cut_off = 0.8
+	wu = 0
+	report = 0
+	commit = 0
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-p", "--p_value_cut_off"):
+			p_value_cut_off = float(arg)
+		elif opt in ("-l", "--limit"):
+			limit = int(arg)
+		elif opt in ("-n", "--connectivity_cut_off"):
+			connectivity_cut_off = float(arg)
+		elif opt in ("-w", "--wu"):
+			wu = 1
+		elif opt in ("-r", "--report"):
+			report = 1
+		elif opt in ("-c", "--commit"):
+			commit = 1
+	
+	if schema and p_value_cut_off:
+		instance = gene_stat(dbname, schema, p_value_cut_off, limit, connectivity_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
-		helper()
+		print __doc__
+		sys.exit(2)
