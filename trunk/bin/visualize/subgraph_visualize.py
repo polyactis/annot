@@ -165,7 +165,8 @@ class subgraph_visualize:
 			edge_data = 1
 			#if edge_table available, get the correlation vector for an edge
 			if edge_table:
-				curs.execute("select cor_vector from %s where edge_name='{%s,%s}'"%(edge_table, vertex_list[0], vertex_list[1]))
+				#03-31-05 sig_vector replaces cor_vector
+				curs.execute("select sig_vector from %s where edge_name='{%s,%s}'"%(edge_table, vertex_list[0], vertex_list[1]))
 				rows = curs.fetchall()
 				edge_data = rows[0][0][1:-1]
 				edge_data = edge_data.split(',')
