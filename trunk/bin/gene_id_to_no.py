@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 """
-Usage: gene_id_to_no.py -d DATABASENAME -g ORGANISM [OPTION] DATADIR
+Usage: gene_id_to_no.py -g ORGANISM [OPTION] DATADIR
 
 Option:
-	-d ..., --dbname=...	the database name
-	-c ..., --commit=...	1 or 0(default) specifies commit or not
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-c, --commit	commits the database transaction
 	-g ..., --organism=...	two letter organism abbreviation
 	-h, --help              show this help
 	
 Examples:
-	gene_id_to_no.py -d mdb -g sc datasets/yeast_data/normal
-	gene_id_to_no.py -d mdb -g hs -c 1 datasets/hs
+	gene_id_to_no.py -g sc datasets/yeast_data/normal
+	gene_id_to_no.py -d mdb -g hs -c datasets/hs
 
 Description:
 	This program extracts all gene_id's from datasets,
@@ -19,6 +19,7 @@ Description:
 """
 
 import sys, os, csv, psycopg, getopt
+from sets import Set
 
 class gene_id_to_no:
 	def __init__(self, dir, dbname, orgn, needcommit=0):
@@ -41,17 +42,31 @@ class gene_id_to_no:
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
 		self.organism = self.org_short2long[orgn]
 		self.needcommit = int(needcommit)
+		#records down the maximum gene_no ever assigned.
+		self.max_gene_no = 0
+		#mapping between gene_id and gene_no
+		self.vertex_dict = {}
+		#a unique collection of all genes in the datasets of the directory
+		self.gene_set = Set()
 		
-		if self.organism == 'Saccharomyces cerevisiae':
-			import pickle
-			pickle_fname = os.path.join(os.path.expanduser('~'),'pickle/yeast_global_struc')
-			global_struc = pickle.load(open(pickle_fname,'r'))
-			self.vertex_dict = global_struc['vertex_dict']
-			self.no_of_yeast_genes = len(self.vertex_dict)
-		else:
-			self.vertex_dict = {}
-			
+	def dstruc_loadin(self):
+		'''
+		look up the database to find all the assigned genes of this organism.
+		this is to maintain backward compatibility.
+		Expand the gene pool on the basis of currently assigned genes.
+		'''
+		self.curs.execute("select gene_id, gene_no from gene_id_to_no where organism='%s'"%self.organism)
+		rows = self.curs.fetchall()
+		for row in rows:
+			if row[1] > self.max_gene_no:
+			#this gene_no is bigger than max_gene_no
+				self.max_gene_no = row[1]
+			self.vertex_dict[row[0]] = row[1]
+		
 	def run(self):
+		#load in the data structure first.
+		self.dstruc_loadin()
+		#iterate over all the datasets, find all the genes
 		files = os.listdir(self.dir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		new_yeast_gene_list = []
@@ -60,32 +75,25 @@ class gene_id_to_no:
 			f_path = os.path.join(self.dir, f)
 			reader = csv.reader(file(f_path), delimiter='\t')
 			for row in reader:
-				if row[0] not in self.vertex_dict:
-					if self.organism == 'Saccharomyces cerevisiae':
-						self.vertex_dict[row[0]] = 0
-						new_yeast_gene_list.append(row[0])
-					else:
-						self.vertex_dict[row[0]] = 1
+				self.gene_set.add(row[0])
 			del reader
-		
-		if self.organism == 'Saccharomyces cerevisiae':
-			new_yeast_gene_list.sort()
-			for gene in new_yeast_gene_list:
-				self.vertex_dict[gene] = self.no_of_yeast_genes + new_yeast_gene_list.index(gene) +1
-		else:
-			key_list = self.vertex_dict.keys()
-			key_list.sort()
-			for i in xrange(len(key_list)):
-				self.vertex_dict[key_list[i]] = i+1
-				
-		if self.needcommit:
-			self.submit()
-	
+		#expand current gene pool
+		sys.stderr.write('Old max_gene_no: %d\n'%self.max_gene_no)
+		for gene_id in self.gene_set:
+			if gene_id not in self.vertex_dict:
+				self.max_gene_no += 1
+				self.vertex_dict[gene_id] = self.max_gene_no
+		sys.stderr.write('New max_gene_no: %d\n'%self.max_gene_no)
+		self.submit()
+
 	def submit(self):
+		sys.stderr.write("Database transacting...")
 		for item in self.vertex_dict:
 			self.curs.execute("insert into gene_id_to_no(gene_id, gene_no, organism) values('%s', %d, '%s')"%\
 				(item, self.vertex_dict[item], self.organism))
-		self.conn.commit()
+		if self.needcommit:
+			self.conn.commit()
+		sys.stderr.write("done.\n")
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -93,12 +101,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:g:c:", ["help", "dbname=", "organism=", "commit="])
+		opts, args = getopt.getopt(sys.argv[1:], "hd:g:c", ["help", "dbname=", "organism=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
-	dbname = ''
+	dbname = 'graphdb'
 	commit = 0
 	organism = ''
 	for opt, arg in opts:
@@ -110,7 +118,7 @@ if __name__ == '__main__':
 		elif opt in ("-g", "--organism"):
 			organism = arg
 		elif opt in ("-c", "--commit"):
-			commit = int(arg)
+			commit = 1
 			
 	if dbname and organism and len(args)>0:
 		instance = gene_id_to_no(args[0], dbname, organism, commit)
