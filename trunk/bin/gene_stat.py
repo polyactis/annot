@@ -205,7 +205,7 @@ class gene_stat_new:
 					self.curs.execute("update gene set cluster_array=ARRAY%s,\
 					tp=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
 					(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,gene_no))
-			self.conn.commit()
+			self.curs.execute("end")
 		sys.stderr.write('\n\tTotal genes: %d\n'%self.no_of_records)
 		sys.stderr.write('\tSensitvity: %f\n'%(self.tp/(self.tp+self.fn)))
 		sys.stderr.write('\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
