@@ -9,10 +9,11 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	splat_result table(default)
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result corresponding to table above
+	-n ..., --gene_p_table=...	the table which store the id of real predictions
 	-g ..., --gene_table=...	table storing the stat results, p_gene(default)
 	-f ..., --function=...	a go_no
-	-c ..., --functioncolor=...	'green' or 'red'
-	-n ..., --centralnode=...	a gene_no
+	-o ..., --functioncolor=...	'green' or 'red'
+	-c ..., --centralnode=...	a gene_no
 	-l ..., --mcl_id=...	the id corresponding to a mcl_cluster
 	-y ..., --type=...	the type, 1(single graph), 2 (meta_graph), 3
 	-p ..., --plot_type=...	dot(default), neato or twopi
@@ -20,68 +21,71 @@ Option:
 
 Examples:
 	subgraph_visualize.py -k sc_yh60_splat -t splat_result_sup_3 -m 
-		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3 
-		-f 45 -c 'red' -n 4096 -l 27 -y 1 test.R
+		mcl_result_sup_3_2
+		-f 45 -c 4096 -l 27 -y 1 test.R
 	
-	subgraph_visualize.py -k sc_yh60_splat -t splat_result_sup_3 -m 
-		mcl_result_sup_3_2 -g p_gene_cluster_stat_sup_3_2_3 -y 2
-		-f 45 -c 'red' -n 4096 test.R
+	subgraph_visualize.py -y 2 -k sc_54 -t splat_result_p3g5e6d4q5n80
+		-m mcl_result_repos_2 -g  p_gene_repos_2_e5 -n gene_p_repos_2_e5
+		-f 202 -c 923 test.R
 	
 	subgraph_visualize.py -k sc_54 -t splat_result_1 -m mcl_result_1
-		-l 0 -n 3747 -y 3 /tmp/test.R
+		-l 0 -y 3 /tmp/test.R
 	
 Description:
 	This program is used to visualize the MCL clusters via R(bioconductor's
 	Rgraphviz). Two types of visualization:
 	1.
-	single graph  only needs the table, mcl_table, mcl_id and centralnode.
+	single graph needs the table, mcl_table, mcl_id
 	2.
-	meta_graph needs table, mcl_table, gene_table, function and centralnode.
+	meta_graph needs table, mcl_table, gene_p_table, gene_table, centralnode and function
 	3.
 	display codense sub_subgraph dataset by dataset, need table, mcl_table,
-	mcl_id, centralnode
+	mcl_id, edge_table(hidden parameter)
+	
 """
 
 import sys, os, psycopg, getopt
 from graphlib import Graph
 from sets import Set
 from rpy import r
-		
+from codense.common import db_connect
+
 class subgraph_visualize:
 	"""
 	run
 		--dstruc_loadin
 		--[type==1]
-		--one_graph
-			--get_subgraph
+		--get_subgraph
+		--weighted_subgraph_output
 		
 		--[type==2]
 		--context_subgraph
 			--get_subgraph
-		--weighted_subgraph
+		--weighted_subgraph_output
 
 		--[type==3]
 		--subgraph_in_one_dataset
 			--get_subgraph
-		--weighted_subgraph
+		--weighted_subgraph_output
 	
 	02-20-05
 	one_graph()
-	weighted_subgraph()
+	weighted_subgraph_output()
 		offer choices on how to draw clusters, "dot", "neato" or "twopi"
 	
 	02-20-05
 	context_subgraph()
 		change the way to mcl_id_list according to the change in gene_stat_plot.py's submit()
 	"""
-	def __init__(self, hostname, dbname, schema, table, mcl_table,\
-			gene_table, function, functioncolor, centralnode, mcl_id, \
-			type, r_fname, plot_type="dot"):
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to %s"%schema)
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, mcl_table=None,\
+			gene_p_table=None, gene_table=None, function=0, functioncolor='green', centralnode=1, mcl_id=1, \
+			type=1, r_fname=None, plot_type="dot"):
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
 		self.table = table
 		self.mcl_table = mcl_table
+		self.gene_p_table = gene_p_table
 		self.gene_table = gene_table
 		self.function = int(function)
 		self.functioncolor = functioncolor
@@ -89,8 +93,6 @@ class subgraph_visualize:
 		self.mcl_id = int(mcl_id)
 		self.type = int(type)
 		self.r_fname = r_fname
-		self.r_f = open(r_fname, 'w')
-		self.r_f.write('library("Rgraphviz")\n')
 		self.plot_type = plot_type
 		
 		#the table for edge_correlation_vector
@@ -104,51 +106,40 @@ class subgraph_visualize:
 		self.gene_id2gene_no = {}
 		self.global_gene_to_go_dict = {}
 		
-	def dstruc_loadin(self):
+	def dstruc_loadin(self, curs):
 		'''
 		'''
-		sys.stderr.write("Loading Data STructure...")
+		sys.stderr.write("Loading Data STructure...\n")
 		
-		#setup self.go_no2go_id
-		self.curs.execute("select go_no, go_id from go")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.go_no2go_id[row[0]] = row[1]
-		
-		#setup self.go_no2go_name
-		self.curs.execute("select g.go_no,t.name from go g, go.term t where g.go_id=t.acc")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.go_no2go_name[row[0]] = row[1]
-				
-		#setup self.gene_no2gene_id
-		self.curs.execute("select gene_no, gene_id from gene")
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.gene_no2gene_id[row[0]] = row[1]
-			self.gene_id2gene_no[row[1]] = row[0]
+		from codense.common import get_go_no2go_id, get_gene_no2gene_id, get_go_no2name, get_gene_id2gene_no, get_gene_no2go_no
+		self.go_no2go_id = get_go_no2go_id(curs)
+		self.go_no2go_name = get_go_no2name(curs)
+		self.gene_no2gene_id = get_gene_no2gene_id(curs)
+		self.gene_id2gene_no = get_gene_id2gene_no(curs)
+		self.global_gene_to_go_dict = get_gene_no2go_no(curs)
 
-		self.curs.execute("select gene_no,go_functions from gene")
-			
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.global_gene_to_go_dict[row[0]] = []
-			go_functions_list = row[1][1:-1].split(',')
-			for go_no in go_functions_list:
-				self.global_gene_to_go_dict[row[0]].append(int(go_no))
+		curs.execute("select gene_no,go_functions from gene")
 		
 		if self.type == 3:
-			self.curs.execute("select array_upper(recurrence_array,1) from %s limit 1"%self.table)
-			rows = self.curs.fetchall()
+			curs.execute("select array_upper(recurrence_array,1) from %s limit 1"%self.table)
+			rows = curs.fetchall()
 			self.no_of_datasets = int(rows[0][0])
 			
 		sys.stderr.write("Done\n")
 	
-	def get_subgraph(self, mcl_id):
+	def get_subgraph(self, curs, splat_table, mcl_table, mcl_id, edge_table=None):
+		"""
+		03-09-05
+			make it class independent
+			
+			input: a mcl_id
+			output: a graph with weight
+		"""
+		sys.stderr.write("Getting subgraph for mcl_id %s..."%mcl_id)
 		#first get the mcl cluster information (node_list)
-		self.curs.execute("select splat_id, vertex_set, p_value_min, \
-			array_upper(recurrence_array,1) from %s where mcl_id=%d"%(self.mcl_table, mcl_id))
-		rows = self.curs.fetchall()
+		curs.execute("select splat_id, vertex_set, p_value_min, \
+			array_upper(recurrence_array,1) from %s where mcl_id=%d"%(mcl_table, mcl_id))
+		rows = curs.fetchall()
 		for row in rows:
 			splat_id = row[0]
 			vertex_set = row[1][1:-1]
@@ -158,8 +149,8 @@ class subgraph_visualize:
 			recurrence = row[3]
 		
 		#second, get the splat pattern from splat_result based on splat_id (big_graph)
-		self.curs.execute("select edge_set from %s where splat_id=%d"%(self.table, splat_id))
-		rows = self.curs.fetchall()
+		curs.execute("select edge_set from %s where splat_id=%d"%(splat_table, splat_id))
+		rows = curs.fetchall()
 		for row in rows:
 			edge_set = row[0]
 
@@ -172,36 +163,42 @@ class subgraph_visualize:
 			vertex_list.sort()
 			#set the default edge_data to be 1
 			edge_data = 1
-			#type 3, get the correlation vector for an edge
-			if self.type == 3:
-				self.curs.execute("select cor_vector from %s where edge_name='{%s,%s}'"%(self.edge_table, vertex_list[0], vertex_list[1]))
-				rows = self.curs.fetchall()
+			#if edge_table available, get the correlation vector for an edge
+			if edge_table:
+				curs.execute("select cor_vector from %s where edge_name='{%s,%s}'"%(edge_table, vertex_list[0], vertex_list[1]))
+				rows = curs.fetchall()
 				edge_data = rows[0][0][1:-1]
 				edge_data = edge_data.split(',')
 				edge_data = map(float, edge_data)
 			big_graph.add_edge(vertex_list[0], vertex_list[1], edge_data)
 			
 		subgraph = big_graph.subgraph_from_node_list(vertex_set)
+		sys.stderr.write("Done\n")
 		return subgraph
 	
-	def subgraph_in_one_dataset(self, mcl_id, dataset_no):
+	def subgraph_in_one_dataset(self, curs, splat_table, mcl_table, edge_table, mcl_id, dataset_no):
 		"""
 		for type 3
 		"""
-		subgraph = self.get_subgraph(mcl_id)
+		sys.stderr.write("Getting subgraph for mcl_id %s in dataset %s..."%(mcl_id, dataset_no))
+		subgraph = self.get_subgraph(curs, splat_table, mcl_table, mcl_id, edge_table)
 		sub_subgraph = Graph.Graph()
 		for edge_id in subgraph.edge_list():
 			edge = subgraph.edge_by_id(edge_id)
 			edge_data = subgraph.edges[edge_id][2]
 			sub_subgraph.add_edge(edge[0], edge[1], edge_data[dataset_no])
+		sys.stderr.write("Done\n")
 		return sub_subgraph
 	
 	
-	def one_graph(self, gene_no, mcl_id):
+	def single_graph_output(self, subgraph, gene_no, mcl_id):
 		'''
 		write the R script to draw an unweighted subgraph
+		03-09-05
+			defunct, use weighted_subgraph_output() instead.
+		
 		'''
-		subgraph = self.get_subgraph(mcl_id)
+		self.r_f.write('library("Rgraphviz")\n')
 		vertex_set = subgraph.node_list()
 		vertex_labels = []
 		for vertex in vertex_set:
@@ -235,17 +232,24 @@ class subgraph_visualize:
 		self.r_f.write('nAttrs$shape <- c("%s"="box")\n'%gene_id)
 		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, "%s")\n'%self.plot_type)
 	
-	def weighted_subgraph(self, subgraph):
+	def weighted_subgraph_output(self, output_f, subgraph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot'):
 		'''
 		write the R script to draw a weighted subgraph
+		
+		03-09-05
+			make it class-independent
+			
+			Not giving the centralnode or function is ok.
 		'''
+		sys.stderr.write("Outputing subgraph...")
+		output_f.write('library("Rgraphviz")\n')
 		vertex_set = subgraph.node_list()
 		vertex_labels = []
 		for vertex in vertex_set:
-			vertex_labels.append('"%s"'%self.gene_no2gene_id[vertex])
-		self.r_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
-		self.r_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
-		self.r_f.write("names(edL2) <- V\n")
+			vertex_labels.append('"%s"'%label_dict[vertex])
+		output_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
+		output_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
+		output_f.write("names(edL2) <- V\n")
 		for i in range(len(vertex_set)):
 			vertex = vertex_set[i]
 			nbrs = subgraph.inc_nbrs(vertex) + subgraph.out_nbrs(vertex)
@@ -260,50 +264,64 @@ class subgraph_visualize:
 				#Note +1 to index
 				nbr_list.append(vertex_set.index(neighbor)+1)
 			#Note: +1 to i
-			self.r_f.write('edL2[[%d]] <- list(edges=c(%s), weights=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list)), ','.join(map(repr,weight_list)) ))
+			output_f.write('edL2[[%d]] <- list(edges=c(%s), weights=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list)), ','.join(map(repr,weight_list)) ))
 		
-		self.r_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
-		self.r_f.write('nAttrs = list()\n')
-		self.r_f.write('eAttrs = list()\n')
+		output_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
+		output_f.write('nAttrs = list()\n')
+		output_f.write('eAttrs = list()\n')
 		#this block adds weights to the edges, copied from 'Rgraphviz.pdf'
-		self.r_f.write('ew <- edgeWeights(gR2)\n')
-		self.r_f.write('lw <- unlist(unlist(ew))\n')
-		self.r_f.write('toRemove <- removedEdges(gR2)\n')
-		self.r_f.write('if (length(toRemove) > 0) lw <- lw[-toRemove]\n')
-		self.r_f.write('names(lw) <- edgeNames(gR2)\n')
-		self.r_f.write('eAttrs$label <- lw\n')
+		output_f.write('ew <- edgeWeights(gR2)\n')
+		output_f.write('lw <- unlist(unlist(ew))\n')
+		output_f.write('toRemove <- removedEdges(gR2)\n')
+		output_f.write('if (length(toRemove) > 0) lw <- lw[-toRemove]\n')
+		output_f.write('names(lw) <- edgeNames(gR2)\n')
+		output_f.write('eAttrs$label <- lw\n')
 		
-		self.r_f.write("defAttrs = getDefaultAttrs()\n")
-		self.r_f.write('defAttrs$node$color <- "black"\n')
-		self.r_f.write('defAttrs$node$fillcolor <- "transparent"\n')
-		self.r_f.write('defAttrs$node$shape <- "ellipse"\n')
+		output_f.write("defAttrs = getDefaultAttrs()\n")
+		output_f.write('defAttrs$node$color <- "black"\n')
+		output_f.write('defAttrs$node$fillcolor <- "transparent"\n')
+		output_f.write('defAttrs$node$shape <- "ellipse"\n')
 		color_list = []
+		central_label = None
 		for vertex in vertex_set:
-			gene_id = self.gene_no2gene_id[vertex]
-			if self.function in self.global_gene_to_go_dict[vertex]:
-				color_list.append('"%s"="%s"'%(gene_id, self.functioncolor))
-		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
-		gene_id = self.gene_no2gene_id[self.centralnode]
-		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
-		self.r_f.write('nAttrs$shape <- c("%s"="box")\n'%gene_id)
-		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, edgeAttrs=eAttrs, "%s")\n'%self.plot_type)
+			label = label_dict[vertex]
+			if vertex in gene_no2go_no:
+				if function in gene_no2go_no[vertex]:
+					color_list.append('"%s"="%s"'%(label, functioncolor))
+			if vertex==centralnode:
+				central_label = label_dict[centralnode]
+		output_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
+		if central_label:
+			output_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%central_label)
+			output_f.write('nAttrs$shape <- c("%s"="box")\n'%central_label)
+		output_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, edgeAttrs=eAttrs, "%s")\n'%plot_type)
+		sys.stderr.write("Done\n")
 		
-	def context_subgraph(self, gene_no, go_no):
-		self.curs.execute("select cluster_context, cluster_array from %s where gene_no=%d \
-			and go_no=%d"%(self.gene_table, gene_no, go_no))
-		rows = self.curs.fetchall()
+	def context_subgraph(self, curs, splat_table, mcl_table, gene_p_table, gene_table, gene_no, go_no):
+		"""
+		03-09-05
+			make it class independent
+			
+			input: a prediction determined by gene_no and go_no
+			output: a meta_graph of all clusters supporting this prediction
+		
+		03-09-05
+			use the gene_p_table to check the real predictions
+		"""
+		sys.stderr.write("Getting context_subgraph for gene %s and go %s...\n"%(gene_no, go_no))
+		curs.execute("select p.mcl_id from %s g, %s p where p.gene_no=%d and \
+			p.go_no=%d and g.p_gene_id=p.p_gene_id"%(gene_p_table, gene_table, gene_no, go_no))
+		rows = curs.fetchall()
 		mcl_id_list = []
 		for row in rows:
-			mcl_id_list_unit = row[1][1:-1]
-			mcl_id_list_unit = mcl_id_list_unit.split(',')
-			mcl_id_list += map(int, mcl_id_list_unit)
+			mcl_id_list.append(row[0])
 		
 		if mcl_id_list == []:
-			sys.stderr.write("No MCL clusters associated.\n")
+			sys.stderr.write("No MCL clusters associated with gene %s and go %s\n"%(gene_no, go_no))
 			sys.exit(1)
 		meta_graph = Graph.Graph()
 		for mcl_id in mcl_id_list:
-			subgraph = self.get_subgraph(mcl_id)
+			subgraph = self.get_subgraph(curs, splat_table, mcl_table, mcl_id)
 			for edge in subgraph.edge_list():
 				node1 = subgraph.edges[edge][0]
 				node2 = subgraph.edges[edge][1]
@@ -322,27 +340,46 @@ class subgraph_visualize:
 				else:
 					#add a new edge
 					meta_graph.add_edge(node1, node2, 1)
+		sys.stderr.write("Done\n")
 		return meta_graph
 		
 	
 	def run(self):
-		self.dstruc_loadin()
+		"""
+		03-09-05
+		"""
+		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+		self.dstruc_loadin(curs)
+		if self.r_fname:
+			self.r_f = open(self.r_fname, 'w')
 		if self.type == 1:
-			#subgraph = self.get_subgraph(self.mcl_id)
-			#self.weighted_subgraph(subgraph)
-			self.one_graph(self.centralnode, self.mcl_id)
+			subgraph = self.get_subgraph(curs, self.table, self.mcl_table, self.mcl_id)
+			self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+				self.centralnode, self.function, self.functioncolor, self.plot_type)
 			self.r_f.close()
 			r.source(self.r_fname)
+			raw_input("Pause:\t")
 		elif self.type == 2:
-			subgraph = self.context_subgraph(self.centralnode, self.function)
-			self.weighted_subgraph(subgraph)
+			if self.gene_table==None or self.gene_p_table==None:
+				sys.stderr.write("Error: Please specify both the gene_p_table and gene_table.\n")
+				sys.exit(2)
+			subgraph = self.context_subgraph(curs, self.table, self.mcl_table, self.gene_p_table, self.gene_table, \
+				self.centralnode, self.function)
+			self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+				self.centralnode, self.function, self.functioncolor, self.plot_type)
 			self.r_f.close()
 			r.source(self.r_fname)
+			raw_input("Pause:\t")
 		elif self.type == 3:
 			for i in range(self.no_of_datasets):
 				sys.stdout.write("Dataset %s\n"%(i+1))
-				sub_subgraph = self.subgraph_in_one_dataset(self.mcl_id, i)
-				self.weighted_subgraph(sub_subgraph)
+				if self.edge_table==None:
+					sys.stderr.write("Error: Please specify both the edge_table.\n")
+					sys.exit(2)
+					
+				sub_subgraph = self.subgraph_in_one_dataset(curs, self.table, self.mcl_table, self.edge_table, self.mcl_id, i)
+				self.weighted_subgraph_output(self.r_f, subgraph, self.gene_no2gene_id, self.global_gene_to_go_dict, \
+					self.centralnode, self.function, self.functioncolor, self.plot_type)
 				
 				self.r_f.close()
 				r.source(self.r_fname)
@@ -352,26 +389,27 @@ class subgraph_visualize:
 					sys.exit(3)
 				#open it again for the next dataset
 				self.r_f = open(self.r_fname, 'w')
-				self.r_f.write('library("Rgraphviz")\n')
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", \
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "gene_p_table=", \
 		"gene_table=", "function=", "functioncolor=", "centralnode=", "mcl_id=", "type=", "plot_type="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:g:f:c:n:l:y:p:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:n:g:f:o:c:l:y:p:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
-	schema = ''
-	table = 'splat_result'
-	mcl_table = 'mcl_result'
-	gene_table = ''
+	schema = None
+	table = None
+	mcl_table = None
+	gene_p_table = None
+	gene_table = None
 	function = 0
 	functioncolor = 'green'
 	centralnode = 0
@@ -392,13 +430,15 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
+		elif opt in ("-n", "--gene_p_table="):
+			gene_p_table = arg
 		elif opt in ("-g", "--gene_table"):
 			gene_table = arg
 		elif opt in ("-f", "--function"):
 			function = int(arg)
-		elif opt in ("-c", "--functioncolor"):
+		elif opt in ("-o", "--functioncolor"):
 			functioncolor = arg
-		elif opt in ("-n", "--centralnode"):
+		elif opt in ("-c", "--centralnode"):
 			centralnode = int(arg)
 		elif opt in ("-l", "--mcl_id"):
 			mcl_id = int(arg)
@@ -406,8 +446,8 @@ if __name__ == '__main__':
 			type = int(arg)
 		elif opt in ("-p", "--plot_type"):
 			plot_type = arg		
-	if schema and centralnode and len(args)==1 and function and type:
-		instance = subgraph_visualize(hostname, dbname, schema, table, mcl_table,\
+	if schema and table and mcl_table and len(args)==1 and type:
+		instance = subgraph_visualize(hostname, dbname, schema, table, mcl_table, gene_p_table,\
 			gene_table, function, functioncolor, centralnode, mcl_id, type, args[0], plot_type)
 		instance.run()
 	else:
