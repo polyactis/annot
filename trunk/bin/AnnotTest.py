@@ -14,12 +14,16 @@ Examples:
 
 02-20-05
 	2: unittest for subgraph_visualize
+
+02-20-05
+	3: unittest for gene_stat
 """
 import unittest, os, sys, getopt
 from gene_stat_plot import gene_stat
+from gene_stat import gene_stat as gene_stat_slim
 from visualize.subgraph_visualize import subgraph_visualize
 
-class TestGeneStat(unittest.TestCase):
+class TestGeneStatPlot(unittest.TestCase):
 	def setUp(self):
 		hostname = 'zhoudb'
 		dbname = 'graphdb'
@@ -150,7 +154,101 @@ class TestSubgraphVisualize(unittest.TestCase):
 		self.instance.weighted_subgraph(subgraph)
 		self.instance.r_f.close()
 		
+
+class TestGeneStat(unittest.TestCase):
+	"""
+	02-21-05
+	"""
+	def setUp(self):
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		table = 'cluster_stat_tmp'
+		mcl_table = 'mcl_result_p3g5e6d4q5n80'
+		depth_cut_off = 5
+		dir_files = None
+		leave_one_out = 1
+		wu = 1
+		report = 1
+		commit = 0
+		gene_table = 'p_gene'
+		subgraph_cut_off = 0
+		debug = 0
+		self.instance = gene_stat_slim(hostname, dbname, schema, table, mcl_table, \
+			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table,\
+			subgraph_cut_off, debug)
+
+	
+	def test_L1_match(self):
+		"""
+		02-21-05
+		"""
+		#loadin data structures used in L1_match()
+		self.instance.dstruc_loadin()
+		self.instance.debug_L1_match =1
+		#it's GO:0006512
+		go_no = 449
+		#it's YFR053C
+		gene_no = 2048
+		k_functions_set = self.instance.known_genes_dict[gene_no]
+		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
+		#it's GO:0046165, a child of GO:0006166, should be correct
+		go_no = 1531
+		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
+		#it's GO:0046173, a child of GO:0046165, should be wrong
+		go_no = 1532
+		is_correct = self.instance.L1_match(go_no, k_functions_set)
+		print "L1_match result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
 		
+	def test_common_ancestor_deep_enough(self):
+		"""
+		02-21-05
+		"""
+		#loadin data structures used in common_ancestor_deep_enough()
+		self.instance.dstruc_loadin()
+		self.instance.debug_common_ancestor_deep_enough =1
+		#it's GO:0006512
+		go_no = 449
+		#it's YFR053C
+		gene_no = 2048
+		k_functions_set = self.instance.known_genes_dict[gene_no]
+		is_correct = self.instance.common_ancestor_deep_enough(go_no, k_functions_set)
+		print "common_ancestor_deep_enough result for %s and gene %s: %s"%(go_no, gene_no, is_correct)
+	
+	def test_submit(self):
+		"""
+		02-21-05
+			testing the new submit()
+		"""
+		#setting the testing gene_table and flag the needcommit
+		self.instance.gene_table = 'p_gene_test'
+		self.instance.needcommit = 1
+		#construct a testing prediction_tuple2list
+		tuple = (3,  4)	#(recurrence, connectivity)
+		#[p-value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
+		#is_correct_lca, cluster_size, unknown_gene_ratio]
+		unit = [0.001, 3, 5000, 50, 0, 1, 1, 10, 0.25]
+		prediction_list = [unit]
+		self.instance.prediction_tuple2list[tuple] = prediction_list
+		self.instance.submit()
+	
+	def test__gene_stat_leave_one_out(self):
+		"""
+		02-21-05
+			new _gene_stat_leave_one_out() adds more fields to a prediction_list
+			
+		"""
+		"""fake a row like [mcl_id, c.leave_one_out, c.p_value_vector, c.connectivity, \
+			m.recurrence_array, m.vertex_set]"""
+		row = [3, 6166, '{0.25,0.1,0.01,0.001}', 0.34, '{0.7,0.8,0.9}', '{1,2,3,4,6166}']
+		#setup a go_no2depth
+		self.instance.go_no2depth[3] = 10
+		self.instance._gene_stat_leave_one_out(row)
+		for (tuple, prediction_list) in self.instance.prediction_tuple2list.iteritems():
+			self.assertEqual(tuple, (2,2))
+			self.assertEqual(prediction_list, [[0.001, 3, 6166, 3, -1, -1, -1, 5, 0.25]] )
 		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -164,8 +262,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	TestCaseDict = {1:TestGeneStat,
-		2: TestSubgraphVisualize}
+	TestCaseDict = {1:TestGeneStatPlot,
+		2: TestSubgraphVisualize,
+		3: TestGeneStat}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -179,9 +278,11 @@ if __name__ == '__main__':
 		"""
 		add one by one
 		"""
-		#suite.addTest(TestGeneStat("test_return_distinct_functions"))
-		#suite.addTest(TestGeneStat("test_L1_match"))
+		#suite.addTest(TestGeneStatPlot("test_return_distinct_functions"))
+		#suite.addTest(TestGeneStatPlot("test_L1_match"))
+		#suite.addTest(TestGeneStat("test__gene_stat_leave_one_out"))
 		#suite.addTest(TestGeneStat("test_submit"))
+		#suite.addTest(TestGeneStat("test_common_ancestor_deep_enough"))
 		"""
 		add all
 		"""
