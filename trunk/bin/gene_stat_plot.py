@@ -172,6 +172,34 @@ class gene_stat:
 		self.dataset_no2go_no_fp = {}
 		self.gene_no2cluster = {}
 		self.gene_no2cluster_fp = {}
+	
+	def parameter_reset_and_cleanup(self, unknown_cut_off, connectivity_cut_off, recurrence_cut_off, \
+			cluster_size_cut_off, p_value_cut_off, depth_cut_off):
+		'''
+		this function is for batch_stat.py
+		'''
+		#parameter_reset
+		self.unknown_cut_off = float(unknown_cut_off)
+		self.connectivity_cut_off = float(connectivity_cut_off)
+		self.recurrence_cut_off = int(recurrence_cut_off)
+		self.cluster_size_cut_off = int(cluster_size_cut_off)
+		self.p_value_cut_off = float(p_value_cut_off)	
+		self.depth_cut_off = int(depth_cut_off)
+		
+		#cleanup
+		self.gene_prediction_dict = {}
+		self.no_of_p_known = 0
+		self.no_of_records = 0
+		self.tp = 0.0
+		self.tp_m = 0.0
+		self.tp1 = 0.0
+		self.tp1_m = 0.0
+		self.tn = 0.0
+		self.fp = 0.0
+		self.fp_m =0.0
+		self.fn = 0.0
+		#the overall prediction accuracy of each function
+		self.go_no2accuracy = {}
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -205,7 +233,7 @@ class gene_stat:
 		#setup the go_graph structure
 			self.go_graph.add_edge(row[2], row[3])
 		
-		#setup self.go_no2go_id
+		#setup self.go_no2go_id and self.go_no2depth
 		self.curs.execute("select go_no, go_id, depth from go")
 		rows = self.curs.fetchall()
 		for row in rows:
