@@ -6,14 +6,15 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	mcl_result(default) or fim_result
+	-t ..., --table=...	 Ignore it, interface compatibility.
+	-m ..., --mcl_table=...	mcl_result(default)
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_gene_ratio_cut_off, 0.25(default)
 	-l ..., --limit=...,	IGNORE it, interface relics.
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
 	-y ..., --recurrence_cut_off=...	5(default), minimum recurrences
 	-x ..., --cluster_size_cut_off=...	20(default), maximum cluster size
-	-w, --wu	IGNORE it. interface relics.
+	-w, --wu	IGNORE it. interface compatibility.
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
 	-h, --help              show this help
@@ -21,14 +22,13 @@ Option:
 Examples:
 	gene_stat_on_mcl_result.py -k shu -p 0.001
 	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7
-	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c -t fim_result
+	gene_stat_on_mcl_result.py -k shu -p 0.001 -n 0.7 -u 0.20 -r -c -m fim_result
 
 Description:
 
 """
 
 import sys, os, psycopg, getopt
-from rpy import *
 from graphlib import Graph
 from sets import Set
 
@@ -44,12 +44,13 @@ class gene_prediction:
 		self.mcl_id_list = []
 
 class gene_stat_on_mcl_result:
-	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, \
-		limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit=0):
+	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
+		limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report=0, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
+		self.mcl_table = mcl_table
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.unknown_cut_off = float(unknown_cut_off)
 		self.limit = int(limit)
@@ -118,7 +119,7 @@ class gene_stat_on_mcl_result:
 
 		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, vertex_set, p_value_min, go_no_vector, unknown_gene_ratio\
 				from %s where connectivity>=%f and p_value_min notnull and array_upper(recurrence_array, 1)>=%d\
-				and array_upper(vertex_set, 1)<=%d"%(self.table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
+				and array_upper(vertex_set, 1)<=%d"%(self.mcl_table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -269,21 +270,34 @@ class gene_stat_on_mcl_result:
 		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
 		sys.stderr.write("\tBased on functions:\n")
 		sys.stderr.write('\t\tTP0: %d  TP1: %d  TN: %d  FP: %d  FN: %d\n'%(self.tp, self.tp1, self.tn, self.fp, self.fn))
-		sys.stderr.write('\t\tSensitvity: %f\n'%((self.tp+self.tp1)/(self.tp+self.tp1+self.fn)))
-		sys.stderr.write('\t\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
-		sys.stderr.write('\t\tFalse Positive Ratio: %f\n'%(self.fp/(self.tp+self.tp1+self.fp)))
+		if (self.tp+self.tp1+self.fn) == 0:
+			sys.stderr.write('\t\tSensitvity: Null\n')
+		else:
+			sys.stderr.write('\t\tSensitvity: %f\n'%((self.tp+self.tp1)/(self.tp+self.tp1+self.fn)))
+		if (self.fp+self.tn) == 0:
+			sys.stderr.write('\t\tSpecificity: Null\n')
+		else:
+			sys.stderr.write('\t\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
+		if (self.tp+self.tp1+self.fp) == 0:
+			sys.stderr.write('\t\tFalse Positive Ratio: Null\n')
+		else:
+			sys.stderr.write('\t\tFalse Positive Ratio: %f\n'%(self.fp/(self.tp+self.tp1+self.fp)))
 		sys.stderr.write("\tBased on clusters:\n")
 		sys.stderr.write('\t\tTP0_M: %d  TP1_M: %d  FP_M: %d\n'%(self.tp_m, self.tp1_m, self.fp_m))
-		sys.stderr.write('\t\tFalse Positive Ratio: %f\n'%(self.fp_m/(self.tp_m+self.tp1_m+self.fp_m)))
+		if (self.tp_m+self.tp1_m+self.fp_m) == 0:
+			sys.stderr.write('\t\tFalse Positive Ratio: Null\n')
+		else:
+			sys.stderr.write('\t\tFalse Positive Ratio: %f\n'%(self.fp_m/(self.tp_m+self.tp1_m+self.fp_m)))
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
+		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:y:x:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -292,6 +306,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	table = 'mcl_result'
+	mcl_table = 'mcl_result'
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
@@ -313,6 +328,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-t", "--table"):
 			table = arg
+		elif opt in ("-m", "--mcl_table"):
+			mcl_table = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-u", "--unknown_cut_off"):
@@ -333,7 +350,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, p_value_cut_off,\
+		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
