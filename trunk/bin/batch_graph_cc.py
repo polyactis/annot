@@ -22,7 +22,7 @@ def batch(dataset_dir, result_dir):
 	for f in files:
 		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 		src_file = os.path.join(dataset_dir, f)
-		output_file = os.path.join(result_dir, f+'.gph')
+		output_file = os.path.join(result_dir, 'gph_'+f)
 		wl = ['graph.bin', src_file, output_file, f]
 		os.spawnvp(os.P_WAIT, bin_dir + 'graph.bin', wl)
 		
