@@ -3,6 +3,7 @@
 Usage: gene_id_to_no.py -g ORGANISM [OPTION] DATADIR
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-c, --commit	commits the database transaction
 	-g ..., --organism=...	two letter organism abbreviation
@@ -22,9 +23,9 @@ import sys, os, csv, psycopg, getopt
 from sets import Set
 
 class gene_id_to_no:
-	def __init__(self, dir, dbname, orgn, needcommit=0):
+	def __init__(self, dir, hostname, dbname, orgn, needcommit=0):
 		self.dir = dir
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to graph")
 		self.org_short2long = {'at':'Arabidopsis thaliana',
@@ -101,11 +102,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:g:c", ["help", "dbname=", "organism=", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:g:c", ["help", "hostname=", "dbname=", "organism=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	commit = 0
 	organism = ''
@@ -113,6 +115,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-g", "--organism"):
@@ -121,7 +125,7 @@ if __name__ == '__main__':
 			commit = 1
 			
 	if dbname and organism and len(args)>0:
-		instance = gene_id_to_no(args[0], dbname, organism, commit)
+		instance = gene_id_to_no(args[0], hostname, dbname, organism, commit)
 		instance.run()
 	else:
 		print __doc__

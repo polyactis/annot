@@ -3,6 +3,7 @@
 Usage: GO_common_ancestor.py -l LIST_FILE [OPTION] Outputfile
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, go(default)
 	-g ..., --organism=...	two letter organism abbreviation, sc(default)
@@ -35,8 +36,8 @@ from kjbuckets import *
 class GO_common_ancestor(GO_graphxml):
 	'''
 	'''
-	def __init__(self, dbname, schema, type, output, orgn, go_set_fname):
-		GO_graphxml.__init__(self, dbname, schema, type, output, orgn)
+	def __init__(self, hostname, dbname, schema, type, output, orgn, go_set_fname):
+		GO_graphxml.__init__(self, hostname, dbname, schema, type, output, orgn)
 		self.go_set_file = csv.reader(file(go_set_fname), delimiter='\t')
 		self.go_id_set = Set()
 
@@ -81,13 +82,14 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 
-	long_options_list = ["help", "dbname=", "schema=", "type=", "organism=", "list_file="]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "type=", "organism=", "list_file="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:l:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:l:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
-	
+
+	hostname = 'zhoudb'	
 	dbname = 'graphdb'
 	schema = 'go'
 	organism = 'sc'
@@ -97,6 +99,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -109,7 +113,7 @@ if __name__ == '__main__':
 			list_file = arg
 
 	if len(args) == 1 and list_file:
-		instance = GO_common_ancestor(dbname, schema, type, args[0], organism, list_file)
+		instance = GO_common_ancestor(hostname, dbname, schema, type, args[0], organism, list_file)
 		instance.run()
 	else:
 		print __doc__

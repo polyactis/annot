@@ -3,6 +3,7 @@
 Usage: connectivity.py -k SCHEMA -t TABLE [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	'splat' or 'mcl', compute which table's connectivity
@@ -34,9 +35,9 @@ class compute_connectivity:
 	Computing connectivity of mcl results is based on splat_id.
 	Because edge_dict is required in advance.
 	'''
-	def __init__(self, table, dbname, schema, report, needcommit=0):
+	def __init__(self, table, hostname, dbname, schema, report, needcommit=0):
 		self.table = table
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		try:
@@ -153,11 +154,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:ct:", ["help", "report", "dbname=", "schema=", "commit", "table="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:ct:", ["help", "report", "hostname=", "dbname=", "schema=", "commit", "table="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	commit = 0
@@ -167,6 +169,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -179,7 +183,7 @@ if __name__ == '__main__':
 			table = arg
 
 	if schema and table:
-		instance = compute_connectivity(table, dbname, schema, report, commit)
+		instance = compute_connectivity(table, hostname, dbname, schema, report, commit)
 		instance.run()
 
 	else:

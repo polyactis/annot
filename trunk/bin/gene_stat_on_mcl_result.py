@@ -3,6 +3,7 @@
 Usage: gene_stat_on_mcl_result.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	mcl_result(default) or fim_result
@@ -41,8 +42,8 @@ class gene_prediction:
 		self.mcl_id_list = []
 
 class gene_stat_on_mcl_result:
-	def __init__(self, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
@@ -267,13 +268,14 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:p:u:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	table = 'mcl_result'
@@ -288,6 +290,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -310,7 +314,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat_on_mcl_result(dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat_on_mcl_result(hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:

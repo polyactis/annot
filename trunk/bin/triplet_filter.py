@@ -5,6 +5,7 @@ Usage: triplet_filter.py -k SCHEMA [OPTION] DATADIR NEWDIR
 Option:
 	DATADIR is the directory of the graph construction results.
 	NEWDIR is the directory to store the filtered results.
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --type=...	0(default, only known), 1(known+unknown) or 2(all)
@@ -37,8 +38,8 @@ class triplet_filter:
 	'''
 	This class filters triplets containing schema-specific unknown genes out.
 	'''
-	def __init__(self, dbname, schema, type, orgn):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, type, orgn):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.type = int(type)
@@ -113,11 +114,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:", ["help", "dbname=", "schema=", "type=", "organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:", ["help", "hostname=", "dbname=", "schema=", "type=", "organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	type = 0
@@ -126,6 +128,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -139,7 +143,7 @@ if __name__ == '__main__':
 		if type == 2 and organism == '':
 			print __doc__
 			sys.exit(2)
-		transform_batch(dbname, schema, type, organism, args[0], args[1])
+		transform_batch(hostname, dbname, schema, type, organism, args[0], args[1])
 	else:
 		print __doc__
 		sys.exit(2)

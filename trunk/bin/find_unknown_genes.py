@@ -4,6 +4,7 @@ Usage: find_unknown_genes.py -g ORGANISM FILE
 
 Option:
 	FILE is the file to store the biological_process unknown genes.
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-g ..., --organism=...	two letter organism abbreviation
 	-h, --help              show this help
@@ -23,8 +24,8 @@ from sets import Set
 class find_unknown_genes:
 	'''
 	'''
-	def __init__(self, dbname, orgn, unknown_file):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, orgn, unknown_file):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.org_short2long = {'at':'Arabidopsis thaliana',
 			'ce':'Caenorhabditis elegans',
@@ -83,24 +84,27 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:g:", ["help", "dbname=", "organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:g:", ["help", "hostname=", "dbname=", "organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	organism = ''
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-g", "--organism"):
 			organism = arg
 			
 	if organism and len(args) == 1:
-		instance = find_unknown_genes(dbname, organism, args[0])
+		instance = find_unknown_genes(hostname, dbname, organism, args[0])
 		instance.run()
 	else:
 		print __doc__

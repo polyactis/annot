@@ -3,6 +3,7 @@
 Usage: go_bioprocess.py -k SCHEMA -p PARSER -u UNKNOWNFILE [OPTION] go_function_file
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-c --commit	commits the database transaction
@@ -169,9 +170,9 @@ parser_map = {"shu":shu_parser(),\
 			"min":min_parser()}
 
 class go_table_setup:
-	def __init__(self, fname, dbname, schema, parser, u_fname, orgn, needcommit=0):
+	def __init__(self, fname, hostname, dbname, schema, parser, u_fname, orgn, needcommit=0):
 		self.go_inf = open(fname, 'r')
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.parser = parser_map[parser]
@@ -241,11 +242,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:cu:p:g:", ["help", "dbname=", "schema=", "commit", "unknown=","parser=","organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:cu:p:g:", ["help", "hostname", "dbname=", "schema=", "commit", "unknown=","parser=","organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	commit = 0
@@ -256,6 +258,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -270,7 +274,7 @@ if __name__ == '__main__':
 			organism = arg
 			
 	if schema and unknown and parser and len(args)>0:
-		instance = go_table_setup(args[0], dbname, schema, parser, unknown, organism, commit)
+		instance = go_table_setup(args[0], hostname, dbname, schema, parser, unknown, organism, commit)
 		instance.dstruc_loadin()
 		instance.submit()
 	else:

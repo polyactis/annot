@@ -3,6 +3,7 @@
 Usage: gene_go_functions.py -k SCHEMA [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-c, --commit	commits the database transaction
@@ -24,8 +25,8 @@ class gene_go_functions:
 	'''
 	Initialize the go_functions column in table schema.gene
 	'''
-	def __init__(self, dbname, schema, orgn, needcommit=0):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname. dbname, schema, orgn, needcommit=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.needcommit = int(needcommit)
@@ -101,11 +102,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:cg:", ["help", "dbname=", "schema=", "commit", "organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:cg:", ["help", "hostname=", "dbname=", "schema=", "commit", "organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	commit = 0
@@ -114,6 +116,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -124,7 +128,7 @@ if __name__ == '__main__':
 			organism = arg
 			
 	if schema:
-		instance = gene_go_functions(dbname, schema, organism, commit)
+		instance = gene_go_functions(hostname, dbname, schema, organism, commit)
 		instance.run()
 	else:
 		print __doc__

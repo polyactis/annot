@@ -3,6 +3,7 @@
 Usage: gene_table.py -k SCHEMA -g ORGANISM [OPTION] DATADIR
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	DATADIR is the directory containing all the datasets
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
@@ -27,9 +28,9 @@ class gene_table:
 	'''
 	Initialize the local gene_id:gene_no mapping in table schema.gene
 	'''
-	def __init__(self, dir, dbname, schema, orgn, union=0, needcommit=0):
+	def __init__(self, dir, hostname, dbname, schema, orgn, union=0, needcommit=0):
 		self.dir = dir
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.union = int(union)
@@ -110,11 +111,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:g:uc", ["help", "dbname=", "schema=", "organism=", "union", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:uc", ["help", "hostname=", "dbname=", "schema=", "organism=", "union", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	organism = ''
@@ -124,6 +126,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -136,7 +140,7 @@ if __name__ == '__main__':
 			commit = 1
 			
 	if schema and organism and len(args) == 1:
-		instance = gene_table(args[0], dbname, schema, organism, union, commit)
+		instance = gene_table(args[0], hostname, dbname, schema, organism, union, commit)
 		instance.run()
 	else:
 		print __doc__

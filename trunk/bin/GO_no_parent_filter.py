@@ -3,6 +3,7 @@
 Usage: GO_no_parent_filter.py [OPTION] DATADIR Outputfile
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, go(default)
 	-t ..., --type=...	which branch of GO, 0, 1(default) or 2(IGNORE it)
@@ -23,8 +24,8 @@ from GO_graphxml import GO_graphxml
 from graphlib import GraphDot
 
 class GO_no_parent_filter(GO_graphxml):
-	def __init__(self, dbname, schema, type, dir, output, visualize):
-		GO_graphxml.__init__(self, dbname, schema, type, output)
+	def __init__(self, hostname, dbname, schema, type, dir, output, visualize):
+		GO_graphxml.__init__(self, hostname, dbname, schema, type, output)
 		self.dir = dir
 		self.visualize = visualize
 	
@@ -78,13 +79,14 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 
-	long_options_list = ["help", "dbname=", "schema=", "type=", "visualize"]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "type=", "visualize"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:v", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:v", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = 'go'
 	type = 1
@@ -93,6 +95,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -107,7 +111,7 @@ if __name__ == '__main__':
 		args[0] is the DATADIR
 		args[1] is the Outputfile
 		'''
-		instance = GO_no_parent_filter(dbname, schema, type, args[0], args[1], visualize)
+		instance = GO_no_parent_filter(hostname, dbname, schema, type, args[0], args[1], visualize)
 		instance.batch_filter()
 	else:
 		print __doc__

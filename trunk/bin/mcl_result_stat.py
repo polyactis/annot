@@ -3,6 +3,7 @@
 Usage: mcl_result_stat.py -k SCHEMA [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	mcl_result(default) or fim_result
@@ -25,8 +26,8 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class mcl_result_stat:
-	def __init__(self, dbname, schema, table, bonferroni=0, report=0, wu=1, needcommit=0):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, table, bonferroni=0, report=0, wu=1, needcommit=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
@@ -167,11 +168,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:t:bcw", ["help", "report", "dbname=", "table=", "schema=", "bonferroni", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:t:bcw", ["help", "report", "hostname=", "dbname=", "table=", "schema=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	table = 'mcl_result'
@@ -183,6 +185,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -199,7 +203,7 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = mcl_result_stat(dbname, schema, table, bonferroni, report, wu, commit)
+		instance = mcl_result_stat(hostname, dbname, schema, table, bonferroni, report, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 

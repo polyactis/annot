@@ -4,6 +4,7 @@ Usage:	go_informative_node.py -a GO_ASSOCIATION -i GO_INDEX [OPTIONS}
 	go_informative_node.py -k SCHEMA -b [OPTIONS]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-a ..., -go_association=...	the file mapping go_id to gene_id
@@ -142,11 +143,11 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, dbname, schema, go_association, go_graph, size, type):
+	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type):
 		self.schema = schema
 		if self.schema:
 		#input from database
-			self.conn = psycopg.connect('dbname=%s'%dbname)
+			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 			self.curs = self.conn.cursor()
 			self.curs.execute("set search_path to %s"%self.schema)
 		else:
@@ -279,11 +280,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:a:i:s:t:b", ["help", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:b", ["help", "hostname=", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''	
 	go_association = ''
@@ -295,6 +297,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -310,10 +314,10 @@ if __name__ == '__main__':
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and schema:
-		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type)
 		instance.run()
 	elif bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type)
 		instance.run()		
 	elif go_association and go_index:
 		instance = go_informative_node(go_association, go_index, size, type)

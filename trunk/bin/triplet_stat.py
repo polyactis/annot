@@ -3,6 +3,7 @@
 Usage: triplet_stat.py -k SCHEMA [OPTION] TRIPLET_FILE
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-h, --help              show this help
@@ -19,8 +20,8 @@ import pickle,sys,os,random,getopt,psycopg,csv
 
 
 class triplet_stat:
-	def __init__(self, dbname, schema):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.recurrence_triplet_list = []
@@ -133,11 +134,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:", ["help", "dbname=", "schema="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:", ["help", "hostname=", "dbname=", "schema="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	
@@ -145,13 +147,15 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
 			
 	if schema and len(args) ==1:
-		instance = triplet_stat(dbname, schema)
+		instance = triplet_stat(hostname, dbname, schema)
 		instance.dstruc_loadin()
 		instance.recurrence_triplet_list_construct(args[0])
 		instance.recurrence_stat_list_construct()	

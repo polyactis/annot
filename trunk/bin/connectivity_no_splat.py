@@ -4,6 +4,7 @@ Usage:	connectivity_no_splat.py -k SCHEMA -t TABLE -g GRAPHDIR [OPTION]
 	connectivity_no_splat.py -k SCHEMA -t fim_result -a CHOICE [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	'fim_result' or 'mcl_result', compute which table's connectivity
@@ -41,8 +42,8 @@ class connectivity_no_splat:
 	5000 records are done in one time. Reduce the memory usage.
 	This is done through postgresql's CURSOR mechanism.
 	'''
-	def __init__(self, dbname, schema, table, graphdir, avg, report, needcommit=0):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, table, graphdir, avg, report, needcommit=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
@@ -280,11 +281,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:a:rc", ["help", "dbname=", "schema=", "table=", "graphdir=", "avg=", "report", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:g:a:rc", ["help", "hostname=", "dbname=", "schema=", "table=", "graphdir=", "avg=", "report", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	table = ''
@@ -297,6 +299,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -314,10 +318,10 @@ if __name__ == '__main__':
 
 
 	if schema and table and graphdir:
-		instance = connectivity_no_splat(dbname, schema, table, graphdir, avg, report, commit)
+		instance = connectivity_no_splat(hostname, dbname, schema, table, graphdir, avg, report, commit)
 		instance.run()
 	elif schema and table and avg:
-		instance = connectivity_no_splat(dbname, schema, table, graphdir, avg, report, commit)
+		instance = connectivity_no_splat(hostname, dbname, schema, table, graphdir, avg, report, commit)
 		instance.run()
 	else:
 		print __doc__

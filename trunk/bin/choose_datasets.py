@@ -4,6 +4,7 @@ Usage: choose_datasets.py  [OPTION] DATADIR
 
 Option:
 	DATADIR is the directory of the datasets to be choosen
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, graph(default)
 	-g ..., --organism=...	two letter organism abbreviation, hs(default)
@@ -26,8 +27,8 @@ class choose_datasets:
 	dataset based on the standard gene set got from database.
 
 	'''
-	def __init__(self, dbname, schema, orgn, dir):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, orgn, dir):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.org_short2long = {'at':'Arabidopsis thaliana',
@@ -90,11 +91,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:g:", ["help", "dbname=", "schema=", "organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:", ["help", "hostname=", "dbname=", "schema=", "organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = 'graph'
 	organism = 'hs'
@@ -102,6 +104,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -110,7 +114,7 @@ if __name__ == '__main__':
 			organism = arg
 			
 	if len(args) == 1:
-		instance = choose_datasets(dbname, schema, organism, args[0])
+		instance = choose_datasets(hostname, dbname, schema, organism, args[0])
 		instance.run()
 	else:
 		print __doc__
