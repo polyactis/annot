@@ -50,12 +50,18 @@ class cluster_dstructure:
 class codense2db:
 	'''
 	'''
-	def __init__(self, infname, hostname, dbname, schema, table, mcl_table, mapping_file, cor_cut_off,\
-			report, needcommit=0):		
-		self.inf = csv.reader(open(infname, 'r'), delimiter='\t')
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to %s"%schema)
+	def __init__(self, infname=None, hostname=None, dbname=None, schema=None, table=None,\
+			mcl_table=None, mapping_file=None, cor_cut_off=0.6,\
+			report=0, needcommit=0):
+		"""
+		02-25-05
+			modify the interface of the class and 2 member functions(get_combined_cor_vector, parse_recurrence)
+			to make it module-independent
+		"""
+		self.infname = infname
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
 		self.table = table
 		self.mcl_table = mcl_table
 		self.mapping_file = mapping_file
@@ -63,7 +69,13 @@ class codense2db:
 		self.report = int(report)
 		self.needcommit = int(needcommit)		
 		self.haiyan_no2gene_no = {}
-		
+	
+	def init(self):
+		self.inf = csv.reader(open(self.infname, 'r'), delimiter='\t')
+		self.conn = psycopg.connect('host=%s dbname=%s'%(self.hostname, self.dbname))
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to %s"%self.schema)
+	
 	def parse(self, row):
 		cluster = cluster_dstructure()
 		cluster.cluster_id = int(row[0])
@@ -89,17 +101,17 @@ class codense2db:
 			edge.sort()
 			cluster.edge_set.append(edge)
 		cluster.no_of_edges = len(cluster.edge_set)
-		combined_cor_vector = self.get_combined_cor_vector(cluster.edge_set)
-		cluster.recurrence_array = self.parse_recurrence(combined_cor_vector, cluster.no_of_edges)
+		combined_cor_vector = self.get_combined_cor_vector(self.curs, cluster.edge_set)
+		cluster.recurrence_array = self.parse_recurrence(combined_cor_vector, cluster.no_of_edges, self.cor_cut_off)
 		
 		return cluster
 	
-	def get_combined_cor_vector(self, edge_set):
+	def get_combined_cor_vector(self, curs, edge_set):
 		combined_cor_vector = []
 		for edge in edge_set:
 			edge_string = '{' + repr(edge)[1:-1] + '}'
-			self.curs.execute("select cor_vector from edge_cor_vector where edge_name='%s'"%edge_string)
-			rows = self.curs.fetchall()
+			curs.execute("select cor_vector from edge_cor_vector where edge_name='%s'"%edge_string)
+			rows = curs.fetchall()
 			if len(rows) == 0:
 				sys.stderr.write('%s not found in edge_cor_vector\n'%edge_string)
 				sys.exit(1)
@@ -108,15 +120,15 @@ class codense2db:
 			combined_cor_vector += cor_vector
 		return combined_cor_vector
 
-	def parse_recurrence(self, combined_cor_vector, no_of_edges):
+	def parse_recurrence(self, combined_cor_vector, no_of_edges, cor_cut_off):
 		cor_array = numarray.array(combined_cor_vector)
 		y_dimension = len(cor_array)/no_of_edges
 		cor_array = numarray.reshape(cor_array, (no_of_edges, y_dimension))
 		recurrence_array = []
 		for i in range(y_dimension):
 			#regard the correlations >= self.cor_cut_off to be 1, others 0
-			if self.cor_cut_off>0:
-				edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], self.cor_cut_off)
+			if cor_cut_off>0:
+				edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], cor_cut_off)
 			else:
 				edge_cor_in_one_dataset = cor_array[:,i]
 			recurrence_array.append(sum(edge_cor_in_one_dataset)/float(no_of_edges))
@@ -170,6 +182,10 @@ class codense2db:
 			sys.exit(1)
 
 	def run(self):
+		
+		#conn, curs, inf ... initialization
+		self.init()
+		
 		#setup the self.haiyan_no2gene_no
 		if self.mapping_file != None:
 			self.haiyan_no2gene_no = get_haiyan_no2gene_no(self.mapping_file)
