@@ -25,7 +25,9 @@ Description:
 """
 
 import sys, os, psycopg, getopt, csv
+from graphlib import Graph, GraphAlgo
 from sets import Set
+from rpy import r
 
 class gene_prediction:
 	# class holding prediction information of a gene
@@ -86,7 +88,13 @@ class context_specific:
 		self.gene_no2gene_id = {}
 		#the overall prediction accuracy of each function
 		self.go_no2accuracy = {}
-
+		#GO DAG
+		self.go_graph = Graph.Graph()
+		#a list of the depths of all the predicted functions, for histogram
+		self.depth_list=[]
+		#a list storing the maximum distance between the predicted functions for one gene.
+		self.max_distance_list = []
+		
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
 		#setup self.known_genes_dict
@@ -136,7 +144,21 @@ class context_specific:
 		
 		#setup self.no_of_predicted_genes
 		self.no_of_predicted_genes = len(self.gene_prediction_dict)
-
+		
+		#get the non-obsolete biological_process GO DAG		
+		self.curs.execute("select count(go_no) from go")
+		rows = self.curs.fetchall()
+		self.no_of_functions = rows[0][0]
+		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
+			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
+			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
+			t1.term_type='biological_process' and t2.term_type='biological_process' ")
+		rows = self.curs.fetchall()
+		for row in rows:
+		#setup the go_graph structure
+			self.go_graph.add_edge(row[2], row[3])
+			self.go_graph.add_edge(row[3], row[2])
+	
 		sys.stderr.write("Done\n")
 
 	def cluster_context2dict(self, cluster_context):
@@ -146,6 +168,10 @@ class context_specific:
 			gene_no, support = map(int, complex_gene.split('/'))
 			context_dict[gene_no] = support
 		return context_dict
+	
+	def depth_of_one_node(self, go_no):
+		go_id = self.go_no2go_id[go_no]
+		return len(GraphAlgo.shortest_path(self.go_graph, 'GO:0008150', go_id))
 
 	def run(self):
 		if self.stat_table_fname != 'null':
@@ -158,13 +184,28 @@ class context_specific:
 				self.list_no_of_functions_each_gene.append(len(unit.p_functions_struc_dict))
 				#rearrange the context_dict into a go_no:Set structure
 				self.go_merge_dict = {}
+				go_no_list = []
 				for go_no in unit.p_functions_struc_dict:
 					#!!! MEANING CHANGE !!!#
 					#function_struc.context_dict will be a Set data structure to store context genes
 					#function_struc.cluster_array will store the go terms to be merged
+					go_no_list.append(go_no)
+					self.depth_list.append(self.depth_of_one_node(go_no))
+					
 					item = function_struc()
 					item.context_dict = Set(unit.p_functions_struc_dict[go_no].context_dict.keys())
 					self.go_merge_dict[go_no] = item
+				max_distance = 0
+			
+				for i in range(len(go_no_list)):
+					for j in range(i+1, len(go_no_list)):
+						go_id1 = self.go_no2go_id[go_no_list[i]]
+						go_id2 = self.go_no2go_id[go_no_list[j]]
+						distance = len(GraphAlgo.shortest_path(self.go_graph, go_id1, go_id2))-1
+						if distance > max_distance:
+							max_distance = distance
+				
+				self.max_distance_list.append(max_distance)
 				self.distinct_contexts()
 				if len(self.go_merge_dict) > 1:
 					self.list_no_of_contexts_each_gene.append(len(self.go_merge_dict))
@@ -172,6 +213,7 @@ class context_specific:
 					self.table_output(gene_no, self.go_merge_dict)
 
 		self.stat_output()
+		self.plot()
 
 	def distinct_contexts(self):
 		go_no_list = self.go_merge_dict.keys()
@@ -252,6 +294,18 @@ class context_specific:
 		sys.stdout.write('\taverage functions per gene: %f.\n'%(avg_functions_per_gene))
 		sys.stdout.write('\taverage contexts per gene: %f.\n'%(avg_contexts_per_gene))
 
+	
+	def plot(self):
+		max_depth = max(self.depth_list)
+		max_distance = max(self.max_distance_list)
+		r.pdf('depth_hist.pdf')
+		r.hist(self.depth_list, breaks=range(max_depth+1), las=1, main='depth histogram', xlab='depth of predicted function' )
+		r.dev_off()
+		
+		r.pdf('distance_hist.pdf')
+		r.hist(self.distance_hist, breaks=range(max_distance+1), las =1, main='max distance histogram', xlab='max distance of the predicted functions of one gene')
+		r.dev_off()
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
