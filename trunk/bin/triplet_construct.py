@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-import pickle,sys,os
+import pickle,sys,os,random
 
 class triplet_construct:
 	def __init__(self):
 		self.global_triplet_dict = {}
-		self.global_recurrence_list = []
 		self.local_triplet_dict = {}
 		self.local_vertex_dict = {}
 		self.local_duplet_dict = {}
@@ -99,7 +98,8 @@ def triplet_batch(dir, ofname):
 		sys.stderr.write("%s\t%d\n"%(triplet, instance.global_triplet_dict[triplet],) )
 		#sys.stderr.write("('%s', '%s', '%s')\t%d\n"%(vertex_list[triplet[0]-1], vertex_list[triplet[1]-1], vertex_list[triplet[2]-1],instance.global_triplet_dict[triplet],))
 	'''
-	
+
+
 if __name__ == '__main__':
 	triplet_batch(sys.argv[1], sys.argv[2])
 	# argv[1] specifies which directory contains results from graph construction
