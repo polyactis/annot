@@ -11,6 +11,8 @@ Option:
 	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.25(default), for wu's
 	-l ..., --limit=...,	OBSOLETE, accepted for backwards compatibility
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
+	-y ..., --recurrence_cut_off=...	5(default), minimum recurrences
+	-x ..., --cluster_size_cut_off=...	20(default), maximum cluster size
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
@@ -36,10 +38,10 @@ from gene_stat_on_mcl_result import gene_stat_on_mcl_result, gene_prediction
 
 
 class gene_stat(gene_stat_on_mcl_result):
-	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit=0, \
-		connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
+	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, \
+		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu=0, report=0, needcommit=0):
 		gene_stat_on_mcl_result.__init__(self, hostname, dbname, schema, table, p_value_cut_off, \
-			unknown_cut_off, limit, connectivity_cut_off, wu, report, needcommit)
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit)
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -85,8 +87,10 @@ class gene_stat(gene_stat_on_mcl_result):
 			sys.stderr.write("gene_stat now doesn't support limit\n")
 			sys.exit(2)
 
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id, leave_one_out, p_value_vector \
-				from cluster_stat where connectivity>=%f"%(self.connectivity_cut_off))
+		self.curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.leave_one_out, c.p_value_vector \
+				from cluster_stat c, mcl_result m where c.mcl_id=m.mcl_id and c.connectivity>=%f and\
+				array_upper(m.recurrence_array, 1)>=%d and array_upper(m.vertex_set, 1)<=%d"\
+				%(self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -151,9 +155,10 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=",\
+		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:y:x:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -165,6 +170,8 @@ if __name__ == '__main__':
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
+	recurrence_cut_off = 5
+	cluster_size_cut_off = 20
 	wu = 0
 	report = 0
 	commit = 0
@@ -189,6 +196,10 @@ if __name__ == '__main__':
 			limit = int(arg)
 		elif opt in ("-n", "--connectivity_cut_off"):
 			connectivity_cut_off = float(arg)
+		elif opt in ("-y", "--recurrence_cut_off"):
+			recurrence_cut_off = int(arg)
+		elif opt in ("-x", "--cluster_size_cut_off"):
+			cluster_size_cut_off = int(arg)
 		elif opt in ("-w", "--wu"):
 			wu = 1
 		elif opt in ("-r", "--report"):
@@ -197,7 +208,8 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat(hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat(hostname, dbname, schema, table, p_value_cut_off,\
+			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
