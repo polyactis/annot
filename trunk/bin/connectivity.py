@@ -44,8 +44,9 @@ class compute_connectivity:
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		try:
-			self.curs.execute("drop index connectivity_mcl_result_idx")
+			self.curs.execute("drop index %s_connectivity_idx"%self.target_table)
 		except psycopg.ProgrammingError, error:
+			sys.stderr.write("Warning: drop the index of connectivity error.\n")
 			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
 		self.source_table = source_table
