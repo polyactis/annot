@@ -1,5 +1,26 @@
 #!/usr/bin/env python
-import sys,os,cStringIO,psycopg
+"""
+Usage: splat_to_db.py -k SCHEMA -p PREFIX [OPTION] DATAFILE
+
+Option:
+	DATAFILE usually is patterns-splat, output of splat.
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-p ..., --prefix=...	specify the splat_id's prefix
+	-c ..., --commit=...	0(default) or 1 specifies commit or not
+	-h, --help              show this help
+	
+Examples:
+	splat_to_db.py -k shu -p sc_shu patterns-splat
+	splat_to_db.py -k shu -p sc_shu -c 1 patterns-splat
+	
+Description:
+	Parse the splat results and import into schema.splat_result.
+
+"""
+
+
+import sys,os,cStringIO,psycopg,getopt
 
 class splat_result_iterator:
 	'''looping over a splat result file, generate a single pattern result'''
@@ -25,37 +46,31 @@ class splat_result_iterator:
 class splat_to_db:
 	'''
 	'''
-	def __init__(self, infname, dbname, organism, needcommit=0):
+	def __init__(self, infname, dbname, schema, prefix, needcommit=0):
 		self.splat_id = ''
-		self.organism = organism
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
+		self.recurrence_array = []
 		self.edge_set = []
+		
 		self.inf = open(infname, 'r')
-		self.needcommit = needcommit
+		self.needcommit = int(needcommit)
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to graph")
-		self.org_short2long = {'at':'Arabidopsis thaliana',
-					'ce':'Caenorhabditis elegans',
-					'dm':'Drosophila melanogaster',
-					'hs':'Homo sapiens',
-					'mm':'Mus musculus',
-					'sc':'Saccharomyces cerevisiae',
-					'Arabidopsis thaliana':'Arabidopsis thaliana',
-					'Caenorhabditis elegans':'Caenorhabditis elegans',
-					'Drosophila melanogaster':'Drosophila melanogaster',
-					'Homo sapiens':'Homo sapiens',
-					'Mus musculus':'Mus musculus',
-					'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
-					'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
+		self.curs.execute("set search_path to %s"%schema)
+		self.prefix = prefix
 					
 	def parse(self, pattern):
+		self.recurrence_array = []
 		line = pattern.readline()
 		no_in_string = line[:-1]
-		self.no_of_edges = no_in_string
+		self.no_of_edges = int(no_in_string)
 		line = pattern.readline()
 		self.recurrence_pattern = line[:-1]
+		for i in range(len(self.recurrence_pattern)):
+			if self.recurrence_pattern[i] == '1':
+				self.recurrence_array.append(i+1)
+		
 		line = pattern.readline()
 		self.edge_set = []	#initialize the edge_set structure
 		while line != '\n':
@@ -72,40 +87,59 @@ class splat_to_db:
 		no = 0
 		for pattern in iter:
 			self.parse(pattern)
-			self.splat_id = '%s_%d'%(self.organism,(no+1))
+			self.splat_id = '%s_%d'%(self.prefix, (no+1))
 			string_edge_set = repr(self.edge_set)
 			string_edge_set = string_edge_set.replace('[','{')
 			string_edge_set = string_edge_set.replace(']','}')
+			string_recurrence_array = repr(self.recurrence_array)
+			string_recurrence_array = '{'+string_recurrence_array[1:-1]+'}'
 			try:
-				self.curs.execute("insert into splat_result(splat_id, organism,no_of_edges, \
-							recurrence_pattern,edge_set) values ('%s','%s',%s,B'%s','%s')"%\
-							(self.splat_id, self.org_short2long[self.organism], self.no_of_edges, \
-							self.recurrence_pattern,string_edge_set ))
+				self.curs.execute("insert into splat_result(splat_id, no_of_edges, \
+							recurrence_pattern, recurrence_array, edge_set) values ('%s',%d,B'%s','%s','%s')"%\
+							(self.splat_id, self.no_of_edges, self.recurrence_pattern,\
+							string_recurrence_array, string_edge_set ))
 			except:
 				sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 				self.conn.rollback()
 				sys.exit(1)
 			no+=1
-			sys.stderr.write('%s%d'%('\x08'*80, no))
+			sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
 		sys.stderr.write('\tLast pattern: %s\n'%self.splat_id)
 
-
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-	argv[1] is the splat result file.\n\
-	argv[2] is the database name.\n\
-	argv[3] is the two abbreviation letters for organism.\n\
-	argv[4] is 1 or 0 indicating whether to commit or not. Default is 0.\n')
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
 		
-	if len(sys.argv) ==5:
-		instance = splat_to_db(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
-	elif len(sys.argv) == 4:
-		instance = splat_to_db(sys.argv[1], sys.argv[2], sys.argv[3], 0)
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:c:", ["help", "dbname=", "schema=", "prefix=", "commit="])
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = 'graphdb'
+	schema = ''
+	commit = 0
+	prefix = ''
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-c", "--commit"):
+			commit = int(arg)
+		elif opt in ("-p", "--prefix"):
+			prefix = arg
+
+	if schema and prefix and len(args)==1:
+		instance = splat_to_db(args[0], dbname, schema, prefix, commit)
+		instance.run()
 	else:
-		helper()
-		sys.exit(1)
-	instance.run()
+		print __doc__
+		sys.exit(2)
