@@ -62,8 +62,7 @@ class triplet_construct:
 def triplet_batch(dir, ofname):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	filename = os.path.join(os.path.expanduser('~'), ofname)
-	of = gzip.open(filename, 'w')
+	of = gzip.open(ofname, 'w')
 	instance = triplet_construct(of)
 
 	for f in files:
@@ -76,6 +75,15 @@ def triplet_batch(dir, ofname):
 
 
 if __name__ == '__main__':
-	triplet_batch(sys.argv[1], sys.argv[2])
-	# argv[1] specifies which directory contains results from graph construction
-	# argv[2] the path,relative the user's home directory, for the file to store the resultant triplets, eg. 'pickle/yeast_triplet'.
+	def helper():
+		sys.stderr.write("\
+	argv[1] specifies which directory contains results from \n\
+		graph construction. Those files should be gspan format.\n\
+	argv[2] the file to store the resultant triplets.\n\
+		The file will be gzipped.\n")
+	
+	if len(sys.argv) == 3:
+		triplet_batch(sys.argv[1], sys.argv[2])
+	else:
+		helper()
+		sys.exit(1)
