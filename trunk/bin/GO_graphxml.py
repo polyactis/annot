@@ -161,7 +161,30 @@ class GO_graphxml:
 		
 		doc.writexml(of)
 		of.close()
+	
+	def cgi_run(self, go_acc, backward):
+		'''
+		For cgi purpose, given a go accession number and direction information
+		'''
+		self.dstruc_loadin()
 		
+		if go_acc in self.acc2id_dict:
+			go_node = self.acc2id_dict[go_acc]
+		#term doesn't exist
+		else:
+			print 'ERROR: %s inexists\n'%go_acc
+			return
+		#this termid is obsolete
+		if self.termid_dict[go_node].is_obsolete == 1:
+			print "ERROR: %s is obsolete\n"%go_acc
+			return
+		if backward:
+			subgraph = self.go_graph.back_bfs_subgraph(go_node)
+			self.subgraph_to_graphxml(subgraph)
+		else:
+			subgraph = self.go_graph.forw_bfs_subgraph(go_node)
+			self.subgraph_to_graphxml(subgraph)
+
 	def run(self):
 		'''
 		given a GO term, find its parent subgraph(back_bfs_subgraph)
