@@ -13,7 +13,6 @@ Option:
 	
 Examples:
 	go_bioprocess.py -d mdb -k shu -p shu  -g sc -u yeast_unknown yestprocess2.txt
-	gene_id_to_no.py -d mdb -k ming -p ming  -g sc -u yeast_unknown -c 1 all.known.genes.informative30.txt
 
 Description:
 	This program extracts go functional class information from raw file,
