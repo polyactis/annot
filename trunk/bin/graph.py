@@ -44,7 +44,8 @@ class graph_construct:
 			line=fd.readline()
 		fd.close()
 		fd_new.close()
-	
+		print 'preprocessing done'
+		
 	def mask_array_construct(self):
 		data =with_mode(0, r.read_table)(self.dataset_source)
 		'''
@@ -129,4 +130,5 @@ if __name__ == '__main__':
 	instance.mask_array_construct()
 	instance.edge_construct()
 	instance.cleanup()
-	print instance.graph_dict
+	for i in  instance.graph_dict:
+		print '%s\t:%f'%(i,instance.graph_dict[i],)
