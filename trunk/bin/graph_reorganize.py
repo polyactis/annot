@@ -166,6 +166,12 @@ class graph_reorganize:
 		self.pickle_fname = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
 		self.vertex_block = ''
 		
+		#following four variables keeping track of the change
+		self.global_vertex_dict_before = {}
+		self.global_vertex_dict_after = {}
+		self.no_of_edges_before = 0
+		self.no_of_edges_after = 0
+		
 	def global_mapping_construct(self, inf):
 		'''
 		global_mapping_construct() collects the graph label and vertex label from inf.
@@ -224,14 +230,24 @@ class graph_reorganize:
 			if line[0] == 'e':
 				vertex1_label = list[1]
 				vertex2_label = list[2]
+				self.no_of_edges_before += 1
+				self.global_vertex_dict_before[vertex1_label] = 1
+				self.global_vertex_dict_before[vertex2_label] = 1
 				if vertex1_label in self.global_vertex_dict and vertex2_label in self.global_vertex_dict:
 					outf.write('e %d %d %s\n'% \
 								(self.global_vertex_dict[vertex1_label], \
 								self.global_vertex_dict[vertex2_label], \
 								list[3],)
 								)
+					self.no_of_edges_after += 1
+					self.global_vertex_dict_after[vertex1_label] = 1
+					self.global_vertex_dict_after[vertex2_label] = 1
 			line = inf.readline()
-
+	
+	def stat_output(self):
+		sys.stderr.write("\tedges: %d(before), %d(after)\n"%(self.no_of_edges_before, self.no_of_edges_after))
+		sys.stderr.write("\tvertices: %d(before), %d(after)\n"%(len(self.global_vertex_dict_before), len(self.global_vertex_dict_after)) )
+	
 def transform_batch(dbname, schema, type, orgn, dir, output_dir):
 	'''
 	See comments of graph_reorganize.transform().
@@ -254,7 +270,8 @@ def transform_batch(dbname, schema, type, orgn, dir, output_dir):
 		instance.transform(inf, outf)
 		inf.close()
 		outf.close()
-
+	instance.stat_output()
+	
 def mapping_batch(dbname, schema, type, orgn, dir):
 	'''
 	See comments of graph_reorganize.global_mapping_construct().
