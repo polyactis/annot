@@ -81,8 +81,10 @@ class yeast_two_way_filter:
 				self.known_genes_outf.write(line)
 			if line[0] == 'e':
 				list = line[:-1].split('\t')
-				list[1] = list[1][1:-1]
-				list[2] = list[2][1:-1]
+				if list[1][0]==list[1][-1] and list[1][0] == "'":
+					list[1] = list[1][1:-1]
+				if list[2][0]==list[2][-1] and list[2][0] == "'":
+					list[2] = list[2][1:-1]
 				vertex1 = list[1]
 				vertex2 = list[2]
 				self.normal_outf.write('%s\n'%'\t'.join(list))
@@ -90,13 +92,45 @@ class yeast_two_way_filter:
 					self.known_genes_outf.write('%s\n'%'\t'.join(list))
 			line = inf.readline()
 
-def batch(dir, output_dir):
+class yeast_one_way_filter:
+	'''
+	The difference from yeast_two_way_filter:
+	Only exercise the known_genes filtration. And it works on gspan format files.
+	It needs global_vertex_list which is built by graph_reorganize.py.
+	'''
+	def __init__(self, known_genes_dict, global_vertex_list):
+		self.dict = known_genes_dict
+		self.vertex_list = global_vertex_list
+	def filter_based_on_known_genes_dict(self, inf, outf):
+		line = inf.readline()
+		while line:
+			list = line[:-1].split(' ')
+			if line[0] == 'e':
+				vertex1 = self.vertex_list[int(list[1])-1]
+				vertex2 = self.vertex_list[int(list[2])-1]
+				#index starts from 0.
+				#vertex counts from 1.
+				if (vertex1 in self.dict) and (vertex2 in self.dict):
+					outf.write(line)
+			elif line[0] == 'v':
+				vertex = list[2]
+				if vertex in self.dict:
+					outf.write(line)
+			else:
+				outf.write(line)
+			line = inf.readline()
+
+def two_way_filter_batch(dir, output_dir):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	normal_dir = os.path.join(output_dir,'sc_normal')
+	if dir[-1] == '/':
+		dir = dir[:-1]
+		#the last '/' will affect the behavior of os.path.basename.
+	basedir = os.path.basename(dir)
+	normal_dir = os.path.join(output_dir,basedir+'_normal')
 	if not os.path.isdir(normal_dir):
 		os.makedirs(normal_dir)
-	known_dir = os.path.join(output_dir,'sc_known')
+	known_dir = os.path.join(output_dir,basedir+'_known')
 	if not os.path.isdir(known_dir):
 		os.makedirs(known_dir)
 	pickle_file = os.path.join(os.path.expanduser('~'), 'pickle/known_genes_dict')
@@ -114,12 +148,35 @@ def batch(dir, output_dir):
 		normal_f.close()
 		known_f.close()
 
-
+def one_way_filter_batch(dir, output_dir):
+	files = os.listdir(dir)
+	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
+	if not os.path.isdir(output_dir):
+		os.makedirs(output_dir)
+	pickle_file1 = os.path.join(os.path.expanduser('~'), 'pickle/known_genes_dict')
+	pickle_file2 = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
+	known_genes_dict = pickle.load(open(pickle_file1,'r'))
+	global_struc = pickle.load(open(pickle_file2, 'r'))
+	instance = yeast_one_way_filter(known_genes_dict, global_struc['vertex_list'])
+	
+	for f in files:
+		pathname = os.path.join(dir, f)
+		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
+		inf = open(pathname, 'r')
+		outf = open(os.path.join(output_dir,f), 'w')
+		instance.filter_based_on_known_genes_dict(inf, outf)
+		inf.close()
+		outf.close()
 
 if __name__ == '__main__':
-	batch(sys.argv[1],sys.argv[2])
+	one_way_filter_batch(sys.argv[1], sys.argv[2])
 	# argv[1] specifies which directory contains raw yeast data
-	# argv[2] specifies the directory to store two bunchs of datafiles
+	# argv[2] specifies the directory to store data with only known genes
+	'''
+	two_way_filter_batch(sys.argv[1],sys.argv[2])
+	# argv[1] specifies which directory contains raw yeast data
+	# argv[2] specifies the directory to store two directories of datafiles
+	'''
 	'''
 	# this part is for constructing known_genes_dict
 	inf = open(sys.argv[1], 'r')
