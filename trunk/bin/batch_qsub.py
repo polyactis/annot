@@ -76,7 +76,7 @@ class batch_qsub:
 				src = os.path.join(self.dir, self.f_list[index])
 				if self.file_form:
 				#run the program on each file
-					command_block = "%s %s %s %s%d"%(self.program, self.parameter, src, self.oprefix, index)
+					command_block = "%s %s %s %s_%s"%(self.program, self.parameter, src, self.oprefix, self.f_list[index])
 					out_block += 'echo "%s"\n'%command_block
 					out_block += command_block
 					out_block += '\n'
