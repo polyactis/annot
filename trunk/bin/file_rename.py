@@ -10,12 +10,15 @@ class rename:
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		
 		for f in files:
+			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 			src_pathname = os.path.join(dir, f)
 			prefix,ext = os.path.splitext(f)
+			if ext == ext[1:]:
+				sys.stderr.write('the filename has no extension, ignore\n')
+				continue
 			ext = ext[1:]
 			#remove the dot(.)
 			dst_pathname = os.path.join(dir, ext+'_'+prefix)
-			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
 			os.rename(src_pathname, dst_pathname)
 
 
