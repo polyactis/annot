@@ -17,6 +17,7 @@ Options:
 
 Examples:
 	stat_plot.py -t sc_known -f ursp:0.25,8,8,0.001 -v n connectivity.jpg
+	stat_plot.py -t depth_4 -p 2 table.csv
 
 Description:
 	unrsp: u denotes unknown_cut_off, n denotes connectivity_cut_off
@@ -41,14 +42,15 @@ class stat_plot:
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to graph")
-		(self.fixed_label, self.fixed_value) = fixed.split(':')
-		self.fixed_value_list = self.fixed_value.split(',')
-		self.var = var
 		self.tag = tag
-		self.x_range = xlim.split('-')
-		self.x_range = map(float, self.x_range)
-		self.y_range = ylim.split('-')
-		self.y_range = map(float, self.y_range)
+		if type!=2:
+			(self.fixed_label, self.fixed_value) = fixed.split(':')
+			self.fixed_value_list = self.fixed_value.split(',')
+			self.var = var
+			self.x_range = xlim.split('-')
+			self.x_range = map(float, self.x_range)
+			self.y_range = ylim.split('-')
+			self.y_range = map(float, self.y_range)
 		self.based_on_clusters = int(based_on_clusters)
 		self.type = int(type)
 		self.l1 = int(l1)
@@ -87,6 +89,7 @@ class stat_plot:
 		The three columns are recurrence_cut_off, connectivity_cut_off, accuracy.
 		'''
 		writer = csv.writer(open(self.ofname,'w'), delimiter='\t')
+		writer.writerow(['recurrence_cut_off', 'connectivity_cut_off', 'accuracy'])
 		self.curs.execute("select  tp, tp_m, tp1, tp1_m, tn, fp, fp_m, fn, recurrence_cut_off, \
 			connectivity_cut_off from stat_plot_data where tag='%s' order by recurrence_cut_off,\
 			connectivity_cut_off"%(self.tag))
@@ -263,7 +266,10 @@ if __name__ == '__main__':
 		elif opt in ("-l", "--l1"):
 			l1 = 1
 	
-	if fixed and var and tag and len(args)==1:
+	if fixed and var and tag and len(args)==1 and type!=2:
+		instance = stat_plot(hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, type, l1, args[0])
+		instance.run()
+	elif tag and len(args)==1 and type==2:
 		instance = stat_plot(hostname, dbname, fixed, var, tag, xlim, ylim, based_on_clusters, type, l1, args[0])
 		instance.run()
 	else:
