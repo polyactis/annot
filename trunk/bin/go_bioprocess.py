@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 """
-Usage: go_bioprocess.py -d DATABASENAME -k SCHEMA -p PARSER -u UNKNOWNFILE -g ORGANISM [OPTION] go_function_file
+Usage: go_bioprocess.py -k SCHEMA -p PARSER -u UNKNOWNFILE [OPTION] go_function_file
 
 Option:
-	-d ..., --dbname=...	the database name
+	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-c ..., --commit=...	1 or 0(default) specifies commit or not
+	-c --commit	commits the database transaction
 	-u ..., --unknown=...	the file containing the unknown gene_ids(seperated by ';')
 	-p ..., --parser=...	which parser to use
-	-g ..., --organism=...	two letter organism abbreviation
+	-g ..., --organism=...	IGNORE it, interface relics
 	-h, --help              show this help
 	
 Examples:
-	go_bioprocess.py -d mdb -k shu -p shu  -g sc -u yeast_unknown yestprocess2.txt
+	go_bioprocess.py -k shu -p shu -u yeast_unknown yestprocess2.txt
 
 Description:
 	This program extracts go functional class information from raw file,
 	combines the stable unknown gene set and sets up the schema.go
 	table in the database.
+	It depends on schema.gene.
 """
 
 import pickle,sys,os, psycopg, getopt, csv
@@ -190,29 +191,35 @@ class go_table_setup:
 			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
 		self.organism = self.org_short2long[orgn]
+		#mapping between gene_id and gene_no
 		self.vertex_dict = {}
+		#stores all the unknown genes in schema.gene
 		self.unknown_gene_list = []
 		
 	def dstruc_loadin(self):
-		self.curs.execute("select gene_id, gene_no from graph.gene_id_to_no where organism='%s' "%self.organism)
+		#sets up the self.vertex_dict
+		self.curs.execute("select gene_id, gene_no from gene")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.vertex_dict[row[0]] = row[1]
-		
+		#sets up the self.unknown_gene_list
 		self._unknown_gene_list = self.reader.next()
 		for gene in self._unknown_gene_list:
 			if gene in self.vertex_dict:
 				self.unknown_gene_list.append(self.vertex_dict[gene])
 	
 	def submit(self):
+		sys.stderr.write("Database transacting...")
+		#following string operations are because of format restrictions of database array input
 		string__unknown_gene_list = repr(self._unknown_gene_list)
 		string__unknown_gene_list = string__unknown_gene_list.replace("'", '')
 		string__unknown_gene_list = '{' + string__unknown_gene_list[1:-1] + '}'
 		string_unknown_gene_list = repr(self.unknown_gene_list)
 		string_unknown_gene_list = '{' + string_unknown_gene_list[1:-1] + '}'
 		
-		self.curs.execute("insert into go values('%s', %d, %d, '%s', '%s', '%s')"%\
-			('GO:0000004', 0, len(self._unknown_gene_list), 'biological_process unknown', string__unknown_gene_list, string_unknown_gene_list))
+		self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array) \
+			values('%s', %d, %d, '%s', '%s', '%s')"%('GO:0000004', 0, len(self._unknown_gene_list), \
+			'biological_process unknown', string__unknown_gene_list, string_unknown_gene_list))
 		go_dict = self.parser.parse(self.go_inf, self.vertex_dict)
 		for term in go_dict:
 			string_whole_gene_array = repr(go_dict[term].whole_gene_array)
@@ -221,11 +228,12 @@ class go_table_setup:
 			string_whole_gene_array = '{' + string_whole_gene_array[1:-1] + '}'
 			string_gene_array = '{' + string_gene_array[1:-1] + '}'
 			go_dict[term].name = go_dict[term].name.replace("'",'')
-			self.curs.execute("insert into go values('%s', %d, %d, '%s', '%s', '%s')"%\
-				(term, go_dict[term].no, go_dict[term].no_of_genes, go_dict[term].name,\
-				string_whole_gene_array, string_gene_array))
+			self.curs.execute("insert into go(go_id, go_no, no_of_genes, name, whole_gene_array, gene_array) \
+				values('%s', %d, %d, '%s', '%s', '%s')"%(term, go_dict[term].no, go_dict[term].no_of_genes,\
+				go_dict[term].name, string_whole_gene_array, string_gene_array))
 		if self.needcommit:
 			self.conn.commit()
+		sys.stderr.write("done.\n")
 			
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -233,17 +241,17 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:c:u:p:g:", ["help", "dbname=", "schema=", "commit=", "unknown=","parser=","organism="])
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:cu:p:g:", ["help", "dbname=", "schema=", "commit", "unknown=","parser=","organism="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
-	dbname = ''
+	dbname = 'graphdb'
 	schema = ''
 	commit = 0
 	unknown = ''
 	parser = ''
-	organism = ''
+	organism = 'sc'
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -253,7 +261,7 @@ if __name__ == '__main__':
 		elif opt in ("-k", "--schema"):
 			schema = arg
 		elif opt in ("-c", "--commit"):
-			commit = int(arg)
+			commit = 1
 		elif opt in ("-u", "-unknown"):
 			unknown = arg
 		elif opt in ("-p", "-parser"):
@@ -261,7 +269,7 @@ if __name__ == '__main__':
 		elif opt in ("-g", "-organism"):
 			organism = arg
 			
-	if dbname and schema and unknown and parser and organism and len(args)>0:
+	if schema and unknown and parser and len(args)>0:
 		instance = go_table_setup(args[0], dbname, schema, parser, unknown, organism, commit)
 		instance.dstruc_loadin()
 		instance.submit()
