@@ -1,19 +1,18 @@
 #!/usr/bin/env python
 """
-Usage: splat_to_db.py -k SCHEMA -p PREFIX [OPTION] DATAFILE
+Usage: splat_to_db.py -k SCHEMA [OPTION] DATAFILE
 
 Option:
 	DATAFILE usually is patterns-splat, output of splat.
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-p ..., --prefix=...	specify the splat_id's prefix
 	-c ..., --commit=...	0(default) or 1 specifies commit or not
 	-r, --report	report the progress(a number)
 	-h, --help              show this help
 	
 Examples:
-	splat_to_db.py -k shu -p sc_shu patterns-splat
-	splat_to_db.py -k shu -p sc_shu -c 1 patterns-splat
+	splat_to_db.py -k shu patterns-splat
+	splat_to_db.py -k shu -c 1 patterns-splat
 	
 Description:
 	Parse the splat results and import into schema.splat_result.
@@ -48,7 +47,6 @@ class splat_to_db:
 	'''
 	'''
 	def __init__(self, infname, dbname, schema, prefix, report, needcommit=0):
-		self.splat_id = ''
 		self.no_of_edges = ''
 		self.recurrence_pattern = ''
 		self.recurrence_array = []
@@ -89,16 +87,15 @@ class splat_to_db:
 		no = 0
 		for pattern in iter:
 			self.parse(pattern)
-			self.splat_id = '%s_%d'%(self.prefix, (no+1))
 			string_edge_set = repr(self.edge_set)
 			string_edge_set = string_edge_set.replace('[','{')
 			string_edge_set = string_edge_set.replace(']','}')
 			string_recurrence_array = repr(self.recurrence_array)
 			string_recurrence_array = '{'+string_recurrence_array[1:-1]+'}'
 			try:
-				self.curs.execute("insert into splat_result(splat_id, no_of_edges, \
+				self.curs.execute("insert into splat_result(no_of_edges, \
 							recurrence_pattern, recurrence_array, edge_set) values ('%s',%d,B'%s','%s','%s')"%\
-							(self.splat_id, self.no_of_edges, self.recurrence_pattern,\
+							(self.no_of_edges, self.recurrence_pattern,\
 							string_recurrence_array, string_edge_set ))
 			except:
 				sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
@@ -110,7 +107,6 @@ class splat_to_db:
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
-		sys.stderr.write('\tLast pattern: %s\n'%self.splat_id)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -142,7 +138,7 @@ if __name__ == '__main__':
 			prefix = arg
 		elif opt in ("-r", "--report"):
 			report = 1
-	if schema and prefix and len(args)==1:
+	if schema and len(args)==1:
 		instance = splat_to_db(args[0], dbname, schema, prefix, report, commit)
 		instance.run()
 	else:

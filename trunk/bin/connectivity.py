@@ -94,7 +94,7 @@ class compute_connectivity:
 		Compute the connectivity of all mcl clusters pertaining to the same splat_id.
 		'''
 		self.dstruc_from_edge_set(edge_set)
-		self.curs.execute("select mcl_id, vertex_set from mcl_result where splat_id='%s'"%\
+		self.curs.execute("select mcl_id, vertex_set from mcl_result where splat_id=%d"%\
 			(splat_id))
 		rows = self.curs.fetchall()
 		for row in rows:
@@ -123,7 +123,7 @@ class compute_connectivity:
 		no_of_vertices = len(self.vertex_dict)
 		connectivity = 2.0*no_of_edges/((no_of_vertices-1)*no_of_vertices)
 		try:
-			self.curs.execute("update splat_result set connectivity=%f where splat_id='%s'"% \
+			self.curs.execute("update splat_result set connectivity=%f where splat_id=%d"% \
 			(connectivity, splat_id))
 		except:
 			sys.stderr.write('Error occurred while setting splat connectivity\n')

@@ -86,7 +86,6 @@ class mcl_to_db:
 					for i in range(len(self.cluster_set)):
 
 						vertex_set = self.cluster_set[i]
-						self.mcl_id = '%s_%s_%d'%(self.splat_id,self.parameter,(i+1))
 						string_vertex_set = repr(vertex_set)
 						string_vertex_set = string_vertex_set.replace('[','{')
 						string_vertex_set = string_vertex_set.replace(']','}')
@@ -98,7 +97,7 @@ class mcl_to_db:
 			for entry in self.mcl_to_be_inserted:
 				try:
 					self.curs.execute("insert into mcl_result(splat_id, vertex_set, parameter) \
-					values ('%s','%s','%s')"%(entry[0], entry[1], entry[2]))
+					values (%s,'%s','%s')"%(entry[0], entry[1], entry[2]))
 				except:
 					sys.stderr.write('Error occured when inserting pattern. Aborted.\n')
 					self.conn.rollback()
@@ -115,7 +114,7 @@ class mcl_to_db:
 		vertex_line = ''
 		while line:
 			if line.find('(splat_id') == 0:
-				self.splat_id = line[10:-3]
+				self.splat_id = int(line[10:-3])
 			if line.find('(parameter') == 0:
 				self.parameter = line[11:-3]
 			if cluster_begin and (line == ')\n'):

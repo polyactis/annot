@@ -29,7 +29,13 @@ class gspan2mcl_input:
 		self.vertex_dict = {}
 	
 	def run(self):
-
+		p_no = re.compile(r'\d+$')
+		try:
+			no = int(p_no.search(self.infname).group())	#integer conversion
+		except AttributeError, error:
+			sys.stderr.write('%s\n'%error)
+			sys.stderr.write("can't find the number of this dataset from %s\n"%self.infname)
+			sys.exit(2)
 		for line in self.inf:
 			if line[0] == 'e':
 				#edge here, like 'e 3807 3859 0.804645'
@@ -45,7 +51,7 @@ class gspan2mcl_input:
 				else:
 					self.vertex_dict[vertex2] = [vertex1]
 		dim = len(self.vertex_dict)
-		out_block = '(splat_id %s )\n'%os.path.basename(self.infname)		# here it is '=' not '+='
+		out_block = '(splat_id %s )\n'%no		# here it is '=' not '+='
 		out_block += '(mclheader\n'
 		out_block += 'mcltype matrix\n'
 		out_block += 'dimensions %dx%d\n)\n'%(dim,dim)
