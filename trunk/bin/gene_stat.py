@@ -18,6 +18,7 @@ Option:
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
+	-v, --dominant	Only assign the dominant function(s) to a gene.
 	-h, --help              show this help
 
 Examples:
@@ -56,7 +57,8 @@ class gene_prediction:
 
 class gene_stat:
 	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, \
-		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, needcommit=0, gene_table='p_gene'):
+		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report=0, \
+		needcommit=0, gene_table='p_gene', dominant=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -72,6 +74,7 @@ class gene_stat:
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.gene_table = gene_table
+		self.dominant = int(dominant)
 		self.tp = 0.0
 		self.tp_m = 0.0
 		self.tp1 = 0.0
@@ -91,11 +94,6 @@ class gene_stat:
 		self.go_graph = Graph.Graph()
 		#mapping between go_no and go_id
 		self.go_no2go_id = {}
-		#data structures for plotting, key is go_no and value is a Set of genes of clusters
-		self.go_no2gene = {}
-		self.go_no2cluster = {}
-		self.cluster_size2cluster = {}
-		self.cluster_size2go_no = {}
 
 	def dstruc_loadin(self):
 		sys.stderr.write("Loading Data STructure...")
@@ -170,10 +168,6 @@ class gene_stat:
 		#Database updating is too slow. Do it only if needcommit.
 			self.submit()
 		self.stat_output()
-		self.hist_plot(self.go_no2cluster, 'go_no2cluster.png', 'go_no', 'number of clusters')
-		self.hist_plot(self.go_no2gene, 'go_no2gene.png', 'go_no', 'number of genes')
-		self.hist_plot(self.cluster_size2cluster, 'cluster_size2cluster.png', 'cluster_size', 'number of clusters')
-		self.hist_plot(self.cluster_size2go_no, 'cluster_size2go_no.png', 'cluster_size', 'number of go_nos')
 
 	def _gene_stat_leave_one_out(self, row):
 		p_value_vector = row[2][1:-1].split(',')
@@ -219,15 +213,7 @@ class gene_stat:
 		if p_value_min>self.p_value_cut_off or unknown_gene_ratio>self.unknown_cut_off:
 			return
 		self.no_of_records += 1
-		#variable for cluster_size2cluster and cluster_size2go_no
-		cluster_size = len(vertex_set)
-		if cluster_size not in self.cluster_size2cluster:
-			self.cluster_size2cluster[cluster_size] = Set([mcl_id])
-		else:
-			self.cluster_size2cluster[cluster_size].add(mcl_id)
-		if cluster_size not in self.cluster_size2go_no:
-			self.cluster_size2go_no[cluster_size] = Set()
-			#it will be expanded in the last block of this function
+
 		for gene_no in vertex_set:
 			if gene_no not in self.gene_prediction_dict:
 				item = gene_prediction()
@@ -239,30 +225,19 @@ class gene_stat:
 					self.gene_prediction_dict[gene_no].p_functions_dict[go_no] = 1
 				else:
 					self.gene_prediction_dict[gene_no].p_functions_dict[go_no] += 1
-				#every go_no's associated gene Set is expanded
-				if go_no not in self.go_no2gene:
-					self.go_no2gene[go_no] = Set([gene_no])
-				else:
-					self.go_no2gene[go_no].add(gene_no)
-		for go_no in go_no_vector:
-			#add each go_no into the corresponding cell in self.cluster_size2go_no
-			self.cluster_size2go_no[cluster_size].add(go_no)
-			#every go_no's associated cluster Set is expanded
-			if go_no not in self.go_no2cluster:
-				self.go_no2cluster[go_no] = Set([mcl_id])
-			else:
-				self.go_no2cluster[go_no].add(mcl_id)
+
 
 	def final(self):
-		#get the dominant function among all the functions predicted for one gene
-		for gene_no in self.gene_prediction_dict:
-			entry = self.gene_prediction_dict[gene_no]
-			#the biggest support is what the dominant function needs
-			dominant_support = max(entry.p_functions_dict.values())
-			#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept.
-			for go_no in entry.p_functions_dict.keys():
-				if entry.p_functions_dict[go_no] < dominant_support:
-					del entry.p_functions_dict[go_no]
+		if self.dominant:
+			#get the dominant function among all the functions predicted for one gene
+			for gene_no in self.gene_prediction_dict:
+				entry = self.gene_prediction_dict[gene_no]
+				#the biggest support is what the dominant function needs
+				dominant_support = max(entry.p_functions_dict.values())
+				#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept.
+				for go_no in entry.p_functions_dict.keys():
+					if entry.p_functions_dict[go_no] < dominant_support:
+						del entry.p_functions_dict[go_no]
 		for gene_no in self.gene_prediction_dict:
 			#initialize three data structures
 			L0_dict = {}
@@ -405,16 +380,6 @@ class gene_stat:
 		else:
 			sys.stderr.write('\t\tFalse Positive Ratio: %f\n'%(self.fp_m/(self.tp_m+self.tp1_m+self.fp_m)))
 
-	def hist_plot(self, dict, filename, xlabel, ylabel):
-		#convert self.go_no2cluster and self.go_no2gene into histograms
-		r.png('%s'%filename)
-		x_list = []
-		y_list = []
-		for (key, value) in dict.iteritems():
-			x_list.append(key)
-			y_list.append(len(value))
-		r.plot(x_list, y_list, type='h', xlab=xlabel, ylab=ylabel, main='%s v.s. %s'%(ylabel, xlabel))
-		r.dev_off()
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -422,9 +387,10 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
-		"unknown_cut_off=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "leave_one_out", "wu", "report", "commit", "gene_table="]
+		"unknown_cut_off=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "leave_one_out",\
+		"wu", "report", "commit", "gene_table=", "dominant"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:lwrcg:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:n:y:x:lwrcg:v", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -444,6 +410,7 @@ if __name__ == '__main__':
 	commit = 0
 	unknown_cut_off = 0.25
 	gene_table = 'p_gene'
+	dominant = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -478,10 +445,13 @@ if __name__ == '__main__':
 			commit = 1
 		elif opt in ("-g", "--gene_table"):
 			gene_table = arg
-	
+		elif opt in ("-v", "--dominant"):
+			dominant = 1
+		
 	if schema and p_value_cut_off:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
-			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, leave_one_out, wu, report, commit, gene_table)
+			unknown_cut_off, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off,\
+			leave_one_out, wu, report, commit, gene_table, dominant)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
