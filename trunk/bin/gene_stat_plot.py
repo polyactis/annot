@@ -361,12 +361,15 @@ class gene_stat:
 		self.final()
 		
 		self.stat_output()
+		#compute the expected accuracy for each specific function
+		#needed by table_output() and submit()
+		self.go_no_accuracy()
 		
 		if self.leave_one_out and self.stat_table_fname != 'null':
 			#only for leave_one_out approach and when stat_table_fname is not 'null'
 			self.stat_table_f = csv.writer(open(self.stat_table_fname, 'w'), delimiter='\t')
-			self.go_no_accuracy()
 			self.table_output()
+
 		if self.needcommit and self.leave_one_out:
 			#Database updating is too slow. Do it only if needcommit.
 			self.submit()
