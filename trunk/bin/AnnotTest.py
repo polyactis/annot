@@ -172,6 +172,8 @@ class TestGeneStat(unittest.TestCase):
 	
 	03-14-05
 		modify because gene_stat.py changed
+	03-15-05
+		further change (submit()) because lca_list also submitted to database by gene_stat
 	"""
 	def setUp(self):
 		"""
@@ -257,18 +259,20 @@ class TestGeneStat(unittest.TestCase):
 		"""
 		02-21-05
 			testing the new submit()
+		03-15-05
+			add lca_list to submit
 		"""
 		from codense.common import db_connect
 		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
 		#setting the testing gene_table and flag the needcommit
 		self.instance.gene_table = 'p_gene_test'
-		self.instance.needcommit = 0
 		#construct a testing prediction_tuple2list
 		tuple = (3,  4)	#(recurrence, connectivity)
 		#[p-value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
-		#is_correct_lca, cluster_size, unknown_gene_ratio]
-		unit = [0.001, 3, 5000, 50, 0, 1, 1, 10, 0.25]
-		prediction_list = [unit]
+		#is_correct_lca, cluster_size, unknown_gene_ratio, lca_list]
+		unit = [0.001, 3, 5000, 50, 0, 1, 1, 10, 0.25, []]
+		unit1 = [0.001, 3, 5000, 50, 0, 1, 1, 10, 0.25, [12,23]]
+		prediction_list = [unit, unit1]
 		self.instance.prediction_tuple2list[tuple] = prediction_list
 		self.instance.submit(curs, self.instance.gene_table)
 	
@@ -293,7 +297,7 @@ class TestGeneStat(unittest.TestCase):
 		self.instance._gene_stat_leave_one_out(row, node_distance_class, curs)
 		for (tuple, prediction_list) in self.instance.prediction_tuple2list.iteritems():
 			print "prediction_space is %s"%repr(tuple)
-			self.assertEqual(prediction_list, [[0.001, 3, 6166, 3, 0, 0, 0, 5, 0.25]] )
+			print "prediction_list is %s"%repr(prediction_list)
 
 class TestCrackSplat(unittest.TestCase):
 	"""
