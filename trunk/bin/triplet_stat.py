@@ -86,7 +86,7 @@ class triplet_stat:
 			sys.stderr.write('\tonly %d triplets\n'%no_of_triplets)
 		if no_of_triplets <1000:
 			sys.stderr.write('\tthe number of triplets is below 1000(%d). Aborted.\n'%no_of_triplets)
-			#sys.exit(1)
+			sys.exit(1)
 		sys.stdout.write('func\ttrans\n')
 		for j in xrange(100):
 			functional_homo = 0
