@@ -11,8 +11,8 @@ Option:
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-e ..., --depth_cut_off=...	the minimum depth for a go node to be valid, 3(default)
 	-f ..., --dir_files=...	the directory containing all the files outputed by cluster_stat.py
-	-x ..., --recurrence_gap_size=...	2(default)
-	-y ..., --connectivity_gap_size=...	2(default)
+	-x ..., --recurrence_gap_size=...	2(default, IGNORE)
+	-y ..., --connectivity_gap_size=...	2(default, IGNORE)
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
@@ -231,6 +231,9 @@ class gene_stat:
 		03-08-05
 			set a default(1.0) for min_p_value
 			fix a bug, alter >self.depth_cut_off to >= self.depth_cut_off
+			
+		03-08-05
+			don't take floor of recurrence and connectivity anymore, p_gene_analysis.py and p_gene_lm.py will take care of this.
 		"""
 		mcl_id = row[0]
 		gene_no = row[1]
@@ -245,10 +248,13 @@ class gene_stat:
 		if self.subgraph_cut_off!=0:
 			#0 means no cutoff
 			recurrence_array = greater_equal(recurrence_array, self.subgraph_cut_off)
+		"""
 		recurrence = int(math.floor(sum(recurrence_array)/self.recurrence_gap_size)*self.recurrence_gap_size)
-		
 		#take the floor of the connectivity *10
 		connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
+		"""
+		recurrence = sum(recurrence_array)
+
 		#setup in prediction_tuple2list
 		prediction_tuple = (recurrence, connectivity)
 		if prediction_tuple not in self.prediction_tuple2list:
@@ -314,6 +320,13 @@ class gene_stat:
 				self.prediction_tuple2list[prediction_tuple].append(prediction_list)
 
 	def index_tuple(self, list):
+		"""
+		03-08-05
+			input: list
+			output: a new list, each element is a tuple of (value, index)
+			
+			value is from list, index is value's index in the list. The new list is sorted.
+		"""
 		new_list = []
 		for i in range(len(list)):
 			#value is position 0, and index is position 1
