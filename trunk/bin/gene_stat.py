@@ -7,7 +7,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	cluster_stat(default), ignore it, interface relics
 	-p ..., --p_value_cut_off=...	p_value_cut_off
-	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.85(default), for wu's
+	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.25(default), for wu's
 	-l ..., --limit=...,	OBSOLETE, accepted for backwards compatibility
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
@@ -23,9 +23,8 @@ Examples:
 Description:
 	This program is mainly for validation purpose. Run after cluster_stat.py.
 	Implements both Jasmine and Wu's strategy.
-	The unknown_cut_off is different from the one in gene_stat_on_mcl_result.
-	The former is unknown class p_value cut_off.
-	The latter is unknown genes ratio.
+	The unknown_cut_off is the same as the one in gene_stat_on_mcl_result.
+	which is unknown genes ratio.
 """
 
 import sys, os, psycopg, getopt
@@ -119,8 +118,8 @@ class gene_stat(gene_stat_on_mcl_result):
 		p_value_vector = map(float, p_value_vector)
 		min_p_value =min(p_value_vector)
 		if self.wu:
-			if float(p_value_vector[0]) <= self.unknown_cut_off:
-			#too many unknown genes
+			if float(p_value_vector[0]) > self.unknown_cut_off:
+			#too many unknown genes, and now cut_off is ratio.
 				return
 		if min_p_value > self.p_value_cut_off:
 		#none of the predicted functions in this cluster is significant
@@ -167,7 +166,7 @@ if __name__ == '__main__':
 	wu = 0
 	report = 0
 	commit = 0
-	unknown_cut_off = 0.85
+	unknown_cut_off = 0.25
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
