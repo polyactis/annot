@@ -620,6 +620,7 @@ class gene_stat:
 	def stat_output(self):
 		sys.stderr.write('\n\tp_value_cut_off:%f unknown_cut_off:%f connectivity_cut_off:%f\n'%(self.p_value_cut_off, self.unknown_cut_off, self.connectivity_cut_off))
 		sys.stderr.write('\trecurrence_cut_off:%d cluster_size_cut_off:%d\n'%(self.recurrence_cut_off, self.cluster_size_cut_off))
+		sys.stderr.write('\tdepth_cut_off:%d\n'%(self.depth_cut_off))
 		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
 		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
 		sys.stderr.write("\tBased on functions:\n")
