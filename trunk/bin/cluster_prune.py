@@ -3,6 +3,7 @@
 Usage: cluster_prune.py -k SCHEMA [OPTION]
 
 Option:
+	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	the database table storing the clusters, mcl_result(default)
@@ -50,8 +51,8 @@ class mcl_id_struc:
 
 class cluster_prune:
 
-	def __init__(self, dbname, schema, table, prune_type, threshhold, report, needcommit=0):
-		self.conn = psycopg.connect('dbname=%s'%dbname)
+	def __init__(self, hostname, dbname, schema, table, prune_type, threshhold, report, needcommit=0):
+		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
@@ -357,11 +358,12 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:p:s:ct:", ["help", "report", "dbname=", "schema=", "prune_type=", "threshhold=", "commit", "table="])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:p:s:ct:", ["help", "report", "hostname=", "dbname=", "schema=", "prune_type=", "threshhold=", "commit", "table="])
 	except:
 		print __doc__
 		sys.exit(2)
 	
+	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	prune_type = 0
@@ -373,6 +375,8 @@ if __name__ == '__main__':
 		if opt in ("-h", "--help"):
 			print __doc__
 			sys.exit(2)
+		elif opt in ("-z", "--hostname"):
+			hostname = arg
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
@@ -389,7 +393,7 @@ if __name__ == '__main__':
 			table = arg
 
 	if schema:
-		instance = cluster_prune(dbname, schema, table, prune_type, threshhold, report, commit)
+		instance = cluster_prune(hostname, dbname, schema, table, prune_type, threshhold, report, commit)
 		instance.run()
 
 	else:
