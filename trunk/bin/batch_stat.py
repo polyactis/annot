@@ -44,10 +44,14 @@ class batch_stat:
 							instance = gene_stat(self.dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity, self.wu)
 						instance.dstruc_loadin()
 						instance.run()
-						self.stat_data.append([connectivity, limit, p_value_cut_off, \
-						 instance.tp, instance.tn, instance.fp, instance.fn, unknown_cut_off])
+						if self.needcommit:
+							self.curs.execute("insert into graph.stat_plot_data(connectivity, limit_of_cluster, p_value_cut_off,\
+							tp, tn, fp, fn, tag, unknown_cut_off) values (%1.2f, %d, %1.5f, %d, %d, %d, %d, '%s',%1.2f)"%\
+							(connectivity, limit, p_value_cut_off, \
+							 instance.tp, instance.tn, instance.fp, instance.fn, self.tag, unknown_cut_off))
+						 	self.conn.commit()
 						del instance
-		self.submit()
+		#self.submit()
 			
 	def submit(self):
 		for item in self.stat_data:
