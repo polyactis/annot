@@ -24,6 +24,7 @@ Description:
 
 import sys, os, getopt
 from codense.common import db_connect, get_go_no2term_id
+from sets import Set
 
 class gene_p_map_redundancy:
 	"""
@@ -168,6 +169,9 @@ class gene_p_map_redundancy:
 			
 			fill in self.go_no2distance
 			return jasmine_distance
+		
+		03-14-05
+			add common_ancestor_set to the value list of go_no2distance
 		"""
 		if go_no1==go_no2:
 			#this is possible because several p_gene_ids point to the same go_no.
@@ -193,11 +197,14 @@ class gene_p_map_redundancy:
 			sys.stderr.write("go_id1: %s and go_id2: %s, distance not present\n"%(go_id1, go_id2))
 			sys.exit(14)
 		for row in rows:
+			common_ancestor_list = row[3][1:-1].split(',')
+			common_ancestor_list = map(int, common_ancestor_list)
+			common_ancestor_set = Set(common_ancestor_list)
 			#key tuple in ascending order
 			if go_no1<go_no2:
-				go_no2distance[(go_no1, go_no2)] = (row[0], row[1], row[2])
+				go_no2distance[(go_no1, go_no2)] = (row[0], row[1], row[2], common_ancestor_set)
 			else:
-				go_no2distance[(go_no2, go_no1)] = (row[0], row[1], row[2])
+				go_no2distance[(go_no2, go_no1)] = (row[0], row[1], row[2], common_ancestor_set)
 		return row[2]
 	
 	def submit(self, curs, gene_p_table, p_gene_id_map):
