@@ -6,6 +6,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-p ..., --p_value_cut_off=...	p_value_cut_off
+	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.85(default), for wu's
 	-l ..., --limit=...,	maximum number of clusters related to one gene, 10(default)
 	-n ..., --connectivity_cut_off=...	0.8(default), minimum connectivity of a mcl cluster
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
@@ -16,6 +17,7 @@ Option:
 Examples:
 	gene_stat.py -k shu -p 0.001
 	gene_stat.py -k shu -l 0 -p 0.001 -n 0.7
+	gene_stat.py -k shu -l 0 -p 0.001 -n 0.7 -u 0.80 -w
 
 Description:
 	This program is mainly for validation purpose. Run after cluster_stat.py.
@@ -137,11 +139,12 @@ class gene_prediction:
 
 
 class gene_stat_new:
-	def __init__(self, dbname, schema, p_value_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
+	def __init__(self, dbname, schema, p_value_cut_off, unknown_cut_off, limit=0, connectivity_cut_off=0.8, wu=0, report=0, needcommit=0):
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
 		self.p_value_cut_off = float(p_value_cut_off)
+		self.unknown_cut_off = float(unknown_cut_off)
 		self.limit = int(limit)
 		self.connectivity_cut_off = float(connectivity_cut_off)
 		self.wu = int(wu)
@@ -155,6 +158,7 @@ class gene_stat_new:
 		self.no_of_records = 0
 		self.log_file = open('/tmp/gene_stat.log','w')
 		self.gene_prediction_dict = {}
+		self.no_of_p_known = 0
 		
 	def dstruc_loadin(self):
 		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
@@ -182,10 +186,10 @@ class gene_stat_new:
 		rows = self.curs.fetchall()
 		while rows:
 			for row in rows:
-				if self.known_genes_dict.has_key(row[1]):
+				#if self.known_genes_dict.has_key(row[1]):
 				# for clusters containing unknown genes
-					self._gene_stat(row)
-					self.no_of_records += 1
+				self._gene_stat(row)
+				self.no_of_records += 1
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 			
@@ -197,16 +201,29 @@ class gene_stat_new:
 			for gene_no in self.gene_prediction_dict:
 				entry = self.gene_prediction_dict[gene_no]
 				p_functions = entry.p_functions_dict.keys()
-				if p_functions:
-					self.curs.execute("update gene set cluster_array=ARRAY%s,\
-					tp=%d,tn=%d,fp=%d,fn=%d,p_functions=ARRAY%s where gene_no=%d"%\
-					(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,repr(p_functions),gene_no))
+				if gene_no in self.known_genes_dict:
+					if p_functions:
+						self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						tp=%d,tn=%d,fp=%d,fn=%d,p_functions=ARRAY%s where gene_no=%d"%\
+						(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,repr(p_functions),gene_no))
+					else:
+						self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						tp=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
+						(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,gene_no))
 				else:
-					self.curs.execute("update gene set cluster_array=ARRAY%s,\
-					tp=%d,tn=%d,fp=%d,fn=%d where gene_no=%d"%\
-					(repr(entry.mcl_id_list),entry.tp,entry.tn,entry.fp,entry.fn,gene_no))
+					if p_functions:
+						self.curs.execute("update gene set cluster_array=ARRAY%s,\
+						p_functions=ARRAY%s where gene_no=%d"%\
+						(repr(entry.mcl_id_list),repr(p_functions),gene_no))
+					else:
+						self.curs.execute("update gene set cluster_array=ARRAY%s \
+						where gene_no=%d"%\
+						(repr(entry.mcl_id_list),gene_no))
+				
 			self.curs.execute("end")
-		sys.stderr.write('\n\tTotal genes: %d\n'%len(self.gene_prediction_dict))
+		sys.stderr.write('\n\tp_value_cut_off:%f unknown_cut_off:%f connectivity_cut_off:%f\n'%(self.p_value_cut_off, self.unknown_cut_off, self.connectivity_cut_off))
+		sys.stderr.write('\tTotal genes: %d\n'%len(self.gene_prediction_dict))
+		sys.stderr.write('\tTotal known genes: %d\n'%self.no_of_p_known)
 		sys.stderr.write('\tSensitvity: %f\n'%(self.tp/(self.tp+self.fn)))
 		sys.stderr.write('\tSpecificity: %f\n'%(self.tn/(self.fp+self.tn)))
 		sys.stderr.write('\tFalse Positive Ratio: %f\n'%(self.fp/(self.tp+self.fp)))
@@ -218,6 +235,9 @@ class gene_stat_new:
 			self.gene_prediction_dict[gene_no] = item
 		self.gene_prediction_dict[gene_no].mcl_id_list.append(row[0])
 		p_value_vector = row[2][1:-1].split(',')
+		if self.wu:
+			if float(p_value_vector[0]) <= self.unknown_cut_off:
+				return
 		for i in range(self.no_of_functions):
 			if float(p_value_vector[i]) <= self.p_value_cut_off:
 				if self.wu:
@@ -227,9 +247,13 @@ class gene_stat_new:
 		
 	def final(self):
 		for gene_no in self.gene_prediction_dict:
-			p_functions_dict = self.gene_prediction_dict[gene_no].p_functions_dict.copy()
-			p_functions = p_functions_dict.keys()
 			entry = self.gene_prediction_dict[gene_no]
+			p_functions_dict = entry.p_functions_dict.copy()
+			p_functions = p_functions_dict.keys()
+			if gene_no not in self.known_genes_dict:
+				self.log_file.write('%d %s %s\n'%(gene_no, repr(p_functions),repr(entry.mcl_id_list)))
+				continue
+			self.no_of_p_known += 1
 			for go_no in self.known_genes_dict[gene_no]:
 				if go_no in p_functions_dict:
 					entry.tp += 1
@@ -251,9 +275,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "dbname=", "schema=", "p_value_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
+	long_options_list = ["help", "dbname=", "schema=", "p_value_cut_off=","unknown_cut_off=", "limit=", "connectivity_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:l:n:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:p:u:l:n:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -266,6 +290,7 @@ if __name__ == '__main__':
 	wu = 0
 	report = 0
 	commit = 0
+	unknown_cut_off = 0.85
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -276,6 +301,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
+		elif opt in ("-u", "--unknown_cut_off"):
+			unknown_cut_off = float(arg)
 		elif opt in ("-l", "--limit"):
 			limit = int(arg)
 		elif opt in ("-n", "--connectivity_cut_off"):
@@ -288,7 +315,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat_new(dbname, schema, p_value_cut_off, limit, connectivity_cut_off, wu, report, commit)
+		instance = gene_stat_new(dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
 	else:
