@@ -164,6 +164,15 @@ class gene_stat_on_mcl_result:
 					self.gene_prediction_dict[gene_no].p_functions_dict[go_no] += 1
 
 	def final(self):
+		#get the dominant function among all the functions predicted for one gene
+		for gene_no in self.gene_prediction_dict:
+			entry = self.gene_prediction_dict[gene_no]
+			#the biggest support is what the dominant function needs
+			dominant_support = max(entry.p_functions_dict.values())
+			#delete those functions whose support is less than the dominant support. There's still possibility that >1 functions are kept. 
+			for go_no in entry.p_functions_dict.keys():
+				if entry.p_functions_dict[go_no] < dominant_support:
+					del entry.p_functions_dict[go_no]
 		for gene_no in self.gene_prediction_dict:
 			L0_dict = {}
 			L1_dict = {}
