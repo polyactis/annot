@@ -18,6 +18,13 @@ Option:
 	-s ..., --max_pre_graph_size_list=...	the maximum subgraph size to do 2nd-order clustering, 80(default)
 	-c ..., --conn_perc_list=...	connect perc restoring the condensedcluster, 0.5(default)
 	
+	-h ..., --match_cut=...	4.0(default)
+	-j ..., --intersect2union_cut=...	0.4(default)
+	-w ..., --euclidean_ratio=...	0.2(default)
+	-z ..., --selection_code=...	0110(default), 4-digit string, the leftmost digit(1st digit) means using match measure, 
+		2nd digit is intersect/union measure, 3rd is euler/max measure, 4th is pearson correlation
+		for example, if you combine 3rd and 4th. you use -z 0011
+	
 	-u ..., --max_degree=...	maximum degree of freedom for user's T table, 500(default)
 	
 	-y ..., --type=...	0(coden, default), 1(copath)
@@ -32,15 +39,15 @@ Option:
 	--rr=...	rank range, i.e. 0-3,5,7-9 means useing 0,1,2,3,5,7,8,9
 		This is used to specify the nodes to use.
 	--js=...	job file starting no, 0 (default)
-	-h, --help              show this help
+	--help              show this help
 	
 Examples:
 	#simplest:
 	netmine_wrapper.py --mp='sc_54_6661_6' --rr=16-25
 
 	#normal:
-	netmine_wrapper.py --mp='sc_54_6661_merge_6' -n 6661 -p 805939 -l 54
-		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --rr=16-25,28,31-34
+	netmine_wrapper.py --mp='sc_54_6661_5' -n 6661 -p 1342902 -l 54
+		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --js=20 --rr=16-25,28,31-34
 	
 	
 Description:
@@ -58,7 +65,8 @@ class netmine_wrapper:
 	def __init__(self, run_mode='0', genenum='6661', svnum='805939', sv_length='54',\
 		ttablefile='ttableFromMatlabt1p-3.txt', cut_loop_num_list=['2'], min_graph_size_list=['5'], \
 		min_edge_freq_list=['6'], first_density_cutoff_list=['0.4'], second_density_cutoff_list=['0.4'],\
-		max_pre_graph_size_list=['80'], conn_perc_list=['0.5'], max_degree='500', type=0, \
+		max_pre_graph_size_list=['80'], conn_perc_list=['0.5'], match_cut='4.0', intersect2union_cut='0.4',\
+		euclidean_ratio='0.2', selection_code='0110', max_degree='500', type=0, \
 		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None, js=0):
 		"""
 		03-16-05
@@ -76,6 +84,12 @@ class netmine_wrapper:
 		self.second_density_cutoff_list = second_density_cutoff_list
 		self.max_pre_graph_size_list = max_pre_graph_size_list
 		self.conn_perc_list = conn_perc_list
+		
+		self.match_cut = match_cut
+		self.intersect2union_cut = intersect2union_cut
+		self.euclidean_ratio = euclidean_ratio
+		self.selection_code = selection_code
+		
 		self.max_degree = max_degree
 		self.type = int(type)
 		self.id = id
@@ -106,6 +120,7 @@ class netmine_wrapper:
 		#additional class wide parameters
 		self.input_matrix_file = os.path.join(self.id, self.mp+'.matrix')
 		self.input_sv_file = os.path.join(self.id, self.mp+'.cor_vector')
+		self.input_bv_file = os.path.join(self.id, self.mp+'.sig_vector')
 		self.input_ttable_file = os.path.join(self.id, self.ttablefile)
 		self.binary = 'netmine'
 		self.binary2nd = 'netmine2nd'
@@ -126,8 +141,12 @@ class netmine_wrapper:
 										int_first_density_cutoff = int(float(first_density_cutoff)*100)
 										int_second_density_cutoff = int(float(second_density_cutoff)*100)
 										int_conn_perc = int(float(conn_perc)*100)
-										op = self.binary+self.mp+'G%sE%sD%sQ%sS%sC%s'%\
-		(min_graph_size, min_edge_freq, int_first_density_cutoff, int_second_density_cutoff, max_pre_graph_size, int_conn_perc)
+										int_match_cut = int(float(self.match_cut))
+										int_intersect2union_cut = int(float(self.intersect2union_cut)*100)
+										int_euclidean_ratio = int(float(self.euclidean_ratio)*100)
+										op = self.binary+self.mp+'G%sE%sD%sQ%sS%sC%sH%sJ%sW%sZ%s'%\
+		(min_graph_size, min_edge_freq, int_first_density_cutoff, int_second_density_cutoff, max_pre_graph_size, int_conn_perc,\
+		int_match_cut, int_intersect2union_cut, int_euclidean_ratio, self.selection_code)
 										op = os.path.join(self.od, op)
 									#first is netmine's parameter
 									parameter_list.append([program_path,\
@@ -137,10 +156,11 @@ class netmine_wrapper:
 		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree])
 									#second is netmine2nd's parameter
 									parameter_list.append([program_path2nd, '-r', cut_loop_num,\
-		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file,\
+		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file, '-a', self.input_bv_file,\
 		'-p', self.svnum, '-l', self.sv_length, '-t', self.input_ttable_file, '-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
-		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree])
+		'-s', max_pre_graph_size, '-c', conn_perc, '-h', self.match_cut, '-j', self.intersect2union_cut,\
+		'-w', self.euclidean_ratio, '-z', self.selection_code, '-u', self.max_degree])
 
 		return parameter_list
 
@@ -230,10 +250,11 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hm:n:p:l:t:r:g:e:d:q:s:c:u:y:", ["help","run_mode=",\
+		opts, args = getopt.getopt(sys.argv[1:], "m:n:p:l:t:r:g:e:d:q:s:c:h:j:w:z:u:y:", ["help","run_mode=",\
 			"genenum=", "svnum=", "sv_length=", "ttablefile=", "cut_loop_num_list=", "min_graph_size_list=",\
 			"min_edge_freq_list=", "first_density_cutoff_list=", "second_density_cutoff_list=", \
-			"max_pre_graph_size_list=", "conn_perc_list=", "max_degree=", "type=", "id=", "od=", \
+			"max_pre_graph_size_list=", "conn_perc_list=", "match_cut=", "intersect2union_cut=",\
+			"euclidean_ratio=", "selection_code=", "max_degree=", "type=", "id=", "od=", \
 			"bd=", "mp=", "op=", "rr=", "js="])
 	except:
 		print __doc__
@@ -251,6 +272,12 @@ if __name__ == '__main__':
 	second_density_cutoff_list = ['0.4']
 	max_pre_graph_size_list = ['80']
 	conn_perc_list = ['0.5']
+	
+	match_cut = '4.0'
+	intersect2union_cut = '0.4'
+	euclidean_ratio = '0.2'
+	selection_code = '0110'
+	
 	max_degree = '500'
 	type = '0'
 	id = None
@@ -262,7 +289,7 @@ if __name__ == '__main__':
 	js = 0
 	
 	for opt, arg in opts:
-		if opt in ("-h", "--help"):
+		if opt in ("--help"):
 			print __doc__
 			sys.exit(2)
 		elif opt in ("-m", "--run_mode"):
@@ -291,6 +318,16 @@ if __name__ == '__main__':
 			max_pre_graph_size_list = arg.split(',')
 		elif opt in ("-c", "--conn_perc_list"):
 			conn_perc_list = arg.split(',')
+		
+		elif opt in ("-h", "--match_cut"):
+			match_cut = arg
+		elif opt in ("-j", "--intersect2union_cut"):
+			intersect2union_cut = arg
+		elif opt in ("-w", "--euclidean_ratio"):
+			euclidean_ratio = arg
+		elif opt in ("-z", "--selection_code"):
+			selection_code = arg
+			
 		elif opt in ("-u", "--max_degree"):
 			max_degree = arg
 		elif opt in ("-y", "--type"):
@@ -322,7 +359,8 @@ if __name__ == '__main__':
 		instance = netmine_wrapper(run_mode, genenum, svnum, sv_length,\
 			ttablefile, cut_loop_num_list, min_graph_size_list, \
 			min_edge_freq_list, first_density_cutoff_list, second_density_cutoff_list,\
-			max_pre_graph_size_list, conn_perc_list, max_degree, type,\
+			max_pre_graph_size_list, conn_perc_list, match_cut, intersect2union_cut,\
+			euclidean_ratio, selection_code, max_degree, type,\
 			id, od, bd, mp, op, rank_range, js)
 		
 		instance.run()
