@@ -3,7 +3,7 @@ import pickle,sys,os
 
 class triplet_construct:
 	def __init__(self):
-		self.global_tirplet_dict = {}
+		self.global_triplet_dict = {}
 		self.global_recurrence_list = []
 		self.local_triplet_dict = {}
 		self.local_vertex_dict = {}
@@ -15,22 +15,27 @@ class triplet_construct:
 		self.local_duplet_dict = {}
 		
 	def parse(self, inf):
-		#loop below initilizes graph_list_dict.
+		#loop below initilizes local_duplet_dict & local_vertex_dict.
 		line = inf.readline()
 		while line:
-			list = line[:-1].split('\t')
+			list = line[:-1].split()
 			if line[0] == 'e':
-				vertex1 = list[1]
-				vertex2 = list[2]
-				self.local_duplet_dict[(vertex1,vertex2)] = 1
+				vertex1 = int(list[1])
+				vertex2 = int(list[2])
+				if vertex1 < vertex2:
+					#two vertices is stored in ascending order in the key
+					self.local_duplet_dict[(vertex1,vertex2)] = 1
+				else:
+					self.local_duplet_dict[(vertex2,vertex1)] = 1
+					
 				if vertex1 in self.local_vertex_dict:
 					self.local_vertex_dict[vertex1].append(vertex2)
 				else:
-					self.local_vertex_dict[vertex1] = []
+					self.local_vertex_dict[vertex1] = [vertex2]
 				if vertex2 in self.local_vertex_dict:
 					self.local_vertex_dict[vertex2].append(vertex1)
 				else:
-					self.local_vertex_dict[vertex2] = []
+					self.local_vertex_dict[vertex2] = [vertex1]
 			line = inf.readline()
 			
 	def local_triplet_dict_construct(self):
@@ -41,17 +46,19 @@ class triplet_construct:
 				for j in range(i+1, no_of_neighbours):
 					triplet = [vertex, neighbour_list[i], neighbour_list[j] ]
 					triplet.sort()
-					tuple = (triplet[0],triplet[1],triplet[2])
+					tuple = (triplet[0],triplet[1],triplet[2])	#only tuple can be hashed.
 					if tuple not in self.local_triplet_dict:
-						if self.local_duplet_dict.has_key((neighbour_list[i],neighbour_list[j])):
+						duplet = [neighbour_list[i], neighbour_list[j]]
+						duplet.sort()
+						if self.local_duplet_dict.has_key((duplet[0], duplet[1])):
 							self.local_triplet_dict[tuple] = 1
 			
 	def local_to_global(self):
 		for triplet in self.local_triplet_dict:
-			if self.global_tirplet_dict.has_key(triplet):
-				self.global_tirplet_dict[triplet] += 1
+			if self.global_triplet_dict.has_key(triplet):
+				self.global_triplet_dict[triplet] += 1
 			else:
-				self.global_tirplet_dict[triplet] = 1
+				self.global_triplet_dict[triplet] = 1
 	
 	def run(self, inf):
 		self.init()
@@ -59,11 +66,11 @@ class triplet_construct:
 		self.local_triplet_dict_construct()
 		self.local_to_global()
 
-def batch(dir, of_name):
+def triplet_batch(dir):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	of_pathname = os.path.join(os.path.expanduser('~'), of_name)
-	of = open(of_pathname, 'w')
+	pickle_filename = os.path.join(os.path.expanduser('~'), 'pickle/yeast_triplet')
+	of = open(pickle_filename, 'w')
 	instance = triplet_construct()
 	
 	for f in files:
@@ -73,13 +80,20 @@ def batch(dir, of_name):
 		instance.run(inf)
 		inf.close()
 		
-	pickle.dump ( instance.global_tirplet_dict, of )
-	#triplet_list = instance.global_tirplet_dict.keys()
-	#triplet_list.sort()
-	#for triplet in triplet_list:
-	#	sys.stderr.write('%s\t%d\n'%(triplet, instance.global_tirplet_dict[triplet],))
+	pickle.dump ( instance.global_triplet_dict, of )
+	'''
+	# this block is for triplet output.
+	triplet_list = instance.global_triplet_dict.keys()
+	triplet_list.sort()
+	pickle_file2 = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
+	global_struc = pickle.load(open(pickle_file2, 'r'))
+	vertex_list = global_struc['vertex_list']
+	for triplet in triplet_list:
+		sys.stderr.write("%s\t%d\n"%(triplet, instance.global_triplet_dict[triplet],) )
+		#sys.stderr.write("('%s', '%s', '%s')\t%d\n"%(vertex_list[triplet[0]-1], vertex_list[triplet[1]-1], vertex_list[triplet[2]-1],instance.global_triplet_dict[triplet],))
+	'''
 	
 if __name__ == '__main__':
-	batch(sys.argv[1],sys.argv[2])
+	triplet_batch(sys.argv[1])
 	# argv[1] specifies which directory contains results from graph construction
-	# argv[2] specifies the outputfile name in the user's home directory
+	# the resultant triplet dictionary will be stored in '~/pickle/yeast_triplet'.
