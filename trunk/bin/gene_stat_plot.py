@@ -237,9 +237,9 @@ class gene_stat:
 			self.stat_table_f = csv.writer(open(self.stat_table_fname, 'w'), delimiter='\t')
 			self.go_no_accuracy()
 			self.table_output()
-			if self.needcommit:
+		if self.needcommit and self.leave_one_out:
 			#Database updating is too slow. Do it only if needcommit.
-				self.submit()
+			self.submit()
 
 		if self.plottype != 3:
 			self.hist_plot(self.go_no2cluster, 'go_no2cluster.png', 'go_no', 'number of clusters')
@@ -524,7 +524,9 @@ class gene_stat:
 				no_of_clusters = len(unit[go_no].cluster_array)
 				#convert the context_dict into a human-readable list.
 				context_list = []
-				for member in unit[go_no].context_dict:
+				context_dict_keys = unit[go_no].context_dict.keys()
+				context_dict_keys.sort()
+				for member in context_dict_keys:
 					no_of_containing_clusters = unit[go_no].context_dict[member]
 					context_list.append('%s/%d'%(member, no_of_containing_clusters ))
 				if go_no not in self.go_no2accuracy:
@@ -666,7 +668,9 @@ class gene_stat:
 			row.append(no_of_clusters)
 			#convert the context_dict into a human-readable list.
 			context_list = []
-			for member in unit[go_no].context_dict:
+			context_dict_keys = unit[go_no].context_dict.keys()
+			context_dict_keys.sort()
+			for member in context_dict_keys:
 				no_of_containing_clusters = unit[go_no].context_dict[member]
 				context_list.append('%s/%d'%(self.gene_no2gene_id[member], no_of_containing_clusters ))
 			row.append(';'.join(context_list))
