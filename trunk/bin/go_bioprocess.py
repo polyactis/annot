@@ -92,7 +92,41 @@ class ming_parser:
 			self.go_dict[id].no = i+1
 		
 		return self.go_dict
-					
+
+class min_parser:
+	def __init__(self):
+		self.go_dict = {}
+	
+	def parse(self, inf, vertex_dict):
+		reader = csv.reader(inf, delimiter='\t')
+		for row in reader:
+			go_id = row[0]
+			if go_id not in self.go_dict:
+				info = go_term()
+				info.name = row[1]
+				info.whole_gene_array = []
+				self.go_dict[go_id] = info
+			ls = row[2].split('|')
+			for item in ls:
+				self.go_dict[go_id].whole_gene_array.append(item)
+		
+		for go_id in self.go_dict:
+			entry = self.go_dict[go_id]
+			entry.no_of_genes = len(entry.whole_gene_array)
+			entry.gene_array = []
+			for gene in entry.whole_gene_array:
+				if gene in vertex_dict:
+					entry.gene_array.append(vertex_dict[gene])
+			
+		key_list = self.go_dict.keys()
+		key_list.sort()
+		for i in range(len(key_list)):
+			id = key_list[i]
+			self.go_dict[id].no = i+1
+		
+		return self.go_dict
+
+
 class shu_parser:
 	'''
 	parse the yeast known_gene(GO bioprocess) file,
@@ -130,7 +164,8 @@ class shu_parser:
 		#parser.parseFile(self.inf)
 
 parser_map = {"shu":shu_parser(),\
-			"ming":ming_parser()}
+			"ming":ming_parser(),\
+			"min":min_parser()}
 
 class go_table_setup:
 	def __init__(self, fname, dbname, schema, parser, u_fname, orgn, needcommit=0):
@@ -170,13 +205,25 @@ class go_table_setup:
 				self.unknown_gene_list.append(self.vertex_dict[gene])
 	
 	def submit(self):
-		self.curs.execute("insert into go values('%s', %d, %d, '%s', ARRAY%s, ARRAY%s)"%\
-			('GO:0000004', 0, len(self._unknown_gene_list), 'biological_process unknown', repr(self._unknown_gene_list), repr(self.unknown_gene_list) ))
+		string__unknown_gene_list = repr(self._unknown_gene_list)
+		string__unknown_gene_list = string__unknown_gene_list.replace("'", '')
+		string__unknown_gene_list = '{' + string__unknown_gene_list[1:-1] + '}'
+		string_unknown_gene_list = repr(self.unknown_gene_list)
+		string_unknown_gene_list = '{' + string_unknown_gene_list[1:-1] + '}'
+		
+		self.curs.execute("insert into go values('%s', %d, %d, '%s', '%s', '%s')"%\
+			('GO:0000004', 0, len(self._unknown_gene_list), 'biological_process unknown', string__unknown_gene_list, string_unknown_gene_list))
 		go_dict = self.parser.parse(self.go_inf, self.vertex_dict)
 		for term in go_dict:
-			self.curs.execute("insert into go values('%s', %d, %d, '%s', ARRAY%s, ARRAY%s)"%\
+			string_whole_gene_array = repr(go_dict[term].whole_gene_array)
+			string_gene_array = repr(go_dict[term].gene_array)
+			string_whole_gene_array = string_whole_gene_array.replace("'", '')
+			string_whole_gene_array = '{' + string_whole_gene_array[1:-1] + '}'
+			string_gene_array = '{' + string_gene_array[1:-1] + '}'
+			go_dict[term].name = go_dict[term].name.replace("'",'')
+			self.curs.execute("insert into go values('%s', %d, %d, '%s', '%s', '%s')"%\
 				(term, go_dict[term].no, go_dict[term].no_of_genes, go_dict[term].name,\
-				repr(go_dict[term].whole_gene_array), repr(go_dict[term].gene_array) ))
+				string_whole_gene_array, string_gene_array))
 		if self.needcommit:
 			self.conn.commit()
 			
