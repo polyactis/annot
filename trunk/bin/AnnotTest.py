@@ -33,6 +33,8 @@ Examples:
 	11: crack_by_modes
 03-19-05
 	12: crack_by_splat
+03-31-05
+	13: p_gene_factor
 """
 import unittest, os, sys, getopt, csv
 
@@ -857,7 +859,20 @@ class TestCrackBySplat(unittest.TestCase):
 			print "edge_set: %s"%(repr(mclResult.edge_set))
 			print "recurrence_array: %s"%(repr(mclResult.recurrence_array))
 	
-			
+class TestPGeneFactor(unittest.TestCase):
+	"""
+	03-31-05
+		
+	"""
+	def setUp(self):
+		from p_gene_factor import p_gene_factor
+		self.instance = p_gene_factor(debug=1)
+		
+	def test_group_data(self):
+		list_2d = [[2,3],[1.2,1],[1.3,0],[2,5],[3,6],[3,4],[4,2],[5,7]]
+		key2data = self.instance.group_data(list_2d, key_column=0, no_of_groups=3)
+		print key2data
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -881,7 +896,8 @@ if __name__ == '__main__':
 		9: TestGraphModeling,
 		10: TestCodense2db,
 		11: TestCrackByModes,
-		12: TestCrackBySplat}
+		12: TestCrackBySplat,
+		13: TestPGeneFactor}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
