@@ -9,14 +9,14 @@ Option:
 	-a ..., -go_association=...	the file mapping go_id to gene_id
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
-	-t, --stat	output in stats format
+	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
 	-b, --bfs	construct by BFS instead of index
 	-h, --help      show this help
 	
 Examples:
 	go_informative_node.py -i process.pathindex.annotation.txt -a go2ug.txt
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b
-	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t
+	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t 1
 	go_informative_node.py -k hs_yh60_42 -b
 
 Description:
@@ -38,11 +38,11 @@ import sys, os, psycopg, getopt, csv
 from kjbuckets import *
 
 class go_informative_node:
-	def __init__(self, go_association, go_index, size, stat):
+	def __init__(self, go_association, go_index, size, type):
 		self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
 		self.goi_f = csv.reader(open(go_index, 'r'), delimiter='\t')
 		self.size = int(size)
-		self.stat = int(stat)
+		self.type = int(type)
 		self.go_index2gene_id_dict = {}
 		#value utilizes kjSet data structure
 		self.go_id2go_index_dict = {}
@@ -134,7 +134,7 @@ class go_informative_node:
 			go_index = self.go_id2go_index_dict[go_id][0]
 			#take the first go_index associated with the go_id
 			gene_id_list = self.go_index2gene_id_dict[go_index].items()
-			if self.stat:
+			if self.type:
 				sys.stdout.write("%s\t%d\n"%(go_id, len(gene_id_list)))
 			else:
 				for gene_id in gene_id_list:
@@ -142,7 +142,7 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, dbname, schema, go_association, go_graph, size, stat):
+	def __init__(self, dbname, schema, go_association, go_graph, size, type):
 		self.schema = schema
 		if self.schema:
 		#input from database
@@ -154,11 +154,19 @@ class go_informative_node_bfs:
 			self.goa_f = csv.reader(open(go_association, 'r'), delimiter='\t')
 			self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
 		self.size = int(size)
-		self.stat = int(stat)
+		self.type = int(type)
+		output_format_dict = {0:self.output_full,
+			1:self.output_stat,
+			2:self.output_between}
+		if self.type in output_format_dict:
+			self._output = output_format_dict[self.type]
+		else:
+			sys.stderr.write('Type %d invalid\n'%self.type)
+			sys.exit(2)
 		self.root = 'GO:0008150'
 		self.go_graph = kjGraph()
-		self.go_id2gene_id_dict = {}
-		#value utilizes kjSet data structure
+		self.go_id2gene_id_dict = {}	#value utilizes kjSet data structure
+		self.go_id2go_name = {}	#mapping between go_id an it's name
 		self.go_id_descendent2gene_id_dict = {}
 		self.informative_node_dict = {}
 		self.log_file = open('/tmp/go_informative_node.log', 'w')
@@ -205,6 +213,13 @@ class go_informative_node_bfs:
 		#setup the go_graph structure
 			self.go_graph.add((row[2], row[3]))
 		self.go_id_set = kjSet(self.go_graph.keys() + self.go_graph.values())
+		
+		#setup self.go_id2go_name
+		self.curs.execute("select acc, name from go.term")
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.go_id2go_name[row[0]] = row[1]
+		
 		sys.stderr.write("Done\n")
 
 	def run(self):
@@ -246,19 +261,25 @@ class go_informative_node_bfs:
 		for go_id,value in self.informative_node_dict.iteritems():
 			if value == 1:	
 				gene_id_list = self.go_id_descendent2gene_id_dict[go_id].items()
-				if self.stat:
-					sys.stdout.write("%s\t%d\n"%(go_id, len(gene_id_list)))
-				else:
-					for gene_id in gene_id_list:
-						sys.stdout.write('%s\t%s\t%s\n'%(go_id, go_id, gene_id))
-				
+				self._output(go_id, gene_id_list)
+	
+	def output_full(self, go_id, gene_id_list):
+		for gene_id in gene_id_list:
+			sys.stdout.write('%s\t%s\t%s\n'%(go_id, self.go_id2go_name[go_id], gene_id))
+
+	def output_stat(self, go_id, gene_id_list):
+		sys.stdout.write("%s\t%d\n"%(go_id, len(gene_id_list)))
+
+	def output_between(self, go_id, gene_id_list):
+		sys.stdout.write("%s\t%s\t%s\n"%(go_id, self.go_id2go_name[go_id], '\t'.join(gene_id_list)))
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hd:k:a:i:s:tb", ["help", "dbname=", "schema=", "go_association=", "go_index=", "size=", "stat", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:a:i:s:t:b", ["help", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -268,7 +289,7 @@ if __name__ == '__main__':
 	go_association = ''
 	go_index = ''
 	size = 60
-	stat = 0
+	type = 0
 	bfs = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -284,18 +305,18 @@ if __name__ == '__main__':
 			go_index = arg
 		elif opt in ("-s", "--size"):
 			size = int(arg)
-		elif opt in ("-t", "--stat"):
-			stat = 1
+		elif opt in ("-t", "--type"):
+			type = int(arg)
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and schema:
-		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, stat)
+		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, type)
 		instance.run()
 	elif bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, stat)
+		instance = go_informative_node_bfs(dbname, schema, go_association, go_index, size, type)
 		instance.run()		
 	elif go_association and go_index:
-		instance = go_informative_node(go_association, go_index, size, stat)
+		instance = go_informative_node(go_association, go_index, size, type)
 		instance.run()
 	else:
 		print __doc__
