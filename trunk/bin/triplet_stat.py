@@ -1,43 +1,62 @@
 #!/usr/bin/env python
-import pickle,sys,os,random
+"""
+Usage: triplet_stat.py -k SCHEMA [OPTION] TRIPLET_FILE
+
+Option:
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-h, --help              show this help
+	
+Examples:
+	triplet_stat.py -k ming2 gph_result/triplet_6
+
+Description:
+
+"""
+
+import pickle,sys,os,random,getopt,psycopg
 
 
 class triplet_stat:
-	def __init__(self):
+	def __init__(self, dbname, schema):
+		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to %s"%schema)
 		self.recurrence_triplet_list = []
 		self.recurrence_stat_func_list = []
 		self.recurrence_stat_trans_list = []
 		self.transfac_pickle_fname = os.path.join(os.path.expanduser('~'),'pickle/yeast_transfac_dict')
-		self.known_genes_pickle_fname = os.path.join(os.path.expanduser('~'),'pickle/known_genes_dict')
-		self.global_struc_fname = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
 		self.vertex_dict = {}
 		self.transfac_dict = {}
 		self.known_genes_dict = {}
+		self.logfile = open('/tmp/triplet_stat.log','w')
 	
 	def dstruc_loadin(self):
 		if not os.path.isfile(self.transfac_pickle_fname):
 			sys.stderr.write('You need to construct the transfac_dict first.\n')
 			sys.exit(1)
-		if not os.path.isfile(self.known_genes_pickle_fname):
-			sys.stderr.write('You need to construct known_genes_dict first.\n')
-			sys.exit(1)
-		if not os.path.isfile(self.global_struc_fname):
-			sys.stderr.write('You need to construct global_struc(vertex labeling) first.\n')
-			sys.exit(1)
-		global_struc = pickle.load(open(self.global_struc_fname, 'r'))
-		self.vertex_dict = global_struc['vertex_dict']
+		
+		self.curs.execute("select gene_id, gene_no from gene")
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.vertex_dict[row[0]] = row[1]
+		
 		transfac_dict_orf = pickle.load(open(self.transfac_pickle_fname,'r'))
 		#replace the orfname with no. because the triplets are in no. form.
 		for item in transfac_dict_orf.iteritems():
 			if self.vertex_dict.has_key(item[0]):
 				no = self.vertex_dict[item[0]]
 				self.transfac_dict[no] = item[1]
-			
-		known_genes_dict_orf = pickle.load(open(self.known_genes_pickle_fname,'r'))
-		for item in known_genes_dict_orf.iteritems():
-			if self.vertex_dict.has_key(item[0]):
-				no = self.vertex_dict[item[0]]
-				self.known_genes_dict[no] = item[1]
+		
+		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
+		rows = self.curs.fetchall()
+		for row in rows:
+			if row[1] == '{}':
+				sys.stderr.write('No function for gene: %d\n'%row[0])
+				continue
+			go_list = row[1][1:-1].split(',')
+			self.known_genes_dict[row[0]] = go_list
+
 
 	
 	def transfac_dict_construct(self, inf):
@@ -70,7 +89,7 @@ class triplet_stat:
 		if no_of_triplets <1000:
 			sys.stderr.write('\tthe number of triplets is below 1000(%d). Aborted.\n'%no_of_triplets)
 			#sys.exit(1)
-		sys.stderr.write('func\ttrans\n')
+		sys.stdout.write('func\ttrans\n')
 		for j in xrange(100):
 			functional_homo = 0
 			transcriptional_homo = 0
@@ -78,12 +97,14 @@ class triplet_stat:
 			for k in xrange(1000):
 				triplet = self.recurrence_triplet_list[index_list[k]]
 				if self.is_homogenious(triplet, self.known_genes_dict):
+					self.logfile.write('f %s\n'%repr(triplet))
 					functional_homo += 1
 				if self.is_homogenious(triplet, self.transfac_dict):
+					self.logfile.write('t %s\n'%repr(triplet))
 					transcriptional_homo += 1
 			functional_homo_ratio = functional_homo/1000.00
 			transcriptional_homo_ratio = transcriptional_homo/1000.00
-			sys.stderr.write('%f\t%f\n'%\
+			sys.stdout.write('%f\t%f\n'%\
 				(functional_homo_ratio,transcriptional_homo_ratio))
 			self.recurrence_stat_func_list.append(functional_homo_ratio)
 			self.recurrence_stat_trans_list.append(transcriptional_homo_ratio)
@@ -102,20 +123,39 @@ class triplet_stat:
 			if judge_dict[item] == 3:
 				return 1
 		return 0
-		
-		
+
+
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-	argv[1] is the file containing triplets with specific frequency.\n')
-	if len(sys.argv) == 2:
-		instance = triplet_stat()
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+		
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:", ["help", "dbname=", "schema="])
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = 'graphdb'
+	schema = ''
+	
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+			
+	if schema and len(args) ==1:
+		instance = triplet_stat(dbname, schema)
 		instance.dstruc_loadin()
-		instance.recurrence_triplet_list_construct(sys.argv[1])
-		instance.recurrence_stat_list_construct()
+		instance.recurrence_triplet_list_construct(args[0])
+		instance.recurrence_stat_list_construct()	
 	else:
-		helper()
-		sys.exit(1)
+		print __doc__
+		sys.exit(2)
 	'''
 	# this block is for transfac_dict construction.
 	inf = open(sys.argv[1])
