@@ -8,8 +8,8 @@ class triplet_counting:
 		if not os.path.isdir(self.counting_dir):
 			os.makedirs(self.counting_dir)
 		self.ancestor_fname = triplet_file_path
-		self.source_fname = '/tmp/father.gz'
-		self.target_fname = '/tmp/son.gz'
+		self.source_fname = '/tmp/father'
+		self.target_fname = '/tmp/son'
 		self.triplet_file_dict = {}
 		self.triplet_dict = {}
 		self.no_of_runs = 0
@@ -20,7 +20,7 @@ class triplet_counting:
 	def run(self):
 		self.triplet_file_dict_initialize()
 		self.atom_run(self.ancestor_fname, self.source_fname)
-		source_f = gzip.open(self.source_fname, 'r')
+		source_f = open(self.source_fname, 'r')
 		line = source_f.readline()
 		while line:
 			source_f.close()
@@ -30,18 +30,18 @@ class triplet_counting:
 			tmp = self.source_fname
 			self.source_fname = self.target_fname
 			self.target_fname = tmp
-			source_f = gzip.open(self.source_fname, 'r')
+			source_f = open(self.source_fname, 'r')
 			line = source_f.readline()
 			
 		
 	def atom_run(self, source, target):
-		source_f = gzip.open(source, 'r')
-		target_f = gzip.open(target, 'w')
+		source_f = open(source, 'r')
+		target_f = open(target, 'w')
 		line = source_f.readline()
 		while line:
 			if line in self.triplet_dict:
 				self.triplet_dict[line] += 1
-			elif len(self.triplet_dict) <1e7:
+			elif len(self.triplet_dict) <2.3e7:
 				self.triplet_dict[line] = 1
 			else:
 				target_f.write(line)
