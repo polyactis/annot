@@ -35,6 +35,9 @@ from rpy import r
 		
 class clustering_test:
 	"""
+	02-24-05
+		make several module functions more independent, easy to be called by
+		outside modules
 	run	--dstruc_loadin
 		--[type==1]
 		--reformat	--get_weight
@@ -43,9 +46,9 @@ class clustering_test:
 		--draw_graph
 		--visualize_clusters		--draw_graph
 	"""
-	def __init__(self, hostname, dbname, schema, table, mcl_table,\
-			gene_table, input_file, cluster_file, output_file, label, plot_type,\
-			function, functioncolor, centralnode, mcl_id, type, r_fname):
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, mcl_table=None,\
+			gene_table=None, input_file=None, cluster_file=None, output_file=None, label=1, plot_type="dot",\
+			function=0, functioncolor='green', centralnode=0, mcl_id=0, type=1, r_fname=None):
 		"""
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -116,25 +119,25 @@ class clustering_test:
 		del reader	
 		sys.stderr.write("Done\n")
 	
-	def get_weight(self, gene_index1, gene_index2):
+	def get_weight(self, graph, gene_index1, gene_index2):
 		if gene_index1<gene_index2:
-			edge_id = self.input_graph.edge_by_node(gene_index1, gene_index2)
+			edge_id = graph.edge_by_node(gene_index1, gene_index2)
 		else:
-			edge_id = self.input_graph.edge_by_node(gene_index2, gene_index1)
-		weight = self.input_graph.edges[edge_id][2]
+			edge_id = graph.edge_by_node(gene_index2, gene_index1)
+		weight = graph.edges[edge_id][2]
 		return weight
 	
-	def reformat(self):
+	def reformat(self, graph, outfname, no_of_genes):
 		"""
 		reformat a graph file in gspan formt to a haiyan's matrix format
 		"""
-		writer = csv.writer(open(self.output_file, 'w'), delimiter = '\t')
-		for i in range(self.no_of_genes):
-			nbrs = Set(self.input_graph.all_nbrs(i))
+		writer = csv.writer(open(outfname, 'w'), delimiter = '\t')
+		for i in range(no_of_genes):
+			nbrs = Set(graph.all_nbrs(i))
 			row = []
-			for j in range(self.no_of_genes):
+			for j in range(no_of_genes):
 				if j in nbrs:
-					weight = self.get_weight(i, j)
+					weight = self.get_weight(graph, i, j)
 					row.append(weight)
 				else:
 					#this includes i itself and other unlinked nodes
@@ -142,72 +145,74 @@ class clustering_test:
 			writer.writerow(row)
 		del writer
 	
-	def visualize_clusters(self, cluster_file):
+	def visualize_clusters(self, cluster_file, graph, label_dict, outfname, functioncolor='green', plot_type="dot"):
 		reader = csv.reader(file(cluster_file), delimiter='\t')
 		for row in reader:
 			cluster_id = int(row[0])
 			node_list = row[3:]
 			node_list = map(int, node_list)
 			sys.stdout.write("Cluster %s \n"%(cluster_id))
-			self.draw_graph(node_list)
-			r.source(self.r_fname)
+			self.draw_graph(graph, label_dict, outfname, functioncolor, plot_type, node_list)
+			r.source(outfname)
 			#asking  to continue or not
 			no_stop = raw_input("Continue? Y/n:\t")
 			if no_stop == 'n' or no_stop == 'N':
 			    sys.exit(3)
 		del reader
 	
-	def draw_graph(self, node_list = []):
+	def draw_graph(self, graph, label_dict, outfname, functioncolor='green', plot_type="dot", node_list = []):
 		'''
 		write the R script to draw an unweighted subgraph
 		'''
-		self.r_f = open(r_fname, 'w')
-		self.r_f.write('library("Rgraphviz")\n')
-		vertex_set = self.input_graph.node_list()
+		r_f = open(outfname, 'w')
+		r_f.write('library("Rgraphviz")\n')
+		vertex_set = graph.node_list()
 		vertex_labels = []
 		for vertex in vertex_set:
-			vertex_labels.append('"%s"'%self.label_dict[self.label][vertex])
-		self.r_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
-		self.r_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
-		self.r_f.write("names(edL2) <- V\n")
+			vertex_labels.append('"%s"'%label_dict[vertex])
+		r_f.write('V <- c(%s)\n'%(','.join(vertex_labels)))
+		r_f.write('edL2 <- vector("list", length=%d)\n'%(len(vertex_set)))
+		r_f.write("names(edL2) <- V\n")
 		for i in range(len(vertex_set)):
 			vertex = vertex_set[i]
-			nbrs = self.input_graph.all_nbrs(vertex)
+			nbrs = graph.all_nbrs(vertex)
 			nbr_list = []
 			for neighbor in nbrs:
 				nbr_list.append(vertex_set.index(neighbor)+1)
-			self.r_f.write('edL2[[%d]] <- list(edges=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list))))
+			r_f.write('edL2[[%d]] <- list(edges=c(%s))\n'%((i+1), ','.join(map(repr,nbr_list))))
 		
-		self.r_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
-		self.r_f.write('nAttrs = list()\n')
-		#self.r_f.write('eAttrs = list()\n')
-		self.r_f.write("defAttrs = getDefaultAttrs()\n")
-		self.r_f.write('defAttrs$node$color <- "black"\n')
-		self.r_f.write('defAttrs$node$fillcolor <- "transparent"\n')
-		self.r_f.write('defAttrs$node$shape <- "ellipse"\n')
+		r_f.write('gR2 <- new("graphNEL", nodes=V, edgeL=edL2, edgemode="undirected")\n')
+		r_f.write('nAttrs = list()\n')
+		#r_f.write('eAttrs = list()\n')
+		r_f.write("defAttrs = getDefaultAttrs()\n")
+		r_f.write('defAttrs$node$color <- "black"\n')
+		r_f.write('defAttrs$node$fillcolor <- "transparent"\n')
+		r_f.write('defAttrs$node$shape <- "ellipse"\n')
 		color_list = []
 		for vertex in node_list:
-			label = self.label_dict[self.label][vertex]
-			color_list.append('"%s"="%s"'%(label, self.functioncolor))
-		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
-		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, "%s")\n'%self.plot_type)
-		self.r_f.close()	
+			label = label_dict[vertex]
+			color_list.append('"%s"="%s"'%(label, functioncolor))
+		r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
+		r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, "%s")\n'%plot_type)
+		r_f.close()	
 
 	def run(self):
 		self.dstruc_loadin()
 		if self.type == 1:
 			if self.output_file:
-				self.reformat()
+				self.reformat(self.input_graph, self.output_file, self.no_of_genes)
 			else:
 				sys.stderr.write("Please the output file.\n")
 				sys.exit(2)
 		elif self.type == 2:
 			if self.r_fname:
 				if self.cluster_file:
-					self.visualize_clusters(self.cluster_file)				
+					self.visualize_clusters(self.cluster_file, self.input_graph, self.label_dict[self.label],\
+						self.r_fname, self.functioncolor, self.plot_type)				
 		
 				else:
-					self.draw_graph()
+					self.draw_graph(self.input_graph, self.label_dict[self.label], self.r_fname,\
+						self.functioncolor, self.plot_type)
 					r.source(self.r_fname)
 					stop = raw_input("Exit? Y/n:")
 					
