@@ -309,3 +309,26 @@ def get_prediction_pair2lca_list(curs, schema=None, p_gene_table=None):
 			sys.exit(3)
 	sys.stderr.write("Done\n")
 	return prediction_pair2lca_list
+
+def get_gspan_graph(gspan_file, min_weight=None):
+	"""
+	04-03-05
+		read in a graph from a file in gspan format
+	"""
+	sys.stderr.write("Getting graph from a gspan file %s..."%gspan_file)
+	from graphlib import Graph
+	graph = Graph.Graph()
+	reader = csv.reader(open(gspan_file,'r'), delimiter=' ')
+	for row in reader:
+		if row[0] == 'e':
+			gene_no1 = int (row[1])
+			gene_no2 = int(row[2])
+			weight = float(row[3])
+			if min_weight:
+				if weight>=min_weight:
+					graph.add_edge(gene_no1, gene_no2, weight)
+			else:
+				graph.add_edge(gene_no1, gene_no2, weight)
+	del reader
+	sys.stderr.write("Done\n")
+	return graph
