@@ -6,6 +6,7 @@ Option:
 	MCLINPUTDIR a directory containing the mcl input files.
 	-n ..., --jobnum=...	The starting number for job. default is 0.
 	-p ..., --parameter=...	parameter passed to mcl, double quoted.
+	-s, --shell	Execute the job file via call 'sh', not 'qsub'(default)
 	-h, --help              show this help
 	
 Examples:
@@ -25,7 +26,7 @@ class mcl_batch_submit:
 	'''
 	Partition a big mcl job into 
 	'''
-	def __init__(self, dir, no_of_job=0, parameter=''):
+	def __init__(self, dir, no_of_job=0, parameter='', shell=0):
 		self.dir = os.path.abspath(dir)
 		if not os.path.isdir(self.dir):
 			sys.stderr.write('%s not present\n'%self.dir)
@@ -36,6 +37,9 @@ class mcl_batch_submit:
 		self.f_list = os.listdir(self.dir)
 		self.no_of_job = no_of_job
 		self.parameter = parameter
+		self.submit_command = 'qsub'
+		if shell == 1:
+			self.submit_command = 'sh'
 	
 	def submit(self):
 		for file in self.f_list:
@@ -49,8 +53,8 @@ class mcl_batch_submit:
 					(file, job_outfname, self.parameter)
 				job_f.write(out_block)
 				job_f.close()
-				wl = ['qsub', job_fname]
-				os.spawnvp(os.P_WAIT, 'qsub', wl)
+				wl = [self.submit_command, job_fname]
+				os.spawnvp(os.P_WAIT, self.submit_command, wl)
 				self.no_of_job += 1
 
 if __name__ == '__main__':
@@ -59,13 +63,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hn:p:", ["help", "jobnum=", "parameter="])
+		opts, args = getopt.getopt(sys.argv[1:], "hn:p:s", ["help", "jobnum=", "parameter=", "shell"])
 	except:
 		print __doc__
 		sys.exit(2)
 	
 	jobnum = ''
 	parameter = ''
+	shell = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -74,9 +79,11 @@ if __name__ == '__main__':
 			jobnum = int(arg)
 		elif opt in ("-p", "--parameter"):
 			parameter = arg
+		elif opt in ("-s", "--shell"):
+			shell = 1 
 
 	if jobnum != '' and len(args)==1:
-		instance = mcl_batch_submit(args[0], jobnum, parameter)
+		instance = mcl_batch_submit(args[0], jobnum, parameter, shell)
 		instance.submit()
 
 	else:
