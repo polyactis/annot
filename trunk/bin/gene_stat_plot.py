@@ -111,7 +111,7 @@ class gene_stat:
 		self.log = int(log)
 		self.final_dict = {0: self.final_direct_match,
 			1: self.final_L0,
-			2: self.final_depth}
+			2: self.final_common_ancestor}
 		self.final = self.final_dict[judger_type]
 		self.depth_cut_off = int(depth_cut_off)
 		self.dir_files = dir_files
@@ -129,6 +129,9 @@ class gene_stat:
 		self.fp = 0.0
 		self.fp_m =0.0
 		self.fn = 0.0
+		#mapping between gene_no and its directly assigned go functions
+		#key is a gene_no, value is a set of go_no's.
+		self.gene_no2direct_go = {}
 		#mapping between gene_no and go_no list
 		self.known_genes_dict = {}
 		self.no_of_records = 0
@@ -181,6 +184,16 @@ class gene_stat:
 			self.known_genes_dict[row[0]] = Set()
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].add(int(go_no))
+		
+		#setup self.gene_no2direct_go
+		self.curs.execute("select ge.gene_no, g.go_no from go g, graph.association a, gene ge\
+			where ge.gene_id=a.gene_id and g.go_id=a.go_id")
+		rows = self.curs.fetchall()
+		for row in rows:
+			if row[0] in self.gene_no2direct_go:
+				self.gene_no2direct_go[row[0]].add(row[1])
+			else:
+				self.gene_no2direct_go[row[0]] = Set([row[1]])
 		
 		#get the non-obsolete biological_process GO DAG
 		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc from \
@@ -578,7 +591,7 @@ class gene_stat:
 			self.fp_m += sum(entry.fp.values())
 			self.fn += sum(entry.fn.values())
 
-	def final_depth(self):
+	def final_common_ancestor(self):
 		if self.dominant:
 			#get the dominant function among all the functions predicted for one gene
 			for gene_no in self.gene_prediction_dict:
@@ -595,12 +608,15 @@ class gene_stat:
 			L1_dict = {}
 			#each entry is a gene_prediction class
 			entry = self.gene_prediction_dict[gene_no]
+			#copy is important to dictionary to avoid direct change.
 			p_functions_dict = entry.p_functions_dict.copy()
 			if gene_no not in self.known_genes_dict:
 				#unknown genes are not validatable. Ignore.
 				#self.log_file.write('unknown: %d %s %s\n'%(gene_no, repr(p_functions_dict),repr(entry.mcl_id_list)))
 				continue
-			k_functions_set = self.known_genes_dict[gene_no]
+			
+			#!!copy()!!. Set is implemented by dictionary.
+			k_functions_set = self.known_genes_dict[gene_no].copy()
 			self.no_of_p_known += 1
 			#compare the known go_no with the predicted go_no to see if they match
 
@@ -895,12 +911,15 @@ class gene_stat:
 			if gene_no in self.known_genes_dict:
 				function_known_list = []
 				for go_known in self.known_genes_dict[gene_no]:
-					function_known_list.append(self.go_no2go_name[go_known])
+					if go_known not in self.gene_no2direct_go[gene_no]:
+						function_known_list.append('%s(parent)'%self.go_no2go_id[go_known])
+					else:
+						function_known_list.append('%s'%self.go_no2go_id[go_known])
 				row.append(';'.join(function_known_list))
 			else:
 				row.append('')
 
-			row.append(self.go_no2go_name[go_no])
+			row.append('%s(%s)'%(self.go_no2go_name[go_no], self.go_no2go_id[go_no]))
 			row.append(unit[go_no].is_correct)
 			no_of_clusters = len(unit[go_no].p_value_list)
 			row.append(sum(unit[go_no].p_value_list)/float(no_of_clusters))
