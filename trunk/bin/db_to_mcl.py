@@ -68,8 +68,8 @@ if __name__ == '__main__':
 	def helper():
 		sys.stderr.write('\
 		argv[1] is the output directory.\n\
-		argv[2] is two-letter organism abbreviation.\n\
-		argv[3] is the database name.\n')
+		argv[2] is the database name.\n\
+		argv[3] is two-letter organism abbreviation.\n')
 		
 	if len(sys.argv) == 4:
 		instance = db_to_mcl(sys.argv[2])
