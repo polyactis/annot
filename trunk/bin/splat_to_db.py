@@ -69,10 +69,10 @@ class splat_to_db:
 			
 	def run(self):
 		iter = splat_result_iterator(self.inf)
-		no = 1
+		no = 0
 		for pattern in iter:
 			self.parse(pattern)
-			self.splat_id = '%s_%d'%(self.organism,no)
+			self.splat_id = '%s_%d'%(self.organism,(no+1))
 			string_edge_set = repr(self.edge_set)
 			string_edge_set = string_edge_set.replace('[','{')
 			string_edge_set = string_edge_set.replace(']','}')
@@ -86,19 +86,20 @@ class splat_to_db:
 				self.conn.rollback()
 				sys.exit(1)
 			no+=1
+			sys.stderr.write('.')
 		if self.needcommit:
 			self.conn.commit()
-		sys.stderr.write('\tTotal patterns: %d\n'%(no-1))
+		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
 		sys.stderr.write('\tLast pattern: %s\n'%self.splat_id)
 
 
 if __name__ == '__main__':
 	def helper():
 		sys.stderr.write('\
-		argv[1] is the splat result file.\n\
-		argv[2] is the database name.\n\
-		argv[3] is the two abbreviation letters for organism.\n\
-		argv[4] is 0 or 1 indicating whether to commit or not.\n')
+	argv[1] is the splat result file.\n\
+	argv[2] is the database name.\n\
+	argv[3] is the two abbreviation letters for organism.\n\
+	argv[4] is 1 or 0 indicating whether to commit or not. Default is 0.\n')
 		
 	if len(sys.argv) ==5:
 		instance = splat_to_db(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])

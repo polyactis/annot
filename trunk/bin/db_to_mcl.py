@@ -28,16 +28,20 @@ class db_to_mcl:
 		if not os.path.isdir(outdir):
 			os.makedirs(outdir)
 		row = self.curs.fetchone()
+		no = 0
 		while row:
 			splat_id = row[0]
 			outfname = splat_id
 			path = os.path.join(outdir, outfname)
 			outf = open(path, 'w')
-			self.vertex_dict = {}	#intialize the vertex_dict
 			self.mcl_singleton_write(row[1], outf)
 			row = self.curs.fetchone()
-			
+			no += 1
+			sys.stderr.write('.')
+		sys.stderr.write('\n\tTotal patterns: %d\n'%no)
+		
 	def mcl_singleton_write(self, edge_set, outf):
+		self.vertex_dict = {}	#intialize the vertex_dict
 		edge_list = edge_set[2:-2].split('},{')
 		for edge in edge_list:
 			vertex_list = edge.split(',')
