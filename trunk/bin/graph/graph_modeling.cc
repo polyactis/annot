@@ -112,16 +112,21 @@ void graph_construct::input()
 	no_of_cols = gene_array[0].size();
 }
 
-void graph_construct::cor_cut_off_array_construct(double p_value_cut_off)
+void graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given)
 {
 	double cor_cut_off, t;
 	for(int i=1; i<400; i++)
 	{
-		//cor_vector.clear();
-		t = gsl_cdf_tdist_Qinv(p_value_cut_off, i);
-		//convert the t to the correlation, see log file.
-		cor_cut_off = sqrt(gsl_pow_2(t)/(gsl_pow_2(t)+i));
-		cor_cut_off_array.push_back((float)cor_cut_off);
+		if(p_value_cut_off != 0)
+		{
+			//cor_vector.clear();
+			t = gsl_cdf_tdist_Qinv(p_value_cut_off, i);
+			//convert the t to the correlation, see log file.
+			cor_cut_off = sqrt(gsl_pow_2(t)/(gsl_pow_2(t)+i));
+			cor_cut_off_array.push_back((float)cor_cut_off);
+		}
+		else	
+			cor_cut_off_array.push_back((float)cor_cut_off_given);
 		
 		/*old method
 		cor_list = general_split(line, '\t');
@@ -386,7 +391,9 @@ void print_usage(FILE* stream,int exit_code)
 	fprintf(stream,"\t-h  --help	Display the usage infomation.\n"\
 		"\t-o --output filename	Write output to file, gph_output(default)\n"\
 		"\t-n --name datasetname	Same as output_filename(default)\n"\
-		"\t-p --p_value_cut_off	p_value significance cutoff,0.01(default)\n");
+		"\t-p --p_value_cut_off	p_value significance cutoff,0.01(default)\n"\
+		"\t-c --cor_cut_off cor	correlation cutoff, 0.6(default)\n"\
+		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n");
 	exit(3);
 }
 
@@ -394,12 +401,13 @@ void print_usage(FILE* stream,int exit_code)
 int main(int argc, char* argv[])
 {
 	int next_option;
-	const char* const short_options="ho:n:p:";
+	const char* const short_options="ho:n:p:c:";
 	const struct option long_options[]={
 	  {"help",0,NULL,'h'},
 	  {"output",1,NULL,'o'},
 	  {"name",1,NULL,'n'},
 	  {"p_value_cut_off", 1, NULL, 'p'},
+	  {"cor_cut_off", 1, NULL, 'c'},
 	  {NULL,0,NULL,0}
 	};
 	
@@ -407,6 +415,7 @@ int main(int argc, char* argv[])
 	char* name = NULL;
 	program_name=argv[0];
 	double p_value_cut_off = 0.01;
+	double cor_cut_off = 0.6;
 
 	do
 	{
@@ -424,6 +433,9 @@ int main(int argc, char* argv[])
 			break;
 		case 'p':
 			p_value_cut_off = atof(optarg);
+			break;
+		case 'c':
+			cor_cut_off = atof(optarg);
 			break;
 		case '?':
 			print_usage(stderr,-1);
@@ -444,7 +456,7 @@ int main(int argc, char* argv[])
 	{
 		
 		graph_construct instance(argv[optind], output_filename, name);
-		instance.cor_cut_off_array_construct(p_value_cut_off);
+		instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off);
 		instance.input();
 		instance.edge_construct();
 		instance.output();

@@ -68,7 +68,7 @@ class graph_construct
 		graph_construct(char* inf_name, char* outf_name, char* g_name);
 		graph_construct(char* outf_name, vector<int> edge_vector);
 		~graph_construct();
-		void cor_cut_off_array_construct(double p_value_cut_off);
+		void cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given);
 		void input();
 		void edge_construct();
 		void output();
