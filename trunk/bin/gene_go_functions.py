@@ -71,6 +71,11 @@ class gene_go_functions:
 			self.geneno_to_geneid[row[1]] = row[0]
 	
 	def run(self):
+		"""
+		03-06-05
+			change the way dealing with left-out known genes. the old way is deleting them.
+			Now. keep them, mark them known, but assign go_no=0. So they are fake unknown genes.
+		"""
 		#load in the data structures first.
 		self.dstruc_loadin()
 		excluded_known_genes = 0
@@ -79,10 +84,10 @@ class gene_go_functions:
 			if gene_no not in self.geneno_go_dict:
 				'''
 				this gene is shared among all datasets. It is known but not present in
-				informative nodes. So delete it.
+				informative nodes. Regard them as fake unknown genes.
 				'''
 				excluded_known_genes += 1
-				self.curs.execute("delete from gene where gene_no=%d"%gene_no)
+				self.curs.execute("update gene set known='1', go_functions='{0}' where gene_no=%d"%(gene_no))
 				continue
 			known = '1'
 			if self.geneno_go_dict[gene_no]==[0] :
@@ -94,7 +99,8 @@ class gene_go_functions:
 		if self.needcommit:
 			self.conn.commit()
 		sys.stderr.write("done.\n")
-		sys.stderr.write("%d genes are known genes but not in the informative nodes. Deleted\n"%excluded_known_genes)
+		sys.stderr.write("%d genes are known genes but not in the informative nodes.\n\
+			Fake them as unknown genes(known=TRUE, go_functions={0})\n"%excluded_known_genes)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
