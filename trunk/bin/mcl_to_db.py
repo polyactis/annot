@@ -79,21 +79,27 @@ class mcl_to_db:
 		line = inf.readline()
 		self.cluster_set = []
 		cluster_begin = 0
+		vertex_list = []
 		while line:
 			if line.find('(splat_id') == 0:
 				self.splat_id = line[10:-3]
 			if line.find('(parameter') == 0:
 				self.parameter = line[11:-3]
-			if line == 'begin\n':
-				cluster_begin = 1
 			if cluster_begin and (line == ')\n'):
 				break;
 			elif cluster_begin:
-				vertex_list = line[1:-2].split()	#remove the first column and $\n.
-				if len(vertex_list) >2:
-					for i in range(len(vertex_list)):
-						vertex_list[i] = int(vertex_list[i])
+				vertex_list_part = line[1:].split()	#remove cluster no. or a space
+				if vertex_list_part[-1] == '$':
+					vertex_list_part.pop()
+					for i in range(len(vertex_list_part)):
+						vertex_list.append(int(vertex_list_part[i]))
 					self.cluster_set.append(vertex_list)
+					vertex_list = []
+				else:
+					for i in range(len(vertex_list_part)):
+						vertex_list.append(int(vertex_list_part[i]))
+			if line == 'begin\n':
+				cluster_begin = 1
 			line = inf.readline()
 				
 if __name__ == '__main__':
