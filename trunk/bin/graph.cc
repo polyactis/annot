@@ -19,16 +19,24 @@ typedef vector<float> vf;
 class graph_construct
 {
 	vector<vf> gene_array;
+	vector<vf> cor_array;
 	vector<bit_vector> mask_vector;
 	vector<string> gene_labels_vector;
 	char* graph_name;
 	int no_of_genes;
 	int no_of_cols;
+	int no_of_valids;
+	int no_of_cor6;
+	int no_of_05;
+	int no_of_025;
+	int no_of_01;
 	ifstream in;
 	ofstream out;
 	public:
 		graph_construct(char* inf_name, char* outf_name, char* g_name);
 		~graph_construct();
+		void cor_array_readin(char* cor_fname);
+		vector<string> general_split(string line, char ch);
 		void input();
 		void edge_construct();
 		void output();
@@ -44,7 +52,10 @@ graph_construct::graph_construct(char* inf_name, char* outf_name, char* g_name)
 	out.open(outf_name);
 	graph_name = g_name;
 	//ios::app | ios::out);
-
+	no_of_cor6 = 0;
+	no_of_05 = 0;
+	no_of_025 = 0;
+	no_of_01 = 0;
 }
 
 graph_construct::~graph_construct()
@@ -126,31 +137,52 @@ void graph_construct::split(string line)
 
 void graph_construct::edge_construct()
 {
-	int i,j,k;
-	float tmp_cor, min_cor = 1.1;
+	int i,j,k,df;
+	float tmp_cor, abs_min_cor, min_cor = 1.1;
 	
 	out<<"t\t#\t"<<graph_name<<endl;
 	for ( i=0; i<no_of_genes; i++)
 		for ( j=i+1; j<no_of_genes; j++)
 		{	
 			min_cor = 1.1;
+			df = 0;
 			for (k=0; k<no_of_cols; k++)
 			{
 				tmp_cor = cor(gene_array[i], gene_array[j], k);
 				//cerr<<tmp_cor<<'\t';
 				//if #valid quantities shared by [i] and [j] is <7, it will return 2.0. 
 				if ( abs(tmp_cor) < abs(min_cor) )
+				{
 					min_cor = tmp_cor;
+					df = no_of_valids-2;
+				}
 			}
 			//cerr<<endl;
-			if ( (abs(min_cor) >= COR_CUT_OFF) && (abs(min_cor)<=1.0) )
-				out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+			abs_min_cor = abs(min_cor);
+			if (abs_min_cor<=1.0)
+			{
+				
+				if ( abs_min_cor >= COR_CUT_OFF)
+					no_of_cor6++;
+				if ( abs_min_cor >= cor_array[(df-5)][0] )
+				{
+					no_of_05++;
+					out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<min_cor<<endl;
+				}
+				if ( abs_min_cor >= cor_array[(df-5)][1] )
+					no_of_025++;
+				
+				if ( abs_min_cor >= cor_array[(df-5)][2] )
+					no_of_01++;
+			}
 		}			
 }
 
 void graph_construct::output()
 {
+	
 	int i;
+	/*
 	out<<no_of_cols<<'\t'<<no_of_genes<<endl;
 		
 	for ( i=0; i<no_of_genes; i++)
@@ -163,7 +195,11 @@ void graph_construct::output()
 			out<<gene_array[i][j]<<'\t';
 	
 	out<<endl;
+	for (i=0; i<cor_array.size(); i++)
+		cout<<cor_array[i][0]<<'\t'<<cor_array[i][1]<<'\t'<<cor_array[i][2]<<endl;
 	}
+	*/
+	cout<<no_of_cor6<<'\t'<<no_of_05<<'\t'<<no_of_025<<'\t'<<no_of_01<<endl;
 
 }
 
@@ -175,7 +211,7 @@ float graph_construct::cor(vf v1, vf v2, int position)
 	float xy = 0.0;
 	float mean_x = 0.0;
 	float mean_y = 0.0;
-	int no_of_valids=0;
+	no_of_valids=0;
 	
 	for (int i=0; i<no_of_cols; i++)
 		if ( (i == position) || ( isnan(v1[i]) )|| ( isnan(v2[i]) ) )
@@ -219,12 +255,47 @@ int graph_construct::bv_count(bit_vector bv)
 	return count;
 }
 
+void graph_construct::cor_array_readin(char* cor_fname)
+{
+	ifstream inf;
+	inf.open(cor_fname);
+	string line;
+	vector<string> cor_list;
+	int i;
+	vf cor_vector;	
+	while(getline(inf, line))
+	{
+		cor_vector.clear();
+		cor_list = general_split(line, '\t');
+		for(i=0; i<cor_list.size(); i++)
+			cor_vector.push_back(atof(cor_list[i].c_str()));
+		cor_array.push_back(cor_vector);
+
+	}
+	
+}
+
+vector<string> graph_construct::general_split(string line, char ch)
+{
+	vector<string> string_list;
+	int delimiter_pos = line.find_first_of(ch);
+	while(delimiter_pos!=-1)
+	{
+		string_list.push_back(line.substr(0, delimiter_pos));
+		line.erase(0, (delimiter_pos+1));
+		delimiter_pos = line.find_first_of(ch);
+	}
+	string_list.push_back(line);
+	return string_list;
+}
+
 int main(int argc, char* argv[])
 {
 	//ifstream inf(argv[1]);
 	//ofstream outf(argv[2], ios::app | ios::out);
 	graph_construct instance(argv[1], argv[2], argv[3] );
+	instance.cor_array_readin("/home/yuhuang/p_value_cor.output");
 	instance.input();
 	instance.edge_construct();
-	//instance.output();
+	instance.output();
 }
