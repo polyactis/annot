@@ -24,6 +24,7 @@ class batch_stat:
 		self.conn = psycopg.connect('dbname=%s'%self.dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.unknown_cut_off_list = [0.70,0.75,0.80,0.85,0.90,0.95]
 		self.connectivity_list = [0.7, 0.8, 0.9]
 		self.limit_list = [0]
 		self.p_value_cut_off_list = [0.001, 0.0005, 0.0001, 0.00005, 0.00001]
@@ -33,25 +34,26 @@ class batch_stat:
 		self.needcommit = int(needcommit)
 		
 	def run(self):
-		for connectivity in self.connectivity_list:
-			for limit in self.limit_list:
-				for p_value_cut_off in self.p_value_cut_off_list:
-					if limit == 0 and p_value_cut_off == 0.0001 and connectivity == 0.8:
-						instance = gene_stat(self.dbname, schema, p_value_cut_off, limit, connectivity, self.wu, 0, 1)
-					else:
-						instance = gene_stat(self.dbname, schema, p_value_cut_off, limit, connectivity, self.wu)
-					instance.dstruc_loadin()
-					instance.run()
-					self.stat_data.append([connectivity, limit, p_value_cut_off, \
-					 instance.tp, instance.tn, instance.fp, instance.fn])
-					del instance
+		for unknown_cut_off in self.unknown_cut_off_list:
+			for connectivity in self.connectivity_list:
+				for limit in self.limit_list:
+					for p_value_cut_off in self.p_value_cut_off_list:
+						if unknown_cut_off ==0.85 and limit == 0 and p_value_cut_off == 0.0001 and connectivity == 0.8:
+							instance = gene_stat(self.dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity, self.wu, 0, 1)
+						else:
+							instance = gene_stat(self.dbname, schema, p_value_cut_off, unknown_cut_off, limit, connectivity, self.wu)
+						instance.dstruc_loadin()
+						instance.run()
+						self.stat_data.append([connectivity, limit, p_value_cut_off, \
+						 instance.tp, instance.tn, instance.fp, instance.fn, unknown_cut_off])
+						del instance
 		self.submit()
 			
 	def submit(self):
 		for item in self.stat_data:
 			self.curs.execute("insert into graph.stat_plot_data(connectivity, limit_of_cluster, p_value_cut_off,\
-			tp, tn, fp, fn, tag) values (%1.2f, %d, %1.5f, %d, %d, %d, %d, '%s')"%\
-			(item[0], item[1], item[2], item[3], item[4], item[5], item[6], self.tag))
+			tp, tn, fp, fn, tag, unknown_cut_off) values (%1.2f, %d, %1.5f, %d, %d, %d, %d, '%s',%1.2f)"%\
+			(item[0], item[1], item[2], item[3], item[4], item[5], item[6], self.tag, item[7]))
 		if self.needcommit:
 			self.conn.commit()
 		
