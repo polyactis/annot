@@ -146,6 +146,9 @@ class subgraph_visualize:
 		edge_list = edge_set[2:-2].split('},{')
 		for edge in edge_list:
 			vertex_list = edge.split(',')
+			#order it
+			vertex_list = map(int, vertex_list)
+			vertex_list.sort()
 			#set the default edge_data to be 1
 			edge_data = 1
 			#get the correlation vector for an edge
@@ -155,7 +158,7 @@ class subgraph_visualize:
 				edge_data = rows[0][0][1:-1]
 				edge_data = edge_data.split(',')
 				edge_data = map(float, edge_data)
-			big_graph.add_edge(int(vertex_list[0]), int(vertex_list[1]), edge_data)
+			big_graph.add_edge(vertex_list[0], vertex_list[1], edge_data)
 			
 		subgraph = big_graph.subgraph_from_node_list(vertex_set)
 		return subgraph
@@ -207,8 +210,8 @@ class subgraph_visualize:
 				color_list.append('%s="%s"'%(gene_id, self.functioncolor))
 		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
 		gene_id = self.gene_no2gene_id[centralnode]
-		self.r_f.write('nAttrs$fillcolor <- c(%s="yellow")\n'%gene_id)
-		self.r_f.write('nAttrs$shape <- c(%s="box")\n'%gene_id)
+		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
+		self.r_f.write('nAttrs$shape <- c("%s"="box")\n'%gene_id)
 		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs)\n')
 	
 	def weighted_subgraph(self, subgraph):
@@ -228,10 +231,9 @@ class subgraph_visualize:
 			nbr_list = []
 			weight_list = []
 			for neighbor in nbrs:
-				#first order
-				edge = subgraph.edge_by_node(vertex, neighbor)
-				if edge == None:
-					#second order
+				if vertex<neighbor:
+					edge = subgraph.edge_by_node(vertex, neighbor)
+				else:
 					edge = subgraph.edge_by_node(neighbor, vertex)
 				weight_list.append(subgraph.edges[edge][2])
 				#Note +1 to index
@@ -261,8 +263,8 @@ class subgraph_visualize:
 				color_list.append('%s="%s"'%(gene_id, self.functioncolor))
 		self.r_f.write("nAttrs$color <- c(%s)\n"%(','.join(color_list)))
 		gene_id = self.gene_no2gene_id[centralnode]
-		self.r_f.write('nAttrs$fillcolor <- c(%s="yellow")\n'%gene_id)
-		self.r_f.write('nAttrs$shape <- c(%s="box")\n'%gene_id)
+		self.r_f.write('nAttrs$fillcolor <- c("%s"="yellow")\n'%gene_id)
+		self.r_f.write('nAttrs$shape <- c("%s"="box")\n'%gene_id)
 		self.r_f.write('plot(gR2, attrs=defAttrs, nodeAttrs=nAttrs, edgeAttrs=eAttrs)\n')
 		
 	def context_subgraph(self, gene_no, go_no):
