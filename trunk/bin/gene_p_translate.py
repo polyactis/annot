@@ -197,6 +197,8 @@ class gene_p_translate:
 		"""
 		03-03-05
 			loop over gene_no2p_gene_id_src and p_gene_id_src_map
+		03-13-05
+			add a column, #clusters in the output file
 		"""
 		#three dictionaries
 		gene_no2gene_id = get_gene_no2gene_id(curs)
@@ -210,7 +212,7 @@ class gene_p_translate:
 		#first output the known genes
 		for (gene_no, p_gene_id_src_list) in known_gene_no2p_gene_id_src.iteritems():
 			self.output_one_gene(curs, writer, gene_no, gene_no2gene_id, gene_no2direct_go)
-			row = ['go_no', 'go_id', 'go_name', 'is_correct', 'is_correct_L1', 'is_correct_lca', 'p_value_list', 'mcl_id_list', \
+			row = ['go_no', 'go_id', 'go_name', 'is_correct', 'is_correct_L1', 'is_correct_lca', 'p_value_list', '#clusters', 'mcl_id_list', \
 				'e_acc', 'e_acc_pair', 'cluster_context']
 			writer.writerow(row)
 			for p_gene_id_src in p_gene_id_src_list:
@@ -220,7 +222,7 @@ class gene_p_translate:
 		#second output the unknown genes
 		for (gene_no, p_gene_id_src_list) in unknown_gene_no2p_gene_id_src.iteritems():
 			self.output_one_gene(curs, writer, gene_no, gene_no2gene_id, gene_no2direct_go)
-			row = ['go_no', 'go_id', 'go_name', 'is_correct', 'is_correct_L1', 'is_correct_lca', 'p_value_list', 'mcl_id_list', \
+			row = ['go_no', 'go_id', 'go_name', 'is_correct', 'is_correct_L1', 'is_correct_lca', 'p_value_list', '#clusters', 'mcl_id_list', \
 				'e_acc', 'e_acc_pair', 'cluster_context']
 			writer.writerow(row)
 			for p_gene_id_src in p_gene_id_src_list:
@@ -266,7 +268,8 @@ class gene_p_translate:
 				context_list.append('%s/%d'%(gene_no2gene_id[gene_no], frequency))
 			row = [go_no, go_no2go_id[go_no], go_no2name[go_no], function_struc.is_correct,\
 				function_struc.is_correct_L1, function_struc.is_correct_lca, ';'.join(p_value_list),\
-				';'.join(mcl_id_list), go_no2accuracy[go_no].ratio, go_no2accuracy_pair[go_no].ratio, ';'.join(context_list)]
+				len(mcl_id_list), ';'.join(mcl_id_list), go_no2accuracy[go_no].ratio, \
+				go_no2accuracy_pair[go_no].ratio, ';'.join(context_list)]
 				
 			writer.writerow(row)
 		#a blank line
