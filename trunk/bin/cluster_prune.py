@@ -13,6 +13,7 @@ Option:
 	-e ..., --threshhold=...	the memory threshhold, default is 1e6.
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
+	-l, --log	record down some stuff in the logfile(cluster_prune.log)
 	-h, --help              show this help
 	
 Examples:
@@ -53,7 +54,7 @@ class mcl_id_struc:
 
 class cluster_prune:
 
-	def __init__(self, hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, needcommit=0):
+	def __init__(self, hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, log=0, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -62,6 +63,7 @@ class cluster_prune:
 		self.prune_type = int(prune_type)
 		self.threshhold = float(threshhold)
 		self.report = int(report)
+		self.log = int(log)
 		self.needcommit = int(needcommit)
 		self.prune_func_dict = {0:self.prune_on_edge_set,
 			1:self.prune_on_recurrence_array,
@@ -75,7 +77,8 @@ class cluster_prune:
 		#the mcl_id:recurrence_array pair dictionary
 		self.bad_mcl_id_list = []
 		#store the mcl_ids that are going to be deleted.
-		self.log_file = open("/tmp/cluster_prune.log", 'w')
+		if self.log:
+			self.log_file = open("/tmp/cluster_prune.log", 'w')
 		self.no_of_goods = 0
 		self.no_of_bads = 0
 		self.run_no = 0
@@ -134,7 +137,8 @@ class cluster_prune:
 				#identify a cluster first by its vertex_set
 					if subgraph in self.vertex_set_dict[vertex_set]:
 						old_mcl_id = self.vertex_set_dict[vertex_set][subgraph]
-						self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
+						if self.log:
+							self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
 						self.good_mcl_id_dict[old_mcl_id] += recurrence_array
 						#merge recurrence_array
 						self.bad_mcl_id_list.append(mcl_id)
@@ -156,7 +160,8 @@ class cluster_prune:
 						self.vertex_set_dict[vertex_set] = {}
 						#different from above codes
 						self.vertex_set_dict[vertex_set][subgraph] = mcl_id
-				self.log_file.write('%s: %s\n'%(mcl_id, subgraph))
+				if self.log:
+					self.log_file.write('%s: %s\n'%(mcl_id, subgraph))
 				i += 1
 			if self.report:
 				sys.stderr.write("%s\t%s"%("\x08"*20, i))
@@ -173,7 +178,8 @@ class cluster_prune:
 			#update the recurrence_array of the good mcl_ids
 			recurrence_array = self.good_mcl_id_dict[mcl_id].items()
 			recurrence_array.sort()
-			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
+			if self.log:
+				self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
 			self.curs.execute("update %s set recurrence_array = ARRAY%s where mcl_id =%d"%\
 				(self.target_table, repr(recurrence_array), mcl_id))
 		#delete the bad mcl_ids
@@ -230,13 +236,15 @@ class cluster_prune:
 					old_connectivity = self.vertex_set_dict[vertex_set][1]
 					if connectivity <= old_connectivity:
 						#old one is still good
-						self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
+						if self.log:
+							self.log_file.write("%d swallows %d\n"%(old_mcl_id, mcl_id))
 						self.good_mcl_id_dict[old_mcl_id][8] += recurrence_array
 						#merge recurrence_array
 						self.bad_mcl_id_list.append(mcl_id)
 					else:
 						#new one is good, old one is bad.
-						self.log_file.write("%d swallows %d\n"%(mcl_id, old_mcl_id))
+						if self.log:
+							self.log_file.write("%d swallows %d\n"%(mcl_id, old_mcl_id))
 						self.vertex_set_dict[vertex_set] = [mcl_id, connectivity]
 						#store the old recurrence_array first
 						old_recurrence_array = self.good_mcl_id_dict[old_mcl_id][8]
@@ -263,7 +271,8 @@ class cluster_prune:
 						#this time, the first one is not always the good one,
 						#it may be replaced by one with higher connectivity
 						self.vertex_set_dict[vertex_set] = [mcl_id, connectivity]
-				self.log_file.write('%s: %s\n'%(mcl_id, vertex_set))
+				if self.log:
+					self.log_file.write('%s: %s\n'%(mcl_id, vertex_set))
 				i += 1
 			if self.report:
 				sys.stderr.write("%s\t%s"%("\x08"*20, i))
@@ -285,7 +294,8 @@ class cluster_prune:
 			#convert kjSet to a list
 			recurrence_array = self.good_mcl_id_dict[mcl_id][8].items()
 			recurrence_array.sort()
-			self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
+			if self.log:
+				self.log_file.write("%d: %s\n"%(mcl_id, repr(recurrence_array)))
 			self.curs.execute("insert into %s(mcl_id, splat_id, vertex_set, parameter, connectivity, p_value_min,\
 				go_no_vector, unknown_gene_ratio, recurrence_array) values(%d, %d, '%s', '%s', %f,\
 				%f, '%s', %f, ARRAY%s)"%(self.target_table, entry[0], entry[1], entry[2], entry[3],\
@@ -390,8 +400,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:s:t:p:e:c", \
-			["help", "report", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", "prune_type=", "threshhold=", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:s:t:p:e:lc", \
+			["help", "report", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", "prune_type=", "threshhold=", "log", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -404,6 +414,7 @@ if __name__ == '__main__':
 	prune_type = 0
 	threshhold = 1e6
 	commit = 0
+	log = 0
 	report = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -425,11 +436,13 @@ if __name__ == '__main__':
 			threshhold = float(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
+		elif opt in ("-l", "--log"):
+			log = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 
 	if schema and target_table:
-		instance = cluster_prune(hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, commit)
+		instance = cluster_prune(hostname, dbname, schema, source_table, target_table, prune_type, threshhold, report, log, commit)
 		instance.run()
 
 	else:
