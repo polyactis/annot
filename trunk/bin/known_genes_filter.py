@@ -63,7 +63,7 @@ class known_genes:
 
 class yeast_two_way_filter:
 	'''
-	Read yeast raw datafile, first remove the single quotes around the orfname.
+	Read yeast graph construction results(by graph.cc), first remove the single quotes around the orfname.
 	secondly, output to two files.
 		normal_outf is the same as the raw datafile but without the single quotes.
 		known_genes_outf contains only the edges of known genes.
@@ -95,7 +95,7 @@ class yeast_two_way_filter:
 class yeast_one_way_filter:
 	'''
 	The difference from yeast_two_way_filter:
-	Only exercise the known_genes filtration. And it works on gspan format files.
+	Only exercise the known_genes filtration. And it works on gspan format files, which are graph_reorganized from the results of graph.cc.
 	It needs global_vertex_list which is built by graph_reorganize.py.
 	'''
 	def __init__(self, known_genes_dict, global_vertex_list):
