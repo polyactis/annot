@@ -379,6 +379,9 @@ class TestLinearModel(unittest.TestCase):
 class TestPGeneLm(unittest.TestCase):
 	"""
 	02-28-05
+	
+	03-27-05
+		p_gene_lm changed
 	"""
 	def setUp(self):
 		hostname = 'zhoudb'
@@ -395,13 +398,15 @@ class TestPGeneLm(unittest.TestCase):
 		from p_gene_lm import p_gene_lm
 		self.instance = p_gene_lm(hostname, dbname, schema, table, lm_table, accuracy_cut_off,\
 			judger_type, min_data_points, commit, report, debug)
-	
+		self.instance.init()
+	"""
 	def test_p_value_outof_accuracy_cut_off(self):
 		self.instance.debug = 0
 		tuple_list = [[0.001, 1], [0.001, -1], [0.001, 1], [0.001,1], [0.01, 1], [0.01, 0], [0.01, 1], [0.01, -1]]
 		accuracy_cut_off = 0.84
 		p_value_cut_off = self.instance.p_value_outof_accuracy_cut_off(tuple_list, accuracy_cut_off)
 		self.assertEqual(p_value_cut_off, 0.001)
+	"""
 	
 	def test_data_fetch(self):
 		from codense.common import db_connect
@@ -411,6 +416,7 @@ class TestPGeneLm(unittest.TestCase):
 		self.instance.data_fetch(curs, self.instance.table)
 		#print self.instance.go_no2prediction_space
 	
+	"""
 	def test_data_prepare(self):
 		from p_gene_analysis import prediction_space_attr
 		prediction_space2attr = {}
@@ -424,6 +430,33 @@ class TestPGeneLm(unittest.TestCase):
 		y_list, x_2d_list = self.instance.data_prepare(prediction_space2attr)
 		print y_list
 		print x_2d_list
+	"""
+	
+	def test_lm_fit(self):
+		"""
+		03-27-05
+			the testing data is a piece from a real p_gene table
+			format: [-lg(p_value), recurrence, connectivity, is_correct]
+		"""
+		go_no2prediction_space = {-1:[]}
+		go_no2prediction_space[-1].append([0.3904164, 9.466667, 0.034783, 0])
+		go_no2prediction_space[-1].append([8.044069435, 7.820000, 0.017834, 1])
+		go_no2prediction_space[-1].append([0.005514175, 8.095238, 0.019373, 0])
+		go_no2prediction_space[-1].append([3.734169750, 8.843137, 0.023794, 0])
+		go_no2prediction_space[-1].append([7.195437351, 7.843750, 0.013958, 1])
+		go_no2prediction_space[-1].append([1.497909955, 7.222222, 0.009553, 0])
+		go_no2prediction_space[-1].append([4.216512196, 7.693878, 0.021872, 0])
+		go_no2lm_results = self.instance.lm_fit(None, go_no2prediction_space)
+		print "\nlinear model fitting results: %s"%repr(go_no2lm_results)
+		
+	def test_return_score_cut_off(self):
+		"""
+		03-27-05
+			The lm model is got from the real p_gene_table, same as above.(via R)
+		"""
+		score_list = [[6,1],[3,0],[3,0],[4,1],[3,0],[4,0],[4,0],[5,1],[6,1],[5,1],[5,0],[6,1]]
+		score_cut_off = self.instance.return_score_cut_off(score_list, 0.7)
+		print "\nthe score cutoff is %s"%repr(score_cut_off)
 
 class TestPGeneAnalysis(unittest.TestCase):
 	"""
