@@ -66,7 +66,7 @@ class mcl_cluster_stat:
 			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
 		
-		self.output()
+		self.output2()
 
 	def _stat(self, row):
 		self.no_of_records += 1
@@ -108,8 +108,27 @@ class mcl_cluster_stat:
 			rows[6].append('%s(%2.3f%%)'%(unit.no_of_good_clusters, unit.no_of_good_clusters*100/float(no_of_clusters)))
 		for i in range(7):
 			self.writer.writerow(rows[i])
-		
 
+	def output2(self):
+		"""
+		change the table direction of output() by 90 degrees.
+		"""
+		recurrence_list = self.mcl_struc_dict.keys()
+		recurrence_list.sort()
+		row = ['recurrence', 'number of clusters', 'number of genes', 'avg cluster_size', 'avg p_value', 'avg connectivity', 'good clusters']
+		self.writer.writerow(row)
+		for recurrence in recurrence_list:
+			row = []
+			unit = self.mcl_struc_dict[recurrence]
+			row.append(recurrence)
+			no_of_clusters = len(unit.cluster_size_list)
+			row.append(no_of_clusters)
+			row.append(len(unit.gene_set))
+			row.append('%3.2f'%(sum(unit.cluster_size_list)/float(no_of_clusters)))
+			row.append('%1.6f'%(sum(unit.p_value_list)/float(no_of_clusters)))
+			row.append('%1.3f'%(sum(unit.connectivity_list)/float(no_of_clusters)))
+			row.append('%s(%2.3f%%)'%(unit.no_of_good_clusters, unit.no_of_good_clusters*100/float(no_of_clusters)))		
+			self.writer.writerow(row)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
