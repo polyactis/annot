@@ -159,19 +159,25 @@ class go_node_distance:
 					list_queue.append(neighbor)
 		
 		sys.stderr.write("done")
-			
+
 	def node_depth(self):
 		'''
 		compute the depth of each node of GO tree from its index and put it into go.term.
 		'''
-		for (go_id, index_tuple) in self.go_id2index.iteritems():
+		for (go_id, index_tuple_set) in self.go_id2index.iteritems():
 			depth = 100
-			for index in index_tuple:
+			index_list = []
+			for index in index_tuple_set:
+				index_acc_form = []
+				for term_id in index:
+					index_acc_form.append(self.go_id2acc[term_id])
+				index_list.append('(%s)'%(','.join(index_acc_form)) )
 				if len(index) < depth:
 					depth = len(index)
-			
-			self.curs.execute("update go.term set depth=%d where id=%d"%\
-				(depth, go_id) )
+			#Strings in a list will be wrapped by "'" after 'repr', which is not good for database submission
+			#','.join(list) doesn't wrap "'" around the strings, which is good.
+			self.curs.execute("update go.term set depth=%d, index='%s' where id=%d"%\
+				(depth, ','.join(index_list), go_id) )
 
 		if self.needcommit:
 			self.curs.execute("end")
