@@ -218,6 +218,8 @@ class clustering_test:
 				else:
 					self.draw_graph()
 					r.source(self.r_fname)
+					stop = raw_input("Exit? Y/n:")
+					
 			else:
 				sys.stderr.write("Please give the R_FILE.\n")
 
