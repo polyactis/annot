@@ -6,12 +6,14 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	mcl_result(default) or fim_result
+	-s ..., --source_table=...	which source table, mcl_result(default) or fim_result
+	-t ..., --target_table=...	which target table, cluster_stat(default)
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
 	-r, --report	report the progress(a number)
-	-h, --help              show this help
+	-l, --log	record down some stuff in the logfile(cluster_stat.log)
+	-h, --help	show this help
 	
 Examples:
 	cluster_stat.py -k shu -c
@@ -19,8 +21,9 @@ Examples:
 		:jasmine's strategy
 	cluster_stat.py -k sc_yh60_splat_5 -b -c
 		:jasmine's strategy + bonferroni correction
-	cluster_stat.py -k sc_yh_60_fp -t fim_result -c -w -b
+	cluster_stat.py -k sc_yh_60_fp -s fim_result -c -w -b
 		:wu's strategy + bonferroni correction
+	cluster_stat.py -k sc_yh60_splat_5 -s mcl_result2 -t cluster_stat2 -c -b -r
 
 Description:
 	Program for computing cluster p-value vectors(leave-one-out).
@@ -31,7 +34,7 @@ Description:
 	prediciton:  Jasmine's only works on clusters with only one unknown gene.
 		Wu's works on all clusters with any number of unknown genes and needs
 		a cut_off for unknown functional class.
-	It's never true for the above difference(08/23/04). Modified Jasmine's strategy is
+	The above difference is never true(08/23/04). Modified Jasmine's strategy is
 	quite similar to Wu's strategy. If you call gene_stat.py after this version of
 	cluster_stat.py, add the -w parameter to gene_stat.py
 """
@@ -40,27 +43,34 @@ import sys,os,psycopg,pickle,getopt
 from rpy import r
 
 class cluster_stat:
-	def __init__(self, hostname, dbname, schema, table, bonferroni=0, report=0, wu=0, needcommit=0):
+	def __init__(self, hostname, dbname, schema, source_table, target_table, bonferroni=0, report=0, log=0, wu=0, needcommit=0):
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		self.source_table = source_table
+		self.target_table = target_table
 		try:
-			self.curs.execute("drop index connectivity_idx")
+			self.curs.execute("drop index %s_connectivity_idx"%(self.target_table))
 		except psycopg.ProgrammingError, error:
 			self.conn.rollback()
 			self.curs.execute("set search_path to %s"%schema)
-		self.curs.execute("truncate cluster_stat")
-		self.curs.execute("alter sequence cluster_stat_cluster_stat_id_seq restart with 1")
-		self.table = table
+		try:
+			self.curs.execute("truncate %s"%self.target_table)
+		except:
+			sys.stderr.write("Warning: truncate failed.\n")
+			self.conn.rollback()
+			self.curs.execute("set search_path to %s"%schema)
 		self.bonferroni = int(bonferroni)
 		self.report = int(report)
+		self.log = int(log)
 		self.wu = int(wu)
 		self.needcommit = int(needcommit)
 		self.global_go_id_to_no_dict = {}
 		self.global_go_no_to_size_dict = {}
 		self.global_gene_to_go_dict = {}
 		self.no_of_records = 0
-		self.logfile = open('/tmp/cluster_stat.log','w')
+		if self.log:
+			self.logfile = open('/tmp/cluster_stat.log','w')
 		self.cluster_memory = {}
 
 	def dstruc_loadin(self):
@@ -81,8 +91,18 @@ class cluster_stat:
 		self.no_of_genes = len(self.global_gene_to_go_dict)
 		
 	def run(self):
+		if self.target_table != 'cluster_stat':
+			try:
+				self.curs.execute("create table %s(\
+					cluster_stat_id	serial primary key,\
+					mcl_id	integer,\
+					leave_one_out	integer,\
+					p_value_vector	float[],\
+					connectivity	float)"%self.target_table)
+			except:
+				sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s"%self.table)
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s"%self.source_table)
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -97,7 +117,7 @@ class cluster_stat:
 			self.curs.execute("fetch 5000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
-			self.curs.execute("create index connectivity_idx on cluster_stat(connectivity)")
+			self.curs.execute("create index %s_connectivity_idx on %s(connectivity)"%(self.target_table, self.target_table))
 			self.curs.execute("end")
 			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
 		else:
@@ -110,8 +130,8 @@ class cluster_stat:
 			if self.needcommit:
 				for gene_no in entry:
 					p_value_vector = entry[gene_no]
-					self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
-						values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
+					self.curs.execute("insert into %s(mcl_id, leave_one_out, p_value_vector, connectivity)\
+						values(%d, %d, ARRAY%s, %8.6f)"%(self.target_table, mcl_id, gene_no, repr(p_value_vector), connectivity))
 			self.no_of_records += len(entry)
 			return
 		else:
@@ -144,8 +164,9 @@ class cluster_stat:
 					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)*len(self._local_go_no_dict)
 				else:
 					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
-				self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
-					(mcl_id,gene_no,go_no,x,m,n,k,p_value))
+				if self.log:
+					self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
+						(mcl_id,gene_no,go_no,x,m,n,k,p_value))
 				p_value_vector[go_no] = p_value
 			#for the unknown class, use the ratio instead of p_value, in accordance with mcl_result_stat.py
 			if self.wu:
@@ -160,8 +181,8 @@ class cluster_stat:
 					p_value_vector[0] = 1
 			_cluster_memory[gene_no] = p_value_vector				
 			if self.needcommit:
-				self.curs.execute("insert into cluster_stat(mcl_id, leave_one_out, p_value_vector, connectivity)\
-				values(%d, %d, ARRAY%s, %8.6f)"%(mcl_id, gene_no, repr(p_value_vector), connectivity))
+				self.curs.execute("insert into %s(mcl_id, leave_one_out, p_value_vector, connectivity)\
+				values(%d, %d, ARRAY%s, %8.6f)"%(self.target_table, mcl_id, gene_no, repr(p_value_vector), connectivity))
 			self.no_of_records += 1
 		self.cluster_memory[vertex_set] = _cluster_memory
 
@@ -212,7 +233,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrz:d:k:t:bcw", ["help", "report", "hostname=", "dbname=", "schema=", "table=", "bonferroni", "commit", "wu"])
+		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:bcw", \
+			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -220,10 +242,12 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
-	table = 'mcl_result'
+	source_table = 'mcl_result'
+	target_table = 'cluster_stat'
 	bonferroni = 0
 	commit = 0
 	report = 0
+	log = 0
 	wu = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -235,19 +259,23 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-t", "--table"):
-			table = arg
+		elif opt in ("-s", "--source_table"):
+			source_table = arg
+		elif opt in ("-t", "--target_table"):
+			target_table = arg
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
+		elif opt in ("-l", "--log"):
+			log = 1
 		elif opt in ("-w", "--wu"):
 			wu = 1
 
 	if schema:
-		instance = cluster_stat(hostname, dbname, schema, table, bonferroni, report, wu, commit)
+		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, bonferroni, report, log, wu, commit)
 		instance.dstruc_loadin()
 		instance.run()
 
