@@ -6,7 +6,8 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	cluster_stat(default), ignore it, interface relics
+	-t ..., --table=...	cluster_stat(default)
+	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
 	-p ..., --p_value_cut_off=...	p_value_cut_off
 	-u ..., --unknown_cut_off=...	unknown_cut_off, 0.25(default), for wu's
 	-l ..., --limit=...,	OBSOLETE, accepted for backwards compatibility
@@ -22,6 +23,7 @@ Examples:
 	gene_stat.py -k shu -p 0.001 -w
 	gene_stat.py -k shu -p 0.001 -n 0.7 -w -r
 	gene_stat.py -k shu -p 0.001 -n 0.7 -u 0.80 -w
+	gene_stat.py -k sc_yh60_splat_5 -t cluster_stat2 -m mcl_result2 -p 0.001 -w
 
 Description:
 	This program is mainly for validation purpose. Run after cluster_stat.py.
@@ -31,16 +33,15 @@ Description:
 """
 
 import sys, os, psycopg, getopt
-from rpy import *
 from graphlib import Graph
 from sets import Set
 from gene_stat_on_mcl_result import gene_stat_on_mcl_result, gene_prediction
 
 
 class gene_stat(gene_stat_on_mcl_result):
-	def __init__(self, hostname, dbname, schema, table, p_value_cut_off, unknown_cut_off, limit, \
-		connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu=0, report=0, needcommit=0):
-		gene_stat_on_mcl_result.__init__(self, hostname, dbname, schema, table, p_value_cut_off, \
+	def __init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, unknown_cut_off, limit, \
+			connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu=0, report=0, needcommit=0):
+		gene_stat_on_mcl_result.__init__(self, hostname, dbname, schema, table, mcl_table, p_value_cut_off, \
 			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, needcommit)
 
 	def dstruc_loadin(self):
@@ -88,9 +89,9 @@ class gene_stat(gene_stat_on_mcl_result):
 			sys.exit(2)
 
 		self.curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.leave_one_out, c.p_value_vector \
-				from cluster_stat c, mcl_result m where c.mcl_id=m.mcl_id and c.connectivity>=%f and\
+				from %s c, %s m where c.mcl_id=m.mcl_id and c.connectivity>=%f and\
 				array_upper(m.recurrence_array, 1)>=%d and array_upper(m.vertex_set, 1)<=%d"\
-				%(self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
+				%(self.table, self.mcl_table, self.connectivity_cut_off, self.recurrence_cut_off, self.cluster_size_cut_off))
 		self.curs.execute("fetch 5000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -148,10 +149,10 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "p_value_cut_off=",\
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
 		"unknown_cut_off=", "limit=", "connectivity_cut_off=", "recurrence_cut_off=", "cluster_size_cut_off=", "wu", "report", "commit"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:p:u:l:n:y:x:wrc", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:u:l:n:y:x:wrc", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -160,6 +161,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	table = 'cluster_stat'
+	mcl_table = 'mcl_result'
 	p_value_cut_off = None
 	limit = 0
 	connectivity_cut_off = 0.8
@@ -181,6 +183,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-t", "--table"):
 			table = arg
+		elif opt in ("-m", "--mcl_table"):
+			mcl_table = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-u", "--unknown_cut_off"):
@@ -201,7 +205,7 @@ if __name__ == '__main__':
 			commit = 1
 	
 	if schema and p_value_cut_off:
-		instance = gene_stat(hostname, dbname, schema, table, p_value_cut_off,\
+		instance = gene_stat(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
 			unknown_cut_off, limit, connectivity_cut_off, recurrence_cut_off, cluster_size_cut_off, wu, report, commit)
 		instance.dstruc_loadin()
 		instance.run()
