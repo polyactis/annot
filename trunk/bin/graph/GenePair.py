@@ -5,8 +5,9 @@ The backend for the GenePairGui_*.py programs.
 """
 import sys, os, getopt, csv
 import graph_modeling
+from rpy import r
 from array import array    # need arrays to pass to ROOT
-from ROOT import gROOT, TCanvas, TPad, TH1F, TImage, TGraph, TMultiGraph
+#from ROOT import gROOT, TCanvas, TPad, TH1F, TImage, TGraph, TMultiGraph
 
 class GenePair:
 	'''
@@ -21,6 +22,8 @@ class GenePair:
 		self.pairwise_calculate = {'cor': graph_modeling.ind_min_cor}
 		#data structure loadin
 		self.dstruc_loadin()
+		#the file to contain the image
+		self.plot_file = '/tmp/genepair.png'
 
 	def dstruc_loadin(self):
 		'''
@@ -63,6 +66,63 @@ class GenePair:
 				new_vector2.append(vector2[i])
 		return (new_vector1, new_vector2)
 
+	def xy_list_return(self, vector):
+		'''
+		return x_list and y_list for plotting, discard those NA values(1e8).
+		'''
+		x_list = []
+		y_list = []
+		for i in range(len(vector)):
+			if vector[i] != 1e8:
+				x_list.append(i+1)
+				y_list.append(vector[i])
+		return (x_list, y_list)
+	
+	def get_min_max(self, vector_list):
+		'''
+		get the minimum and maximum out of vector_list
+		'''
+		whole_list = []
+		for vector in vector_list:
+			whole_list += vector
+		whole_list.sort()
+		min = whole_list[0]
+		for i in range(1,len(whole_list)+1):
+			if whole_list[-i]>1e8:
+				sys.stderr.write("Error, maximum gene expr value > 1e8, NAN\n")
+			elif whole_list[-i] == 1e8:
+				#it's NAN
+				continue
+			else:
+				#got it
+				max = whole_list[-i]
+				break
+
+		return (min, max)
+	
+	def plot(self, vector_list, gene_id_list):
+		self.no_of_curves = 0
+		x_range = (1, len(vector_list[0]))
+		y_range = self.get_min_max(vector_list)
+		r.png("%s"%self.plot_file)
+		for vector in vector_list:
+			(x_list, y_list) = self.xy_list_return(vector)
+			self._plot(x_list, y_list, x_range, y_range)
+		
+		r.legend(x_range[1], y_range[1], gene_id_list, col=range(1, self.no_of_curves+1), lty=1, pch='*', xjust=1)
+		r.dev_off()
+	
+	def _plot(self, x_list, y_list, x_range, y_range):
+		self.no_of_curves += 1
+		if self.no_of_curves==1:
+			r.plot(x_list, y_list, type='o',pch='*',xlab='dataset no.',xlim=x_range,ylim=y_range, \
+			ylab='expression value', col=self.no_of_curves)
+		else:
+			r.lines(x_list, y_list, type='o',pch='*',col=self.no_of_curves)
+
+	
+	"""
+	#function deprecated
 	def root_draw(self, vector1, vector2, gene_id1, gene_id2):
 		# create arrays to pass to ROOT later
 		array0 = array('d')
@@ -83,22 +143,29 @@ class GenePair:
 		mg.Add(gr2)
 		mg.Draw("AL*")
 		stop = raw_input("Exit: Y/n")
-		
-	def gene_pair_analyze(self, gene_id1, gene_id2):
-		if gene_id1 in self.gene_id2expr_array and gene_id2 in self.gene_id2expr_array:
-			vector1 = self.gene_id2expr_array[gene_id1]
-			vector2 = self.gene_id2expr_array[gene_id2]
+	"""
+	
+	def gene_pair_analyze(self, gene_id_list):
+		vector_list = []
+		#gene_id_list may contain some inexistent genes
+		real_gene_id_list = []
+		for gene_id in gene_id_list:
+			if gene_id in self.gene_id2expr_array:
+				real_gene_id_list.append(gene_id)
+				vector_list.append(self.gene_id2expr_array[gene_id])	
+			else:
+				sys.stderr.write("%s doesn't appear in the dataset\n"%(gene_id))
+		#(new_vector1, new_vector2) = self.NA_cleanup(vector1, vector2)
+		for key in self.pairwise_calculate:
+			for i in range(len(vector_list)):
+				for j in range(i+1, len(vector_list)):
+					edge_data = self.pairwise_calculate[key](vector_list[i], vector_list[j])
+					sys.stdout.write("%s %s %s: %s\n"%(real_gene_id_list[i], real_gene_id_list[j], key, edge_data.value))
+		if len(real_gene_id_list)>0:
+			self.plot(vector_list, real_gene_id_list)
+			return self.plot_file
 		else:
-			sys.stderr.write("%s and %s don't appear in the dataset\n"%(gene_id1, gene_id2))
-			return
-		(new_vector1, new_vector2) = self.NA_cleanup(vector1, vector2)
-		if len(new_vector1) <3:
-			sys.stderr.write("Only %s valid columns.\n"%len(new_vector1))
-		else:
-			for key in self.pairwise_calculate:
-				edge_data = self.pairwise_calculate[key](new_vector1, new_vector2)
-				sys.stdout.write("%s: %s\n"%(key, edge_data.value))
-			self.root_draw(new_vector1, new_vector2, gene_id1, gene_id2)
+			return None
 
 	
 if __name__ == '__main__':
