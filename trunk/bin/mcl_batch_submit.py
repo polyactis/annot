@@ -45,7 +45,7 @@ class mcl_batch_submit:
 				out_block = '#!/bin/sh\n'		#this is '=' not '+='
 				out_block += 'cd %s\n'%self.dir
 				job_outfname = 'out%d'%self.no_of_job
-				out_block += '~/script/annot/bin/mcl_batch_run.py %s %s %s\n'%\
+				out_block += '~/script/annot/bin/mcl_batch_run.py %s %s "%s"\n'%\
 					(file, job_outfname, self.parameter)
 				job_f.write(out_block)
 				job_f.close()
