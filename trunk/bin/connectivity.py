@@ -38,6 +38,11 @@ class compute_connectivity:
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
+		try:
+			self.curs.execute("drop index connectivity_mcl_result_idx")
+		except psycopg.ProgrammingError, error:
+			self.conn.rollback()
+			self.curs.execute("set search_path to %s"%schema)
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.vertex_dict = {}
@@ -67,6 +72,7 @@ class compute_connectivity:
 			self.curs.execute("fetch 1000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
+			self.curs.execute("create index connectivity_mcl_result_idx on mcl_result(connectivity)")
 			self.curs.execute("end")
 			sys.stderr.write('\n\tTotal %d splat records updated\n'%self.no_of_splat_records)
 			sys.stderr.write('\tTotal %d mcl records updated\n'%self.no_of_mcl_records)
