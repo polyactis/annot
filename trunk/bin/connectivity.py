@@ -1,5 +1,29 @@
 #!/usr/bin/env python
-import sys,os,cStringIO,psycopg
+"""
+Usage: connectivity.py -k SCHEMA -t TABLE [OPTION]
+
+Option:
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-t ..., --table=...	'splat' or 'mcl', compute which table's connectivity
+	-c, --commit	commit the database transaction
+	-r, --report	report the progress(a number)
+	-h, --help              show this help
+	
+Examples:
+	connectivity.py -k shu -c -t mcl
+	connectivity.py -k ming1 -r -t splat
+	
+Description:
+	This program computes the connectivity of splat and mcl results.
+	1000 records are done in one time. Reduce the memory usage.
+	This is done through postgresql's CURSOR mechanism.
+	Computing connectivity of mcl results is based on splat_id.
+	Because edge_dict is required in advance.
+	
+"""
+
+import sys,os,cStringIO,psycopg,getopt
 
 class compute_connectivity:
 	'''
@@ -9,34 +33,21 @@ class compute_connectivity:
 	Computing connectivity of mcl results is based on splat_id.
 	Because edge_dict is required in advance.
 	'''
-	def __init__(self, table, dbname, needcommit=0):
+	def __init__(self, table, dbname, schema, report, needcommit=0):
 		self.table = table
 		self.conn = psycopg.connect('dbname=%s'%dbname)
 		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to graph")
+		self.curs.execute("set search_path to %s"%schema)
+		self.report = int(report)
 		self.needcommit = int(needcommit)
 		self.vertex_dict = {}
 		self.edge_dict = {}
 		self.no_of_splat_records = 0
 		self.no_of_mcl_records = 0
-		self.org_short2long = {'at':'Arabidopsis thaliana',
-					'ce':'Caenorhabditis elegans',
-					'dm':'Drosophila melanogaster',
-					'hs':'Homo sapiens',
-					'mm':'Mus musculus',
-					'sc':'Saccharomyces cerevisiae',
-					'Arabidopsis thaliana':'Arabidopsis thaliana',
-					'Caenorhabditis elegans':'Caenorhabditis elegans',
-					'Drosophila melanogaster':'Drosophila melanogaster',
-					'Homo sapiens':'Homo sapiens',
-					'Mus musculus':'Mus musculus',
-					'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
-					'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
 					
-	def run(self, organism):
+	def run(self):
 		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result \
-			where organism='%s'"%(self.org_short2long[organism]))
+		self.curs.execute("DECLARE crs CURSOR FOR select splat_id,edge_set from splat_result")
 		self.curs.execute("fetch 1000 from crs")
 		rows = self.curs.fetchall()
 		while rows:
@@ -48,10 +59,11 @@ class compute_connectivity:
 				elif self.table == 'mcl':
 					self.mcl_atom_update(splat_id, edge_set)
 			
-			if self.table == 'splat':
-				sys.stderr.write("%s%s"%("\x08"*80,self.no_of_splat_records))
-			elif self.table == 'mcl':
-				sys.stderr.write("%s%s"%("\x08"*80,self.no_of_mcl_records))
+			if self.report:
+				if self.table == 'splat':
+					sys.stderr.write("%s%s"%("\x08"*20,self.no_of_splat_records))
+				elif self.table == 'mcl':
+					sys.stderr.write("%s%s"%("\x08"*20,self.no_of_mcl_records))
 			self.curs.execute("fetch 1000 from crs")
 			rows = self.curs.fetchall()
 		if self.needcommit:
@@ -120,18 +132,40 @@ class compute_connectivity:
 		
 
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-	argv[1] could be splat or mcl, specifying which connectivity to compute.\n\
-	argv[2] is the database name\n\
-	argv[2] is two-letter abbreviation for an organism.\n\
-	argv[4] is 1 or 0 indicating whether to commit or not. Default is 0.\n')
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+		
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hrd:k:ct:", ["help", "report", "dbname=", "schema=", "commit", "table="])
+	except:
+		print __doc__
+		sys.exit(2)
 	
-	if len(sys.argv) == 4:
-		instance = compute_connectivity(sys.argv[1], sys.argv[2])
-		instance.run(sys.argv[3])
-	elif len(sys.argv) == 5:
-		instance = compute_connectivity(sys.argv[1], sys.argv[2],sys.argv[4])
-		instance.run(sys.argv[3])
+	dbname = 'graphdb'
+	schema = ''
+	commit = 0
+	report = 0
+	table = ''
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-c", "--commit"):
+			commit = 1
+		elif opt in ("-r", "--report"):
+			report = 1
+		elif opt in ("-t", "--table"):
+			table = arg
+
+	if schema and table:
+		instance = compute_connectivity(table, dbname, schema, report, commit)
+		instance.run()
+
 	else:
-		helper()
+		print __doc__
+		sys.exit(2)
