@@ -30,6 +30,7 @@ class graph_construct:
 		fd = open(self.raw_dataset_source, 'r')
 		fd_new = open(self.dataset_source, 'w')
 		line = fd.readline()
+		self.no_of_cols = len(line.split())-1
 		while line:
 			if line[0] == '#' or line =='\n':
 				pass
@@ -48,7 +49,7 @@ class graph_construct:
 
 		
 	def mask_array_construct(self):
-		data =with_mode(0, r.read_table)(self.dataset_source)
+		data =with_mode(0, r.read_table)(self.dataset_source, row_names=1)
 		'''
 		!Important!
 		if the dataset_source has too few data, conversion from R to python will be a problem.

@@ -3,10 +3,10 @@
 import os,sys
 from graph import *
 
-def batch(dir):
+def batch(dir, of_name):
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	of_pathname = os.path.join(os.getcwd(), 'output.gph')
+	of_pathname = os.path.join('/home/yh', of_name)
 	of = open(of_pathname, 'w')
 	
 	for f in files:
@@ -19,4 +19,4 @@ def batch(dir):
 		instance.output(out=of)
 		
 if __name__ == '__main__':
-	batch(sys.argv[1])
+	batch(sys.argv[1],sys.argv[2])
