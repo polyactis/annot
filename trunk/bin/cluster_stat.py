@@ -99,8 +99,9 @@ class cluster_stat:
 	
 		if self.target_table != 'cluster_stat' and self.output == None:
 			try:
+				#03-18-05 cluster_stat_id is changed to be an integer, because the the name of xxx_cluster_stat_id_seq has limited length and got collisions.
 				self.curs.execute("create table %s(\
-					cluster_stat_id	serial primary key,\
+					cluster_stat_id	integer,\
 					mcl_id	integer,\
 					leave_one_out	integer,\
 					p_value_vector	float[],\
@@ -176,12 +177,13 @@ class cluster_stat:
 				else:
 					#no unknown genes
 					p_value_vector[0] = 1
+			#03-18-05increment before inserted into table, cluster_stat_id starting from 1
+			self.no_of_records += 1
 			if self.output:
 				self.outf.write('%d\t%d\t%s\t%f\n'%(mcl_id, gene_no, repr(p_value_vector), connectivity))
 			elif self.needcommit:
-				self.curs.execute("insert into %s(mcl_id, leave_one_out, p_value_vector, connectivity)\
-				values(%d, %d, ARRAY%s, %8.6f)"%(self.target_table, mcl_id, gene_no, repr(p_value_vector), connectivity))
-			self.no_of_records += 1
+				self.curs.execute("insert into %s(cluster_stat_id, mcl_id, leave_one_out, p_value_vector, connectivity)\
+				values(%d, %d, %d, ARRAY%s, %8.6f)"%(self.target_table, self.no_of_records, mcl_id, gene_no, repr(p_value_vector), connectivity))
 
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
