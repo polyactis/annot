@@ -20,7 +20,7 @@ c_flags		= -O2
 c_compiler	= gcc
 
 
-all:	$(gsl_cxx_targets) $(gsl_c_targets) $(BoostPythonTarget)
+all:	$(gsl_cxx_targets) $(gsl_c_targets) $(BoostPythonTarget) $(cxx_swig_targets)
 
 swig:	$(cxx_swig_targets)
 
