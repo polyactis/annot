@@ -11,6 +11,7 @@ Option:
 	-i ..., --go_index=...	the file mapping go_id to go_index, OR the go_graph file
 	-s ..., --size=...	the size of the informative node, 60(default)
 	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
+	-n, --informative	employ the informative node approach
 	-b, --bfs	construct by BFS instead of index
 	-h, --help      show this help
 	
@@ -19,6 +20,7 @@ Examples:
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b
 	go_informative_node.py -i term2term.txt -a go2ug.txt -b -t 1
 	go_informative_node.py -k hs_yh60_42 -b
+	go_informative_node.py -k sc_38_all_no_info -n -b
 
 Description:
 	First usage:
@@ -143,7 +145,7 @@ class go_informative_node:
 
 
 class go_informative_node_bfs:
-	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type):
+	def __init__(self, hostname, dbname, schema, go_association, go_graph, size, type, informative):
 		self.schema = schema
 		if self.schema:
 		#input from database
@@ -156,6 +158,7 @@ class go_informative_node_bfs:
 			self.gog_f = csv.reader(open(go_graph, 'r'), delimiter='\t')
 		self.size = int(size)
 		self.type = int(type)
+		self.informative = int(informative)
 		output_format_dict = {0:self.output_full,
 			1:self.output_stat,
 			2:self.output_between}
@@ -164,6 +167,7 @@ class go_informative_node_bfs:
 		else:
 			sys.stderr.write('Type %d invalid\n'%self.type)
 			sys.exit(2)
+		#biological_process is the root
 		self.root = 'GO:0008150'
 		self.go_graph = kjGraph()
 		self.go_id2gene_id_dict = {}	#value utilizes kjSet data structure
@@ -232,7 +236,6 @@ class go_informative_node_bfs:
 			self.dstruc_loadin()
 		for go_id in self.go_id_set.items():
 			#collect the associated genes from descendent terms
-			self.informative_node_dict[go_id] = 0
 			descendent_set = self.go_graph.reachable(go_id)
 			if go_id in self.go_id2gene_id_dict:
 				self.go_id_descendent2gene_id_dict[go_id] = self.go_id2gene_id_dict[go_id]
@@ -241,21 +244,30 @@ class go_informative_node_bfs:
 			for descendent in descendent_set.items():
 				if descendent in self.go_id2gene_id_dict:
 					self.go_id_descendent2gene_id_dict[go_id] += self.go_id2gene_id_dict[descendent]
-		#below is analogous to BFS,
-		#informative_node_dict's role is similar to vertex coloring in real BFS
-		self.informative_node_dict[self.root] = 1
-		list_queue = [self.root]
-		while list_queue:
-			go_id = list_queue.pop(0)
-			neighbor_list = self.go_graph.neighbors(go_id)
-			for neighbor in neighbor_list:
-				if len(self.go_id_descendent2gene_id_dict[neighbor]) >= self.size:
-					self.log_file.write('%s ousted by %s\n'%(go_id,neighbor))
-					self.informative_node_dict[go_id] = 0
-					if self.informative_node_dict[neighbor] == 0:
-					#trick is here. informative_node candidates and first touch
-						list_queue.append(neighbor)
-					self.informative_node_dict[neighbor] = 1
+			if self.informative:
+				self.informative_node_dict[go_id] = 0
+			else:
+				if go_id!=self.root and len(self.go_id_descendent2gene_id_dict[go_id]) > 0:
+					#not biological_process and have >0 genes associated, then they are informative nodes.
+					self.informative_node_dict[go_id] = 1
+				
+		if self.informative:
+			#below is analogous to BFS,
+			#informative_node_dict's role is similar to vertex coloring in real BFS
+			self.informative_node_dict[self.root] = 1
+			list_queue = [self.root]
+			while list_queue:
+				go_id = list_queue.pop(0)
+				neighbor_list = self.go_graph.neighbors(go_id)
+				for neighbor in neighbor_list:
+					if len(self.go_id_descendent2gene_id_dict[neighbor]) >= self.size:
+						self.log_file.write('%s ousted by %s\n'%(go_id,neighbor))
+						self.informative_node_dict[go_id] = 0
+						if self.informative_node_dict[neighbor] == 0:
+						#trick is here. informative_node candidates and first touch
+							list_queue.append(neighbor)
+						self.informative_node_dict[neighbor] = 1
+		
 		self.output()
 	
 	def output(self):
@@ -280,7 +292,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:b", ["help", "hostname=", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "bfs"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:t:nb", ["help", "hostname=", "dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "informative", "bfs"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -292,6 +304,7 @@ if __name__ == '__main__':
 	go_index = ''
 	size = 60
 	type = 0
+	informative = 0
 	bfs = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -311,13 +324,15 @@ if __name__ == '__main__':
 			size = int(arg)
 		elif opt in ("-t", "--type"):
 			type = int(arg)
+		elif opt in ("-n", "--informative"):
+			informative = 1
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 	if bfs==1 and schema:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, informative)
 		instance.run()
 	elif bfs==1 and go_association and go_index:
-		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type)
+		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, go_index, size, type, informative)
 		instance.run()		
 	elif go_association and go_index:
 		instance = go_informative_node(go_association, go_index, size, type)
