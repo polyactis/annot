@@ -66,7 +66,8 @@ class GO_graphxml:
 			'Mus musculus':'Mus musculus',
 			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
-		self.organism = self.org_short2long[orgn]		
+		self.organism = self.org_short2long[orgn]
+		self.log_file = open('/tmp/GO_graphxml.log', 'w')		
 		self.termid_dict = {}
 		self.acc2id_dict = {}
 		self.go_graph = Graph.Graph()
@@ -181,6 +182,10 @@ class GO_graphxml:
 			if self.termid_dict[go_node].is_obsolete == 1:
 				sys.stderr.write("%s is obsolete\n"%go_id)
 				continue
+			#output the genes associated with this go_id.
+			for gene_id in self.termid_dict[go_node].family:
+				self.log_file.write('%s\t%s\n'%(gene_id, go_id))
+
 			direction = raw_input("backward(b) or forward(f):\t")
 			if direction == 'b':
 				subgraph = self.go_graph.back_bfs_subgraph(go_node)
