@@ -1,6 +1,36 @@
 #!/usr/bin/env python
+"""
+Usage: graph_reorganize.py -k SCHEMA [OPTION] DATADIR NEWDIR
 
-import sys, pickle,os
+Option:
+	DATADIR is the directory of the graph construction results.
+	NEWDIR is the directory to store the filtered results.
+	-d ..., --dbname=...	the database name, graphdb(default)
+	-k ..., --schema=...	which schema in the database
+	-t ..., --type=...	0(default, only known), 1(known+unknown) or 2(all)
+			if 2 is selected, specify the organism
+	-g ..., --organism=...	two letter organism abbreviation
+	-h, --help              show this help
+	
+Examples:
+	graph_reorganize.py -k shu normal/ known/
+	graph_reorganize.py -k shu -t 2 -g sc normal/ known/	take all yeast genes
+
+Description:
+	This program depends on schema.gene and graph.gene_id_to_no.
+	It does the filtration for the graph construction results.
+	Three types of filtration:
+	0: only known genes in that schema are preserved.
+	1: only known genes and unknown genes in that schema are preserved.
+	2: all the genes in table gene_id_to_no are preserved.
+
+Note:
+	There're some known genes that are not in schema.
+	So 1 & 2 are different.
+"""
+
+
+import sys, pickle, os, psycopg, getopt
 
 class vertex_attributes:
 	"a class wrapping the attributes of a vertex"
@@ -110,9 +140,27 @@ class graph_reorganize:
 	Collect labels.
 	Transform graph.cc results into gspan input.
 	'''
-	def __init__(self):
-		self.global_vertex_list = []
-		self.global_graph_list = []
+	def __init__(self, dbname, schema, type, orgn):
+		self.conn = psycopg.connect('dbname=%s'%dbname)
+		self.curs = self.conn.cursor()
+		self.curs.execute("set search_path to %s"%schema)
+		self.type = int(type)
+		self.org_short2long = {'at':'Arabidopsis thaliana',
+			'ce':'Caenorhabditis elegans',
+			'dm':'Drosophila melanogaster',
+			'hs':'Homo sapiens',
+			'mm':'Mus musculus',
+			'sc':'Saccharomyces cerevisiae',
+			'Arabidopsis thaliana':'Arabidopsis thaliana',
+			'Caenorhabditis elegans':'Caenorhabditis elegans',
+			'Drosophila melanogaster':'Drosophila melanogaster',
+			'Homo sapiens':'Homo sapiens',
+			'Mus musculus':'Mus musculus',
+			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
+			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
+		if self.type == 2:
+			self.organism = self.org_short2long[orgn]
+			
 		self.global_vertex_dict = {}
 		self.global_graph_dict = {}
 		self.pickle_fname = os.path.join(os.path.expanduser('~'), 'pickle/yeast_global_struc')
@@ -144,19 +192,22 @@ class graph_reorganize:
 
 	def dstruc_loadin(self):
 		'''
-		This method loads in the data structures from a pre-stored file through pickle.
+		This method loads in the data structures from database.
 		'''
-		if not os.path.isfile(self.pickle_fname):
-			sys.stderr.write('Error, file: %s not existent\n'%self.pickle_fname)
-			return	1
-		global_struc = pickle.load(open(self.pickle_fname, 'r'))
-		self.global_graph_list = global_struc['graph_list']
-		self.global_vertex_dict = global_struc['vertex_dict']
-		self.global_vertex_list = global_struc['vertex_list']
-		for i in self.global_vertex_list:
-			self.vertex_block += 'v %d %s\n'%(self.global_vertex_list.index(i)+1, i)
+		if self.type == 0:
+			self.curs.execute("select gene_id, gene_no from gene where known=TRUE order by gene_no")
+		if self.type == 1:
+			self.curs.execute("select gene_id, gene_no from gene order by gene_no")
+		if self.type == 2:
+			self.curs.execute("select gene_id, gene_no from graph.gene_id_to_no \
+				where organism=%s order by gene_no"%self.organism)
+			
+		rows = self.curs.fetchall()
+		for row in rows:
+			self.global_vertex_dict[row[0]] = row[1]
+			self.vertex_block += 'v %d %s\n'%(row[1], row[0])
 		return 0
-
+		
 	def transform(self, inf, outf):
 		'''
 		This method transforms a graph.cc output file(inf) into a gspan input file(outf).
@@ -180,7 +231,7 @@ class graph_reorganize:
 								)
 			line = inf.readline()
 
-def transform_batch(dir, output_dir):
+def transform_batch(dbname, schema, type, orgn, dir, output_dir):
 	'''
 	See comments of graph_reorganize.transform().
 	'''
@@ -189,7 +240,7 @@ def transform_batch(dir, output_dir):
 	if not os.path.isdir(output_dir):
 		os.makedirs(output_dir)
 	
-	instance = graph_reorganize()
+	instance = graph_reorganize(dbname, schema, type, orgn)
 	data_not_loaded = instance.dstruc_loadin()
 	if data_not_loaded:
 		return
@@ -203,13 +254,13 @@ def transform_batch(dir, output_dir):
 		inf.close()
 		outf.close()
 
-def mapping_batch(dir):
+def mapping_batch(dbname, schema, type, orgn, dir):
 	'''
 	See comments of graph_reorganize.global_mapping_construct().
 	'''
 	files = os.listdir(dir)
 	sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
-	instance = graph_reorganize()	
+	instance = graph_reorganize(dbname, schema, type, orgn)	
 	for f in files:
 		pathname = os.path.join(dir, f)
 		sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
@@ -217,43 +268,49 @@ def mapping_batch(dir):
 		instance.global_mapping_construct(inf)
 		inf.close()
 
-	instance.global_vertex_list = instance.global_vertex_dict.keys()
-	instance.global_vertex_list.sort()
-	for i in range(len(instance.global_vertex_list)):
-		instance.global_vertex_dict[instance.global_vertex_list[i]] = i+1
+	global_vertex_list = instance.global_vertex_dict.keys()
+	global_vertex_list.sort()
+	for i in range(len(global_vertex_list)):
+		instance.global_vertex_dict[global_vertex_list[i]] = i+1
 	global_struc = {'vertex_dict': instance.global_vertex_dict,
-			'vertex_list': instance.global_vertex_list,
+			'vertex_list': global_vertex_list,
 			'graph_list': instance.global_graph_dict}
 	pickle.dump(global_struc, open(instance.pickle_fname, 'w') )
 	
 
 if __name__ == '__main__':
-	def helper():
-		sys.stderr.write('\
-		#argv[1] is "mapping" or "transform".\n\
-			For "mapping", ignore argv[3].\n\
-		#argv[2] specifies the directory which contains the graph.cc\n\
-			output files. Yeast normal(no single quotes) data is OK.\n\
-		#argv[3] specifies the directory to store the gspan input files.\n')
-	'''
-	# this block uses the old class.
-	instance = graph_reorganize_old()
-	inf = open(sys.argv[1], 'r')
-	instance.parse(inf)
-	'''
-	if len(sys.argv) == 3:
-		if sys.argv[1] == 'mapping':
-			mapping_batch(sys.argv[2])
-		else:
-			helper()
-			sys.exit(1)
-
-	elif len(sys.argv) ==4:
-		if sys.argv[1] == 'transform':
-			transform_batch(sys.argv[2], sys.argv[3])
-		else:
-			helper()
-			sys.exit(1)
+	if len(sys.argv) == 1:
+		print __doc__
+		sys.exit(2)
+		
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hd:k:t:g:", ["help", "dbname=", "schema=", "type=", "organism="])
+	except:
+		print __doc__
+		sys.exit(2)
+	
+	dbname = 'graphdb'
+	schema = ''
+	type = 0
+	organism = ''
+	for opt, arg in opts:
+		if opt in ("-h", "--help"):
+			print __doc__
+			sys.exit(2)
+		elif opt in ("-d", "--dbname"):
+			dbname = arg
+		elif opt in ("-k", "--schema"):
+			schema = arg
+		elif opt in ("-t", "--type"):
+			type = int(arg)
+		elif opt in ("-g", "-organism"):
+			organism = arg
+			
+	if schema and len(args) == 2:
+		if type == 2 and organism == '':
+			print __doc__
+			sys.exit(2)
+		transform_batch(dbname, schema, type, organism, args[0], args[1])
 	else:
-		helper()
-		sys.exit(1)
+		print __doc__
+		sys.exit(2)
