@@ -21,6 +21,8 @@ Examples:
 	5: unittest for module_cc.linear_model
 02-28-05
 	6: unittest for p_gene_lm
+03-01-05
+	7: unittest for p_gene_analysis
 """
 import unittest, os, sys, getopt
 
@@ -419,6 +421,36 @@ class TestPGeneLm(unittest.TestCase):
 		print y_list
 		print x_2d_list
 
+class TestPGeneAnalysis(unittest.TestCase):
+	"""
+	02-28-05
+	"""
+	def setUp(self):
+		from p_gene_analysis import p_gene_analysis
+		hostname = 'zhoudb'
+		dbname = 'graphdb'
+		schema = 'sc_54'
+		table = 'cluster_stat_repos_2'
+		mcl_table = 'mcl_result_repos_2'
+		p_value_cut_off = 0
+		judger_type = 1
+		report = 0
+		commit = 0
+		gene_table = 'p_gene_repos_2_e5'
+		lm_table = 'lm_p_gene_repos_2_e5_v40'
+		self.instance = p_gene_analysis(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
+			report, judger_type, commit, gene_table, lm_table)
+			
+	def test_lm(self):
+		from codense.common import db_connect
+		(conn, curs) = db_connect(self.instance.hostname, self.instance.dbname, self.instance.schema)
+		self.instance.go_no2lm_results, lm_results_2d_list = self.instance.get_go_no2lm_results(curs, self.instance.lm_table)
+		self.instance.general_lm_results = self.instance.get_general_lm_results(lm_results_2d_list)
+		print self.instance.go_no2lm_results
+		print self.instance.general_lm_results
+		print self.instance.return_p_value_cut_off(56, 18, 2)
+		
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -436,7 +468,8 @@ if __name__ == '__main__':
 		3: TestGeneStat,
 		4: TestCrackSplat,
 		5: TestLinearModel,
-		6: TestPGeneLm}
+		6: TestPGeneLm,
+		7: TestPGeneAnalysis}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
