@@ -17,6 +17,7 @@ def batch(dir, of_name):
 		instance.edge_construct()
 		instance.cleanup()
 		instance.output(out=of)
+		del instance
 		
 if __name__ == '__main__':
 	batch(sys.argv[1],sys.argv[2])
