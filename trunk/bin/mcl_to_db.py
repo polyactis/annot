@@ -93,7 +93,8 @@ class mcl_to_db:
 					vertex_list_part.pop()
 					for i in range(len(vertex_list_part)):
 						vertex_list.append(int(vertex_list_part[i]))
-					self.cluster_set.append(vertex_list)
+					if len(vertex_list) >2:
+						self.cluster_set.append(vertex_list)
 					vertex_list = []
 				else:
 					for i in range(len(vertex_list_part)):
