@@ -4,21 +4,12 @@ Usage: clustering_test.py -k SCHEMA [OPTION] R_FILE
 
 Option:
 	R_FILE is the file to store the R code.
-	-z ..., --hostname=...	the hostname, zhoudb(default)
-	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	splat_result table(default)
-	-m ..., --mcl_table=...	mcl_result(default), mcl_result corresponding to table above
-	-g ..., --gene_table=...	table storing the stat results, p_gene(default)
 	-i ..., --input_file=...	gspan format
 	-s ..., --cluster_file=...	modes' output
 	-o ..., --output_file=...	haiyan's matrix format
 	-b ..., --label=...	use gene 1(index, default) or 2(no) or 3(id) to label
 	-p ..., --plot_type=...	dot(default), neato or twopi
-	-f ..., --function=...	a go_no
 	-c ..., --functioncolor=...	'green'(default) or 'red'
-	-n ..., --centralnode=...	a gene_no
-	-l ..., --mcl_id=...	the id corresponding to a mcl_cluster
 	-y ..., --type=...	the type, 1(reformat, default), 2 (visualize)
 	-h, --help              show this help
 
