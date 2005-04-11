@@ -47,7 +47,12 @@ class cluster_dstructure:
 		self.recurrence_array = None
 		self.splat_connectivity = None	#03-03-05 this is the connectivity of the summary subgraph
 		self.connectivity = None	#03-03-05 this is by averaging connectivities of the summary subgraph in each individual dataset
-
+		#04-06-05 more structures
+		self.edge_cor_2d_list = None
+		self.edge_sig_2d_list = None
+		self.connectivity_original = None
+		self.go_no2association_genes = None
+		self.go_no2information = None
 		
 class codense2db:
 	'''
@@ -130,19 +135,21 @@ class codense2db:
 		self.cluster_no+=1
 		return cluster
 	
-	def get_combined_cor_vector(self, curs, edge_set):
+	def get_combined_cor_vector(self, curs, edge_set, edge_table='edge_cor_vector'):
 		"""
 		03-03-05
 			return (combined_cor_vector, combined_sig_vetor)
+		04-06-05
+			make edge_table to be an explicit parameter
 		"""
 		combined_cor_vector = []
 		combined_sig_vetor = []
 		for edge in edge_set:
 			edge_string = '{' + repr(edge)[1:-1] + '}'
-			curs.execute("select cor_vector, sig_vector from edge_cor_vector where edge_name='%s'"%edge_string)
+			curs.execute("select cor_vector, sig_vector from %s where edge_name='%s'"%(edge_table,edge_string))
 			rows = curs.fetchall()
 			if len(rows) == 0:
-				sys.stderr.write('%s not found in edge_cor_vector\n'%edge_string)
+				sys.stderr.write('%s not found in %s\n'%(edge_string, edge_table))
 				sys.exit(1)
 			cor_vector = rows[0][0][1:-1].split(',')
 			cor_vector = map(float, cor_vector)
