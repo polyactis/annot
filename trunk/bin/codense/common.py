@@ -332,3 +332,16 @@ def get_gspan_graph(gspan_file, min_weight=None):
 	del reader
 	sys.stderr.write("Done\n")
 	return graph
+
+def parse_splat_table_edge_set(edge_string):
+	"""
+	04-05-05
+		parse the edge_string fetched from splat table and return a list
+	"""
+	edge_set = []
+	edge_list = edge_string[2:-2].split('},{')
+	for edge in edge_list:
+		edge = edge.split(',')
+		edge = map(int, edge)
+		edge_set.append(edge)
+	return edge_set
