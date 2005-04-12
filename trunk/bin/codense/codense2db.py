@@ -31,7 +31,7 @@ Description:
 """
 
 
-import sys,os,psycopg,getopt,csv, numarray
+import sys, os, psycopg, getopt, csv, numarray, re
 from common import *
 
 class cluster_dstructure:
@@ -53,6 +53,8 @@ class cluster_dstructure:
 		self.connectivity_original = None
 		self.go_no2association_genes = None
 		self.go_no2information = None
+		#04-11-05
+		self.cooccurrent_cluster_id=None
 		
 class codense2db:
 	'''
@@ -88,7 +90,7 @@ class codense2db:
 			2: self.codense_parser}
 		
 		self.cluster_no = 0
-
+		self.p_cooccurrent_cluster_id = re.compile(r'\d+\.\d+')
 	
 	def copath_parser(self, row, argument=None, argument2=None):
 		"""
@@ -101,11 +103,14 @@ class codense2db:
 			--get_combined_cor_vector
 			--parse_recurrence
 			--parse_connectivity
+		04-11-05
+			process the cooccurrent_cluster_id from haiyan's new output format.
 		"""
 		haiyan_no2gene_no = argument
 		curs = argument2
 		cluster = cluster_dstructure()
 		cluster.cluster_id = self.cluster_no
+		cluster.cooccurrent_cluster_id = self.p_cooccurrent_cluster_id.match(row[0]).group()
 		cluster.splat_connectivity = float(row[1])
 		cluster.vertex_set = row[2][1:-2].split(';')
 		cluster.vertex_set = map(int, cluster.vertex_set)
@@ -232,32 +237,32 @@ class codense2db:
 		return cluster
 	
 	def create_tables(self, curs, table, mcl_table):
+		"""
+		04-11-05
+			remove the 'try...except' clause
+		"""
 		#create tables if necessary
 		if table != 'splat_result':
-			try:
-				curs.execute("create table %s(\
-					splat_id		serial primary key,\
-					no_of_edges	integer,\
-					recurrence_pattern	bit varying(200),\
-					recurrence_array	float[],\
-					edge_set	integer[][],\
-					connectivity	float)"%table)
-			except:
-				sys.stderr.write("Error occurred when creating table %s\n"%table)
+			curs.execute("create table %s(\
+				splat_id		serial primary key,\
+				no_of_edges	integer,\
+				recurrence_pattern	bit varying(200),\
+				recurrence_array	float[],\
+				edge_set	integer[][],\
+				connectivity	float)"%table)
+
 		if mcl_table != 'mcl_result':
-			try:
-				curs.execute("create table %s(\
-					mcl_id	serial primary key,\
-					splat_id	integer,\
-					vertex_set	integer[],\
-					parameter	varchar,\
-					connectivity	float,\
-					p_value_min	float,\
-					go_no_vector	integer[],\
-					unknown_gene_ratio	float,\
-					recurrence_array	float[])"%mcl_table)
-			except:
-				sys.stderr.write("Error occurred when creating table %s\n"%mcl_table)	
+			curs.execute("create table %s(\
+				mcl_id	serial primary key,\
+				splat_id	integer,\
+				vertex_set	integer[],\
+				parameter	varchar,\
+				connectivity	float,\
+				p_value_min	float,\
+				go_no_vector	integer[],\
+				unknown_gene_ratio	float,\
+				recurrence_array	float[],\
+				cooccurrent_cluster_id	varchar)"%mcl_table)	
 
 	def db_submit(self, curs, cluster, table, mcl_table):
 		"""
@@ -271,10 +276,10 @@ class codense2db:
 					(table, cluster.cluster_id, cluster.no_of_edges, repr(cluster.recurrence_array),\
 					repr(cluster.edge_set), cluster.splat_connectivity))
 		#inserting into the mcl_table
-		curs.execute("insert into %s(mcl_id, splat_id, vertex_set, connectivity, recurrence_array)\
-						values (%d, %d, ARRAY%s, %f, ARRAY%s)"%\
+		curs.execute("insert into %s(mcl_id, splat_id, vertex_set, connectivity, recurrence_array, cooccurrent_cluster_id)\
+						values (%d, %d, ARRAY%s, %f, ARRAY%s,'%s')"%\
 						(mcl_table, cluster.cluster_id, cluster.cluster_id, repr(cluster.vertex_set),\
-						cluster.connectivity, repr(cluster.recurrence_array)) )
+						cluster.connectivity, repr(cluster.recurrence_array), cluster.cooccurrent_cluster_id) )
 		"""
 		except:
 			sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
