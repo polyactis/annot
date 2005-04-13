@@ -8,6 +8,11 @@
 // Available as http://cheng.ececs.uc.edu/biclustering/Biclustering.java
 // Input file format: tab-delimited ASCII file as converted from Excel
 
+//04-12-05 by yh: In two cases, the data is regarded as NA.
+//1. blank on that column and row
+//2. it's not a value, some characters, like 'NA'
+//all comments embedded in the code are written by yh
+
 import javax.swing.*;
 import java.lang.*;
 import java.util.*;
@@ -232,7 +237,7 @@ public class Biclustering extends JFrame implements MouseListener{
 					for (int j = 0; j < numberOfColumns; j++){
 						int nextTab = line.indexOf('\t', tab);
 						if (nextTab == tab + 1)
-							matrix[i][j] = (short)(rand.nextInt(1600) - 800);
+							matrix[i][j] = (short)(rand.nextInt(1600) - 800);	//04-12-05 by yh: regarded as NA(random)
 						else{
 							if (nextTab == -1) w = line.substring(tab);
 							else w = line.substring(tab, nextTab);
@@ -240,7 +245,7 @@ public class Biclustering extends JFrame implements MouseListener{
 								double d = Double.parseDouble(w);
 								matrix[i][j] = (short)(d * 100.0);
 							}catch(NumberFormatException e){
-								matrix[i][j] = (short)(rand.nextInt(1600) - 800);
+								matrix[i][j] = (short)(rand.nextInt(1600) - 800);	//04-12-05 by yh: regarded as NA(random)
 							}
 						}
 						tab = nextTab + 1;
@@ -309,14 +314,15 @@ public class Biclustering extends JFrame implements MouseListener{
 		smHeight = numberOfRows;
 		scoring();
 		int index = 0;
-		while ((HScore > maxScore) && (index > -1)){
-			if (smHeight > batchThreshold){
+		while ((HScore > maxScore) && (index > -1)){	//if no more columns or rows can be removed,
+			if (smHeight > batchThreshold){			//This algorithm 2 of the paper. Multiple node deletion, but kind of different,
+											//no batchThreshold in the paper's algorithm
 				for (int i = 0; i < numberOfRows; i++)
 					if (remainingR[i] && (rowScore[i] > HScore)){
 						remainingR[i] = false;
 						smHeight--;
 					}
-			}else{
+			}else{	//find the maximum from rowScore and columnScore
 				double ms = 0;
 				index = -1;
 				boolean row = true;
@@ -348,6 +354,7 @@ public class Biclustering extends JFrame implements MouseListener{
 		}
 
 		display();
+		//04-12-05 by yh: put random numbers in the block(cluster)
 		for (int i = 0; i < numberOfRows; i++) if (remainingR[i])
 				for (int j = 0; j < numberOfColumns; j++) if (remainingC[j])
 						matrix[i][j] = (short)(rand.nextInt(1600) - 800);
