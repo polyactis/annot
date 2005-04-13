@@ -1,4 +1,4 @@
-BoostPythonTarget	= clustering.so
+BoostPythonTarget	= clustering.so biclustering.so
 BoostPythonLib  = -lboost_python
 
 swig_py		= graph_modeling.py
@@ -52,4 +52,4 @@ $(cxx_swig_targets):	_%.so:	%.o %_wrap.o
 $(BoostPythonTarget):	%.so:	%.o
 	$(cxx_compiler) $(gsl_lib) $(BoostPythonLib) $(swig_flags) $< -o $@
 clean:
-	-rm -f *.o $(gsl_cxx_targets) $(gsl_c_targets) $(cxx_swig_targets) $(cxx_wrap) *.pyc $(swig_py) $(BoostPythonTarget)
+	-rm -f *.class *.o $(gsl_cxx_targets) $(gsl_c_targets) $(cxx_swig_targets) $(cxx_wrap) *.pyc $(swig_py) $(BoostPythonTarget)
