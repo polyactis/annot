@@ -46,9 +46,9 @@ public class Biclustering extends JFrame implements MouseListener{
 	int numberOfRows = 0;
 	short[][] matrix = null;
 	Random rand = new Random();
-	int maxScore = 1200;
+	int maxScore = 50;
 	int minHeight = 5;
-	int minWidth = 10;
+	int minWidth = 6;
 	int batchThreshold = 100;
 	boolean[] remainingR = null;
 	boolean[] remainingC = null;
@@ -179,7 +179,8 @@ public class Biclustering extends JFrame implements MouseListener{
 				return;
 			}
 			try{
-				String line = br.readLine();
+				br.mark(1000);	//1000 is the readAheadLimit. approx the number of characters in one line.
+				String line = br.readLine();  //one line has been read in already.
 				StringTokenizer st = new StringTokenizer(line, "\t");
 				n = st.countTokens();
 				String inWord = null;
@@ -205,6 +206,7 @@ public class Biclustering extends JFrame implements MouseListener{
 						skipRows = Integer.parseInt(inWord);
 					}catch(NumberFormatException e){ more = true; }
 				}
+				br.reset();	//bug here. reset the stream to the start of file. one line has been read before.
 				for (int i = 1; i < skipRows; i++) br.readLine();
 				numberOfRows = 0;
 				while((line = br.readLine()) != null){
@@ -269,6 +271,9 @@ public class Biclustering extends JFrame implements MouseListener{
 		rm = RepaintManager.currentManager(contents);
 		offscreen = rm.getOffscreenBuffer(contents, imagewidth, imageheight);
 		offGraphics = offscreen.getGraphics();
+		
+		//04-13-05 output the matrix
+		outputMatrix();
 
 	}
 
@@ -380,7 +385,7 @@ public class Biclustering extends JFrame implements MouseListener{
 					                     stepSize * (j + 1), 400 - matrix[i][sorted[j]]);
 				}
 			}
-		offGraphics.drawString("H Score = " + Integer.toString((int)HScore), 100, 30);
+		offGraphics.drawString("H Score = " + Double.toString(HScore), 100, 30);	//04-14-05, output the Hscore in double, not integer
 		Graphics g = contents.getGraphics();
 		g.clipRect(0,0,imagewidth, imageheight);
 		g.drawImage(offscreen, 0, 0, contents);
@@ -395,12 +400,38 @@ public class Biclustering extends JFrame implements MouseListener{
 			record.setVisible(false);
 			return;
 		}
-		recordFile.println(smHeight + " " + smWidth + " " + (int)HScore);
+		
+		recordFile.println(smHeight + " " + smWidth + " " + HScore);	//output the score in double
 		for (int i = 0; i < numberOfRows; i++) if (remainingR[i])
 				recordFile.print(i + " ");
 		recordFile.println();
 		for (int j = 0; j < numberOfColumns; j++) if (remainingC[j])
 				recordFile.print(j + " ");
+		
+		recordFile.println();
+		recordFile.close();
+	}
+
+	public void outputMatrix(){
+	/*
+	*04-13-05
+	*	output the matrix that's read in, for comparison with biclustering.cc
+	*/
+		PrintWriter recordFile = null;
+		try{
+			recordFile = new PrintWriter(new FileWriter("Biclusters.txt", true));
+		}catch(IOException e){
+			System.err.println(e.getMessage());
+			record.setVisible(false);
+			return;
+		}
+		
+		for (int i = 0; i < numberOfRows; i++)
+		{
+			for (int j = 0; j < numberOfColumns; j++)
+				recordFile.print(matrix[i][j]+"\t");
+			recordFile.println();
+			}
 		recordFile.println();
 		recordFile.close();
 	}
