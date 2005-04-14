@@ -28,7 +28,7 @@ struct bicluster
 class biclustering
 {
 	public:
-		biclustering(int mxScore, int mnHeight, int mnWidth, int bThreshold);
+		biclustering(double mxScore, int mnHeight, int mnWidth, int bThreshold);
 		~biclustering();
 		
 		void data_read_in(boost::python::list list_2d);
@@ -38,8 +38,8 @@ class biclustering
 	
 		int numberOfColumns;
 		int numberOfRows;
-		vector<vi> matrix;
-		int maxScore;
+		vector<vd> matrix;
+		double maxScore;
 		int minHeight;
 		int minWidth;
 		int batchThreshold;
@@ -57,7 +57,7 @@ class biclustering
 		gsl_rng * r;	//random number generator
 };
 
-biclustering::biclustering(int mxScore, int mnHeight, int mnWidth, int bThreshold)
+biclustering::biclustering(double mxScore, int mnHeight, int mnWidth, int bThreshold)
 {
 	//parameter initialize
 	maxScore = mxScore;
@@ -93,21 +93,21 @@ void biclustering::data_read_in(boost::python::list list_2d)
 	cout<<"Number of columns: "<<numberOfColumns<<endl;
 	
 	//fill matrix
-	vi row_vector;	//temporarily hold the data before pushed into matrix
-	int value;
+	vd row_vector;	//temporarily hold the data before pushed into matrix
+	double value;
 	for(int i=0; i<numberOfRows; i++)
 	{
 		for(int j=0; j<numberOfColumns; j++)
 		{
 			std::string value_string = boost::python::extract<std::string>(list_2d[i][j]);
 			if (value_string=="NA")
-				value = int(gsl_rng_uniform_int(r, 1600)-800);
+				value = double(gsl_rng_uniform_int(r, 1600)-800);
 			else
 			{
-				float f_value = atof(value_string.c_str())*100;
-				value = int(f_value);	//see log on 04-14-05 in section of c++/c. tricks in the data type coersion.
+				value = atof(value_string.c_str());
+				//see log on 04-14-05 in section of c++/c. tricks in the data type coersion.
 				#if defined(DEBUG)
-					std::cout << "Original: "<<value_string<<"Half: "<<f_value<<" New: "<<value<<endl;
+					std::cout << "Original: "<<value_string<<"Middle: "<<atof(value_string.c_str())<<" New: "<<value<<endl;
 				#endif
 			}
 			
@@ -286,7 +286,7 @@ boost::python::list biclustering::return_matrix_data()
 
 BOOST_PYTHON_MODULE(biclustering)
 {
-	boost::python::class_<biclustering>("biclustering", init<int, int, int, int>())
+	boost::python::class_<biclustering>("biclustering", init<double, int, int, int>())
 		.def("data_read_in", &biclustering::data_read_in)
 		.def("scoring", &biclustering::scoring)
 		.def("getbicluster", &biclustering::getbicluster)
