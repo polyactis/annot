@@ -11,6 +11,7 @@ Option:
 	-o ..., --offset=...	the number of rows to skip before returning rows, 0 (default)
 	-m ..., --limit=...	the maximum number of rows to return, all (default)
 	-p ..., --output=...	specifiy the filename to output the cluster stat results
+	-u ..., --uniformity=...	the percentage of associated-genes over total known genes, 0.5(default)
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
@@ -46,10 +47,15 @@ Description:
 
 import sys,os,psycopg,pickle,getopt
 from rpy import r
+from sets import Set
 
 class cluster_stat:
 	def __init__(self, hostname, dbname, schema, source_table, target_table, offset, limit, \
-		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0):
+		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0, uniformity=0.5):
+		"""
+		04-18-05
+			add parameter uniformity
+		"""
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -67,6 +73,7 @@ class cluster_stat:
 		self.log = int(log)
 		self.wu = int(wu)
 		self.needcommit = int(needcommit)
+		self.uniformity = float(uniformity)
 		self.global_go_id_to_no_dict = {}
 		self.global_go_no_to_size_dict = {}
 		self.global_gene_to_go_dict = {}
@@ -74,6 +81,8 @@ class cluster_stat:
 		if self.log:
 			self.logfile = open('/tmp/cluster_stat.log','w')
 		self.cluster_memory = {}
+		#mapping between gene_no and go_no list
+		self.known_genes_dict = {}
 
 	def dstruc_loadin(self):
 		self.curs.execute("select go_id,go_no,array_upper(gene_array,1) from go")
@@ -82,8 +91,8 @@ class cluster_stat:
 			self.global_go_id_to_no_dict[row[0]] = row[1]
 			self.global_go_no_to_size_dict[row[1]] = row[2]
 		self.no_of_functions = len(self.global_go_no_to_size_dict)
-		self.curs.execute("select gene_no,go_functions from gene")
-			
+		
+		self.curs.execute("select gene_no,go_functions from gene")	
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.global_gene_to_go_dict[row[0]] = []
@@ -91,6 +100,15 @@ class cluster_stat:
 			for go_no in go_functions_list:
 				self.global_gene_to_go_dict[row[0]].append(int(go_no))
 		self.no_of_genes = len(self.global_gene_to_go_dict)
+		
+		#setup self.known_genes_dict
+		self.curs.execute("select gene_no,go_functions from gene where known=TRUE")
+		rows = self.curs.fetchall()
+		for row in rows:
+			go_functions_list = row[1][1:-1].split(',')
+			self.known_genes_dict[row[0]] = Set()
+			for go_no in go_functions_list:
+				self.known_genes_dict[row[0]].add(int(go_no))
 		
 	def run(self):
 		if self.output and self.needcommit:
@@ -134,6 +152,13 @@ class cluster_stat:
 			sys.stderr.write('\n\tNo real updates\n')
 		
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
+		"""
+		04-18-05
+			add two important criteria to avoid the situation that hypergeometric test
+			is powerless (the population size of the go-no is too small).
+			1. percentage of associated-genes over total known genes >= uniformity (0.5 default)
+			2. apart from the percentage, the absolute number is also needed in case the cluster is too small.
+		"""	
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
 		for i in range(len(vertex_list_all)):
@@ -158,6 +183,12 @@ class cluster_stat:
 					m = self._global_go_no_dict[go_no]
 					n = self.no_of_genes -1 - m
 					k = cluster_size-1
+				go_no_ratio = float(x)/self._no_of_known_genes_of_the_cluster	#NOTE: it's different from no_of_known_genes_of_the_cluster
+				if  go_no_ratio < self.uniformity and go_no!=0:	#It doesn't apply to the 0(unknown) category.
+					#ignore the function category if its percentage is < uniformity
+					continue
+				if x < 3 and go_no!=0:	#apart from the percentage, the absolute number is also needed in case the cluster is too small.
+					continue
 				if self.bonferroni:
 					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)*len(self._local_go_no_dict)
 				else:
@@ -188,9 +219,15 @@ class cluster_stat:
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
 		construct a local go_no:size dictionary for a specific cluster.
+		
+		04-18-05
+			set the no_of_known_genes_of_the_cluster
 		'''
 		self.local_go_no_dict = {}
+		self.no_of_known_genes_of_the_cluster = 0
 		for gene_no in vertex_list:
+			if gene_no in self.known_genes_dict:
+				self.no_of_known_genes_of_the_cluster += 1
 			go_no_list = self.global_gene_to_go_dict[gene_no]
 			for go_no in go_no_list:
 				if go_no in self.local_go_no_dict:
@@ -203,12 +240,19 @@ class cluster_stat:
 		'''
 		After one gene is left out, both local and global go_no:size dictionaries
 		need to be adjusted.
+		04-18-05:
+			set _no_of_known_genes_of_the_cluster
 		'''
 		self._local_go_no_dict = self.local_go_no_dict.copy()
 		self._global_go_no_dict = self.global_go_no_to_size_dict.copy()
 		if gene_no not in self.global_gene_to_go_dict:
 		#this filter will only be useful when Jasmine's strategy is applied to whole gene-set(unknown included)
 			return
+		if gene_no in self.known_genes_dict:
+			self._no_of_known_genes_of_the_cluster = self.no_of_known_genes_of_the_cluster-1
+		else:
+			self._no_of_known_genes_of_the_cluster = self.no_of_known_genes_of_the_cluster
+		
 		go_no_list = self.global_gene_to_go_dict[gene_no]
 		for go_no in go_no_list:
 			self._local_go_no_dict[go_no] -= 1
@@ -232,9 +276,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:bcw", \
+		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:u:bcw", \
 			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", \
-			"offset=", "limit=", "output=", "bonferroni", "commit", "wu"])
+			"offset=", "limit=", "output=", "uniformity=", "bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -247,6 +291,7 @@ if __name__ == '__main__':
 	offset = 0
 	limit = 'all'
 	output = None
+	uniformity = 0.5
 	bonferroni = 0
 	commit = 0
 	report = 0
@@ -272,6 +317,8 @@ if __name__ == '__main__':
 			limit = arg
 		elif opt in ("-p", "--output"):
 			output = arg
+		elif opt in ("-u", "--uniformity"):
+			uniformity = float(arg)
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -284,7 +331,8 @@ if __name__ == '__main__':
 			wu = 1
 
 	if schema:
-		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, offset, limit, output, bonferroni, report, log, wu, commit)
+		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, \
+			offset, limit, output, bonferroni, report, log, wu, commit, uniformity)
 		instance.dstruc_loadin()
 		instance.run()
 
