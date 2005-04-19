@@ -104,7 +104,8 @@ class cluster_info:
 				unit.splat_connectivity = row[6]
 			sys.stderr.write("Done.\n")
 		else:
-			sys.stderr.write("Not found.\n")
+			unit = None
+			sys.stderr.write("Cluster: %s not found.\n"%mcl_id)
 		return unit
 
 	def get_go_functions_of_this_gene_set(self, curs, gene_set, gene_table='gene'):
@@ -329,11 +330,12 @@ class cluster_info:
 		"""
 		no_of_total_genes = get_no_of_total_genes(curs)
 		cluster  = self.get_basic_cluster_dstructure(curs, mcl_id, splat_table, mcl_table)
-		cluster.go_no2association_genes = self.get_go_functions_of_this_gene_set(curs, cluster.vertex_set)
-		cluster.go_no2information = self.get_information_of_go_functions(curs, cluster.go_no2association_genes, \
-			len(cluster.vertex_set), no_of_total_genes)
-		cluster.edge_cor_2d_list, cluster.edge_sig_2d_list = self.get_cor_sig_2d_list(curs, cluster.edge_set)
-		#graph = self.graph_from_node_edge_set(cluster.vertex_set, cluster.edge_set)
+		if cluster:	#not None
+			cluster.go_no2association_genes = self.get_go_functions_of_this_gene_set(curs, cluster.vertex_set)
+			cluster.go_no2information = self.get_information_of_go_functions(curs, cluster.go_no2association_genes, \
+				len(cluster.vertex_set), no_of_total_genes)
+			cluster.edge_cor_2d_list, cluster.edge_sig_2d_list = self.get_cor_sig_2d_list(curs, cluster.edge_set)
+			#graph = self.graph_from_node_edge_set(cluster.vertex_set, cluster.edge_set)
 		return cluster
 		
 		"""
