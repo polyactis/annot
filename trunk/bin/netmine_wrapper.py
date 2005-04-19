@@ -46,8 +46,11 @@ Examples:
 	mpirun N netmine_wrapper.py --mp='sc_54_6661_6'
 
 	#normal:
-	mpirun n0-17 netmine_wrapper.py --mp='sc_54_6661_5' -n 6661 -p 1342902 -l 54
-		-e 6 -d 0.4,0.6,0.8 -q 0.6 -y 1 --js=20
+	mpirun n0-17 netmine_wrapper.py --mp='sc54_5' -n 6661 -p 1342902 -l 54
+		-e 6 -q 0.6 -z0001
+	
+	mpirun n0-17 netmine_wrapper.py --mp='sc54_5' -n 6661 -p 1342902 -l54
+		-e6 -q0.4 -w0.4 -z0010
 	
 	
 Description:
