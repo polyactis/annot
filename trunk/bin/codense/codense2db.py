@@ -14,6 +14,7 @@ Option:
 	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense)
+	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
@@ -38,16 +39,17 @@ class cluster_dstructure:
 	def __init__(self):
 		self.cluster_id = None
 		self.vertex_set = None
-		#string form is for database submission
+		#string form is for database submission, USELESS
 		self.vertex_set_string = None
 		self.edge_set = None
-		#string form is for database submission
+		#string form is for database submission, USELESS
 		self.edge_set_string = None
 		self.no_of_edges = None
 		self.recurrence_array = None
 		self.splat_connectivity = None	#03-03-05 this is the connectivity of the summary subgraph
 		self.connectivity = None	#03-03-05 this is by averaging connectivities of the summary subgraph in each individual dataset
-		#04-06-05 more structures
+		
+		#04-06-05 more structures for cluster_info.py
 		self.edge_cor_2d_list = None
 		self.edge_sig_2d_list = None
 		self.connectivity_original = None
@@ -67,7 +69,7 @@ class codense2db:
 	'''
 	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, table=None,\
 			mcl_table=None, mapping_file=None, cor_cut_off=0,\
-			parser_type=1, needcommit=0, report=0):
+			parser_type=1, min_cluster_size=5, needcommit=0, report=0):
 		"""
 		02-25-05
 			modify the interface of the class and 2 member functions(get_combined_cor_vector, parse_recurrence)
@@ -82,6 +84,7 @@ class codense2db:
 		self.mapping_file = mapping_file
 		self.cor_cut_off = float(cor_cut_off)
 		self.parser_type = int(parser_type)
+		self.min_cluster_size = int(min_cluster_size)
 		self.needcommit = int(needcommit)
 		self.report = int(report)
 	
@@ -90,6 +93,7 @@ class codense2db:
 			2: self.codense_parser}
 		
 		self.cluster_no = 0
+		#used to find the cooccurrent_cluster_id, like '6.6.9', cooccurrent_cluster_id is '6.6'
 		self.p_cooccurrent_cluster_id = re.compile(r'\d+\.\d+')
 	
 	def copath_parser(self, row, argument=None, argument2=None):
@@ -291,7 +295,8 @@ class codense2db:
 		"""
 		03-18-05
 			mapping_dict all changed to haiyan_no2gene_no
-			
+		04-12-05
+			use min_cluster_size to cut off some small clusters
 		"""
 
 		inf = csv.reader(open(self.infname, 'r'), delimiter='\t')
@@ -309,6 +314,9 @@ class codense2db:
 		no = 0
 		for row in inf:
 			cluster = self.parser_dict[self.parser_type](row, mapping_dict[self.parser_type], curs)
+			if len(cluster.vertex_set)<self.min_cluster_size:
+				#too small, ignore
+				continue
 			self.db_submit(curs, cluster, self.table, self.mcl_table)
 			no+=1
 			if self.report and no%1000==0:
@@ -325,9 +333,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:cr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:cr", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
-			"parser_type=", "commit", "report"])
+			"parser_type=", "min_cluster_size=", "commit", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -340,6 +348,7 @@ if __name__ == '__main__':
 	mapping_file = None
 	cor_cut_off = 0
 	parser_type = 1
+	min_cluster_size = 5
 	commit = 0
 	report = 0
 	for opt, arg in opts:
@@ -362,13 +371,15 @@ if __name__ == '__main__':
 			cor_cut_off = float(arg)
 		elif opt in ("-y", "--parser_type"):
 			parser_type = int(arg)
+		elif opt in ("-s", "--min_cluster_size"):
+			min_cluster_size = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and len(args)==1:
-		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, cor_cut_off,\
-			parser_type, commit, report)
+		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, \
+			cor_cut_off, parser_type, min_cluster_size, commit, report)
 		instance.run()
 	else:
 		print __doc__
