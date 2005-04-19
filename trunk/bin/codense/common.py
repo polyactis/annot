@@ -345,3 +345,66 @@ def parse_splat_table_edge_set(edge_string):
 		edge = map(int, edge)
 		edge_set.append(edge)
 	return edge_set
+
+def foreach_cb(model, path, iter, pathlist):
+	"""
+	04-17-05
+		used in gui listview, pathfinding.
+	"""
+	pathlist.append(path)	
+	
+def create_columns(treeview, label_list):
+	"""
+	04-17-05
+		create columns in the treeview in the first refresh
+	"""
+	import gtk
+	tvcolumn_dict = {}
+	cell_dict = {}
+
+	for i in range(len(label_list)):
+		tvcolumn_dict[i] = gtk.TreeViewColumn(label_list[i])	# create the TreeViewColumn to display the data
+		treeview.append_column(tvcolumn_dict[i])	# add tvcolumn to treeview
+		cell_dict[i] = gtk.CellRendererText()	# create a CellRendererText to render the data
+		tvcolumn_dict[i].pack_start(cell_dict[i], True)	# add the cell to the tvcolumn and allow it to expand
+		# set the cell "text" attribute to column 0 - retrieve text
+		# from that column in liststore
+		tvcolumn_dict[i].add_attribute(cell_dict[i], 'text', i)
+		tvcolumn_dict[i].set_sort_column_id(i)	# Allow sorting on the column
+
+def fill_treeview(treeview, liststore, list_2d, reorderable=True):
+	"""
+	04-17-05
+	"""
+	import gtk
+	for data in list_2d:
+		liststore.append(data)
+	# set the TreeView mode to be liststore
+	treeview.set_model(liststore)
+
+	if reorderable:
+		for i in range(len(list_2d[0])):
+			# make it searchable
+			treeview.set_search_column(i)
+		
+		# Allow drag and drop reordering of rows
+		treeview.set_reorderable(True)
+	#setting the selection mode
+	treeselection = treeview.get_selection()
+	treeselection.set_mode(gtk.SELECTION_MULTIPLE)
+
+def get_no_of_total_genes(curs, schema=None, gene_table='gene'):
+	"""
+	04-18-05
+		get the no_of_total_genes
+	"""
+	sys.stderr.write("Getting no_of_total_genes...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	
+	curs.execute("select count(gene_no) from %s"%gene_table)
+	rows = curs.fetchall()
+	for row in rows:
+		no_of_total_genes = int(row[0])
+	sys.stderr.write("Done\n")
+	return no_of_total_genes
