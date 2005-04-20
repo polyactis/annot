@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Usage: cluster_info.py -k SCHEMA [OPTION] OUTPUT_FILE
+Usage: cluster_info.py -k SCHEMA -t SPLAT_TABLE -m MCL_TABLE [OPTION] OUTPUT_FILE
 
 Option:
 	R_FILE is the file to store the R code.
