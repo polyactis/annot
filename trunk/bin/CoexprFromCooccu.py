@@ -8,6 +8,8 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	the splat_result table (edge_set)
 	-m ..., --mcl_table=...	the mcl_result table (vertex_set)
+	-e ..., --e_mcl_table=...	the e_mcl_table stores the 2nd-order clusters of mcl_table
+		if not given, it's $mcl_table+'e'
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
 	
@@ -21,13 +23,14 @@ Description:
 
 import sys, os, psycopg, getopt, csv, numarray, re
 from codense.common import db_connect
+from sets import Set
 
 class CoexprFromCooccu:
 	"""
 	04-11-05
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
-		table=None, mcl_table=None, p_value_cut_off=0.01, report=0, \
+		table=None, mcl_table='', e_mcl_table=None, p_value_cut_off=0.01, report=0, \
 		judger_type=0, needcommit=0, gene_table='p_gene', lm_table=None, \
 		stat_table_fname=None, debug=0):
 		
@@ -36,6 +39,9 @@ class CoexprFromCooccu:
 		self.schema = schema		
 		self.table = table
 		self.mcl_table = mcl_table
+		self.e_mcl_table = e_mcl_table
+		if self.e_mcl_table==None:
+			self.e_mcl_table = self.mcl_table+'e'
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.report = int(report)
 		self.judger_type = int(judger_type)
@@ -46,17 +52,18 @@ class CoexprFromCooccu:
 		#debugging flag
 		self.debug = int(debug)
 		
-		self.cooccu_id2mcl_id_list = {}
-		
 		self.no_of_records = 0
+		self.pre_2nd_cc_hierarchy = {}
 		
-	def data_fetch(self, curs, mcl_table):
+	def data_fetch(self, curs, mcl_table, e_mcl_table):
 		"""
 		04-11-05
+		
+		04-19-05
 		"""
-		sys.stderr.write("Seaching...\n")
-		curs.execute("DECLARE crs CURSOR FOR select mcl_id, cooccurrent_cluster_id \
-			from %s"%(mcl_table))
+		sys.stderr.write("Constructing the pre_2nd_cc_hierarchy from database...\n")
+		curs.execute("DECLARE crs CURSOR FOR select m1.mcl_id, m2.mcl_id, m2.cooccurrent_cluster_id \
+			from %s m1, %s m2 where m1.cooccurrent_cluster_id=m2.cooccurrent_cluster_id"%(mcl_table, e_mcl_table))
 		
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -72,35 +79,51 @@ class CoexprFromCooccu:
 			rows = curs.fetchall()
 		
 		sys.stderr.write("Done\n")		
-	
+		return self.pre_2nd_cc_hierarchy	#return for the purpose of cluster_info.py
 	
 	def _coexpr_from_cocccu(self, row):
 		"""
 		04-11-05
+		
+		04-19-05
+			
 		"""
 		mcl_id = row[0]
-		cooccurrent_cluster_id = row[1]
-		if cooccurrent_cluster_id not in self.cooccu_id2mcl_id_list:
-			self.cooccu_id2mcl_id_list[cooccurrent_cluster_id] = []
-		self.cooccu_id2mcl_id_list[cooccurrent_cluster_id].append(mcl_id)
+		mcl_id_2nd_order = row[1]
+		cooccurrent_cluster_id = row[2]
+		pregraph_id,hhu_2nd_order_id = map(int, cooccurrent_cluster_id.split('.'))
+		if pregraph_id not in self.pre_2nd_cc_hierarchy:
+			self.pre_2nd_cc_hierarchy[pregraph_id] = {}
+		if mcl_id_2nd_order not in self.pre_2nd_cc_hierarchy[pregraph_id]:
+			self.pre_2nd_cc_hierarchy[pregraph_id][mcl_id_2nd_order] = Set()
+		self.pre_2nd_cc_hierarchy[pregraph_id][mcl_id_2nd_order].add(mcl_id)
 	
-	def output(self, cooccu_id2mcl_id_list):
+	def output(self, pre_2nd_cc_hierarchy):
 		"""
 		04-11-05
+		
+		04-19-05
+			
 		"""
 		writer = csv.writer(sys.stdout, delimiter='\t')
-		for cooccurrent_cluster_id,mcl_id_list in cooccu_id2mcl_id_list.iteritems():
-			if len(mcl_id_list)>1:
-				writer.writerow([cooccurrent_cluster_id]+mcl_id_list)
+		for pregraph_id,mcl_id_2nd_order_dict in pre_2nd_cc_hierarchy.iteritems():
+			writer.writerow([pregraph_id])
+			for mcl_id_2nd_order,mcl_id_set in mcl_id_2nd_order_dict.iteritems():
+				writer.writerow(['', mcl_id_2nd_order])	#one indentation
+				for mcl_id in mcl_id_set:
+					writer.writerow(['', '', mcl_id])	#two indentations
 		del writer
 		
 	def run(self):
 		"""
 		04-11-05
+		
+		04-19-05
+			generate pre_2nd_cc_hierarchy.
 		"""
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-		self.data_fetch(curs, self.mcl_table)
-		self.output(self.cooccu_id2mcl_id_list)
+		self.data_fetch(curs, self.mcl_table, self.e_mcl_table)
+		self.output(self.pre_2nd_cc_hierarchy)
 
 
 if __name__ == '__main__':
@@ -108,11 +131,11 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "e_mcl_table=", "p_value_cut_off=",\
 		"judger_type=", "report", "commit", "gene_table=", "lm_table=", "debug", "accuracy_cut_off=",\
 		"gene_p_table=",  "recurrence_gap_size=", "connectivity_gap_size="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:j:rcg:l:ba:n:x:y:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:e:p:j:rcg:l:ba:n:x:y:", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -121,7 +144,8 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	table = None
-	mcl_table = None
+	mcl_table = ''
+	e_mcl_table = None
 	p_value_cut_off = 0.001
 	judger_type = 0
 	report = 0
@@ -148,6 +172,8 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
+		elif opt in ("-e", "--e_mcl_table"):
+			e_mcl_table = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-j", "--judger_type"):
@@ -173,7 +199,7 @@ if __name__ == '__main__':
 
 			
 	if schema and mcl_table:
-		instance = CoexprFromCooccu(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
+		instance = CoexprFromCooccu(hostname, dbname, schema, table, mcl_table, e_mcl_table, p_value_cut_off,\
 			report, judger_type, commit, gene_table, lm_table, stat_table_fname, debug)
 		instance.run()
 	else:
