@@ -33,6 +33,7 @@ from codense.codense2db import cluster_dstructure
 from codense.common import parse_splat_table_edge_set
 from codense.common import get_no_of_total_genes
 from graphlib import Graph
+from CoexprFromCooccu  import CoexprFromCooccu
 
 class cluster_info:
 	"""
@@ -230,18 +231,23 @@ class cluster_info:
 		return accuracy2cluster
 
 	
-	def data_fetch(self, curs, splat_table, mcl_table):
+	def data_fetch(self, curs, splat_table, mcl_table, crs_no=0):
 		"""
 		04-17-05
 			fetch cluster_dstructures for all clusters(Jasmine's request)	
+		04-19-05
+			1. return a mcl_id2cluster_dstructure
+			2. crs_no
 		"""
+		mcl_id2cluster_dstructure = {}
+		
 		no_of_total_genes = get_no_of_total_genes(curs)
 		sys.stderr.write("Getting the basic information for all clusters...\n")
-		curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.vertex_set, m.connectivity, m.connectivity_original,\
+		curs.execute("DECLARE crs%s CURSOR FOR select m.mcl_id, m.vertex_set, m.connectivity, m.connectivity_original,\
 			m.recurrence_array, s.edge_set, s.connectivity, m.cooccurrent_cluster_id from %s m, %s s where \
 			m.splat_id=s.splat_id"\
-			%(mcl_table, splat_table))
-		curs.execute("fetch 5000 from crs")
+			%(crs_no, mcl_table, splat_table))
+		curs.execute("fetch 5000 from crs%s"%crs_no)
 		rows = curs.fetchall()
 		while rows:
 			for row in rows:
@@ -261,16 +267,19 @@ class cluster_info:
 					unit.go_no2association_genes, len(unit.vertex_set), no_of_total_genes, p_value_cut_off=0.5)	#jasmine wants to cut some go-nos.
 				unit.edge_cor_2d_list, unit.edge_sig_2d_list = self.get_cor_sig_2d_list(curs, unit.edge_set)
 				
+				mcl_id2cluster_dstructure[unit.cluster_id] = unit
+				"""
 				order_1st_id, order_2nd_id = map(int, unit.cooccurrent_cluster_id.split('.'))
 				if order_1st_id not in self.order_1st_id2all_clusters:
 					self.order_1st_id2all_clusters[order_1st_id] = {}
 				if order_2nd_id not in self.order_1st_id2all_clusters[order_1st_id]:
 					self.order_1st_id2all_clusters[order_1st_id][order_2nd_id] = []
 				self.order_1st_id2all_clusters[order_1st_id][order_2nd_id].append(unit)
-			curs.execute("fetch 5000 from crs")
+				"""
+			curs.execute("fetch 5000 from crs%s"%crs_no)
 			rows = curs.fetchall()
 		sys.stderr.write("Done.\n")
-		
+		return mcl_id2cluster_dstructure
 		
 	def cluster_dstructure_output(self, curs, output_fname, order_1st_id2all_clusters):
 		"""
@@ -287,26 +296,7 @@ class cluster_info:
 			for order_2nd_id,cluster_list in all_2nd_order_clusters.iteritems():
 				str_tmp_list2 = []	#hold the connected components
 				for cluster in cluster_list:
-					str_tmp = ''
-					str_tmp+="["
-					str_tmp+="[%s],\n"%cluster.cluster_id
-					
-					str_tmp_list = []
-					for edge in cluster.edge_set:
-						str_tmp_list.append("{'%s','%s'}"%(gene_no2gene_id[edge[0]], gene_no2gene_id[edge[1]]))
-					str_tmp += "[%s],\n"%(','.join(str_tmp_list))
-					
-					str_tmp_list = []
-					for go_no, information in cluster.go_no2information.iteritems():
-						str_tmp_list.append("['%s','%s',%s,%s,%s,%s]\n"%(information[1], information[2], information[3],information[4],information[5],information[6]))
-					str_tmp += "[%s],"%(",".join(str_tmp_list))
-					
-					edge_sig_2d_array = array(cluster.edge_sig_2d_list)
-					str_tmp_list = []
-					for i in range(edge_sig_2d_array.shape[1]):
-						str_tmp_list.append("%s\n"%repr(list(edge_sig_2d_array[:,i])))
-					str_tmp += "[%s]]"%(",".join(str_tmp_list))
-					
+					str_tmp = self.return_string_form_of_cluster_dstructure(cluster, gene_no2gene_id)
 					str_tmp_list2.append(str_tmp)
 				str_tmp_list1.append("[%s]"%','.join(str_tmp_list2))
 			str_tmp_list0.append("[%s]"%",".join(str_tmp_list1))
@@ -315,6 +305,63 @@ class cluster_info:
 		outf.close()
 		sys.stderr.write("Done.\n")
 					
+	def return_string_form_of_cluster_dstructure(self, cluster, gene_no2gene_id):
+		"""
+		04-19-05
+			wrap the information jasmine wants out of a cluster_dstructure into a string form, which
+			is in array-form of darwin.
+		"""
+		str_tmp ="["
+		str_tmp+="[%s],\n"%cluster.cluster_id
+		
+		str_tmp_list = []
+		for edge in cluster.edge_set:
+			str_tmp_list.append("{'%s','%s'}"%(gene_no2gene_id[edge[0]], gene_no2gene_id[edge[1]]))
+		str_tmp += "[%s],\n"%(','.join(str_tmp_list))
+		
+		str_tmp_list = []
+		for go_no, information in cluster.go_no2information.iteritems():
+			str_tmp_list.append("['%s','%s',%s,%s,%s,%s]\n"%(information[1], information[2], \
+				information[3],information[4],information[5],information[6]))
+		str_tmp += "[%s],"%(",".join(str_tmp_list))
+		
+		edge_sig_2d_array = array(cluster.edge_sig_2d_list)
+		str_tmp_list = []
+		for i in range(edge_sig_2d_array.shape[1]):
+			str_tmp_list.append("%s\n"%repr(list(edge_sig_2d_array[:,i])))
+		str_tmp += "[%s]]"%(",".join(str_tmp_list))
+		
+		return str_tmp
+	
+	def cluster_dstructure_output_with_both_hierarchy(self, curs, output_fname, \
+		pre_2nd_cc_hierarchy, mcl_id2cluster_dstructure, mcl_id_2nd_order2cluster_dstructure):
+		"""
+		04-19-05
+			jasmine wants to put 2nd-order clusters and its connected components into one file.
+		"""
+		from codense.common import get_gene_no2gene_id
+		gene_no2gene_id = get_gene_no2gene_id(curs)
+		sys.stderr.write("Outputting cluster information...")
+		outf = open(output_fname, 'w')
+		str_tmp_list0 = []	#hold the 1st-order clusters
+		for pregraph_id,mcl_id_2nd_order_dict in pre_2nd_cc_hierarchy.iteritems():
+			str_tmp_list1 = []	#hold the 2nd-order clusters
+			for mcl_id_2nd_order,mcl_id_set in mcl_id_2nd_order_dict.iteritems():
+				str_tmp_list2 = []	#hold the connected components
+				#first one is the 2nd-order cluster
+				str_tmp = self.return_string_form_of_cluster_dstructure(mcl_id_2nd_order2cluster_dstructure[mcl_id_2nd_order],\
+					gene_no2gene_id)
+				str_tmp_list2.append(str_tmp)
+				for mcl_id in mcl_id_set:
+					str_tmp = self.return_string_form_of_cluster_dstructure(mcl_id2cluster_dstructure[mcl_id],\
+						gene_no2gene_id)
+					str_tmp_list2.append(str_tmp)
+				str_tmp_list1.append("[%s]"%','.join(str_tmp_list2))
+			str_tmp_list0.append("[%s]"%",".join(str_tmp_list1))
+		#'r:=' is for directly read in as an array
+		outf.write("r:=[%s]:"%",".join(str_tmp_list0))
+		outf.close()
+		sys.stderr.write("Done.\n")
 	
 	def get_cluster_dstructure(self, curs, mcl_id, splat_table, mcl_table):
 		"""
@@ -371,15 +418,27 @@ class cluster_info:
 		"""
 		04-18-05
 			Serve for jasmine's darwin input.
+		04-19-05
+			changed to put 2nd-order clusters and its connected components into one file.
 			
 			--db_connect()
+			--CoexprFromCooccu.data_fetch()
 			--data_fetch()
-			--cluster_dstructure_output()
+			--data_fetch()
+			--cluster_dstructure_output_with_both_hierarchy()
 
 		"""
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-		self.data_fetch(curs, self.table,  self.mcl_table)
-		self.cluster_dstructure_output(curs, self.output_fname, self.order_1st_id2all_clusters)
+		
+		e_splat_table = self.table+'e'
+		e_mcl_table = self.mcl_table+'e'
+		CoexprFromCooccu_instance = CoexprFromCooccu()
+		pre_2nd_cc_hierarchy = CoexprFromCooccu_instance.data_fetch(curs, self.mcl_table, e_mcl_table)
+		mcl_id2cluster_dstructure = self.data_fetch(curs, self.table,  self.mcl_table, crs_no=1)
+		mcl_id_2nd_order2cluster_dstructure = self.data_fetch(curs, e_splat_table, e_mcl_table, crs_no=2)
+		self.cluster_dstructure_output_with_both_hierarchy(curs, self.output_fname, pre_2nd_cc_hierarchy,\
+			mcl_id2cluster_dstructure, mcl_id_2nd_order2cluster_dstructure)
+		#self.cluster_dstructure_output(curs, self.output_fname, self.order_1st_id2all_clusters)
 		
 
 if __name__ == '__main__':
