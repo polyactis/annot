@@ -15,13 +15,14 @@ using namespace boost::python;
 
 typedef vector<double> vd;
 typedef vector<bool> vb;
-typedef vector<int> vi;
+typedef vector<float> vf;
 
 //data structure to hold the information
 struct bicluster
 {
 	boost::python::list row_index_list;
 	boost::python::list column_index_list;
+	boost::python::list consensus_list;
 	double score;
 };
 
@@ -31,14 +32,14 @@ class biclustering
 		biclustering(double mxScore, int mnHeight, int mnWidth, int bThreshold);
 		~biclustering();
 		
-		void data_read_in(boost::python::list list_2d);
+		void data_read_in(boost::python::numeric::array& list_2d);
 		void scoring();
 		bicluster getbicluster();
 		boost::python::list return_matrix_data();
 	
 		int numberOfColumns;
 		int numberOfRows;
-		vector<vd> matrix;
+		vector<vf> matrix;
 		double maxScore;
 		int minHeight;
 		int minWidth;
@@ -78,30 +79,32 @@ biclustering::~biclustering()
 	std::cout<<"Biclustering c++ exits"<<endl;
 }
 
-void biclustering::data_read_in(boost::python::list list_2d)
+void biclustering::data_read_in(boost::python::numeric::array& list_2d)
 {
 	//convert the 2 dimensional list of python into matrix
-	numberOfRows = boost::python::extract<int>(list_2d.attr("__len__")());
+	boost::python::tuple shape = boost::python::extract<tuple>(list_2d.attr("shape"));
+	numberOfRows = boost::python::extract<int>(shape[0]);
 	if (numberOfRows == 0)
 	{
 		cout<<"No data"<<endl;
 		numberOfColumns = 0;
 	}
 	else
-		numberOfColumns = boost::python::extract<int>(list_2d[0].attr("__len__")());
+		numberOfColumns = boost::python::extract<int>(shape[1]);
 	cout<<"Number of rows: "<<numberOfRows<<endl;
 	cout<<"Number of columns: "<<numberOfColumns<<endl;
 	
 	//fill matrix
-	vd row_vector;	//temporarily hold the data before pushed into matrix
-	double value;
+	vf row_vector;	//temporarily hold the data before pushed into matrix
+	float value;
 	for(int i=0; i<numberOfRows; i++)
 	{
 		for(int j=0; j<numberOfColumns; j++)
 		{
-			std::string value_string = boost::python::extract<std::string>(list_2d[i][j]);
-			if (value_string=="NA")
-				value = double(gsl_rng_uniform_int(r, 1600)-800);
+			value = boost::python::extract<float>(list_2d[i][j]);
+			/*
+			if ((value-1.1)<0.0001)
+				value = float(gsl_rng_uniform_int(r, 1600)-800);
 			else
 			{
 				value = atof(value_string.c_str());
@@ -110,7 +113,7 @@ void biclustering::data_read_in(boost::python::list list_2d)
 					std::cout << "Original: "<<value_string<<"Middle: "<<atof(value_string.c_str())<<" New: "<<value<<endl;
 				#endif
 			}
-			
+			*/
 			row_vector.push_back(value);
 		}
 		matrix.push_back(row_vector);
@@ -261,7 +264,10 @@ bicluster biclustering::getbicluster()
 	//fill the column index of the cluster
 	for (int j=0; j<numberOfColumns; j++)
 		if(remainingC[j])
+		{
 			column_index_list.append(j);
+			bicluster_to_return.consensus_list.append(columnMean[j]);
+		}
 
 	bicluster_to_return.row_index_list = row_index_list;
 	bicluster_to_return.column_index_list = column_index_list;
@@ -299,6 +305,8 @@ BOOST_PYTHON_MODULE(biclustering)
 	boost::python::class_<bicluster>("bicluster")
 		.def_readonly("row_index_list", &bicluster::row_index_list)
 		.def_readonly("column_index_list", &bicluster::column_index_list)
+		.def_readonly("consensus_list", &bicluster::consensus_list)
 		.def_readonly("score", &bicluster::score)
 	;
+	def("set_module_and_type", &numeric::array::set_module_and_type);
 }
