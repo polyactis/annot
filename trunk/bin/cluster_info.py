@@ -264,7 +264,7 @@ class cluster_info:
 				unit.cooccurrent_cluster_id = row[7]
 				unit.go_no2association_genes = self.get_go_functions_of_this_gene_set(curs, unit.vertex_set)
 				unit.go_no2information = self.get_information_of_go_functions(curs, \
-					unit.go_no2association_genes, len(unit.vertex_set), no_of_total_genes, p_value_cut_off=0.5)	#jasmine wants to cut some go-nos.
+					unit.go_no2association_genes, len(unit.vertex_set), no_of_total_genes, p_value_cut_off=0.05)	#jasmine wants to cut some go-nos.
 				unit.edge_cor_2d_list, unit.edge_sig_2d_list = self.get_cor_sig_2d_list(curs, unit.edge_set)
 				
 				mcl_id2cluster_dstructure[unit.cluster_id] = unit
