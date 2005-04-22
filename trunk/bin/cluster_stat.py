@@ -158,6 +158,8 @@ class cluster_stat:
 			is powerless (the population size of the go-no is too small).
 			1. percentage of associated-genes over total known genes >= uniformity (0.5 default)
 			2. apart from the percentage, the absolute number is also needed in case the cluster is too small.
+		04-19-05
+			fix a bug. self._no_of_known_genes_of_the_cluster could be 0.
 		"""	
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
@@ -183,7 +185,10 @@ class cluster_stat:
 					m = self._global_go_no_dict[go_no]
 					n = self.no_of_genes -1 - m
 					k = cluster_size-1
-				go_no_ratio = float(x)/self._no_of_known_genes_of_the_cluster	#NOTE: it's different from no_of_known_genes_of_the_cluster
+				if self._no_of_known_genes_of_the_cluster == 0:
+					go_no_ratio = 0
+				else:
+					go_no_ratio = float(x)/self._no_of_known_genes_of_the_cluster	#NOTE: it's different from no_of_known_genes_of_the_cluster
 				if  go_no_ratio < self.uniformity and go_no!=0:	#It doesn't apply to the 0(unknown) category.
 					#ignore the function category if its percentage is < uniformity
 					continue
