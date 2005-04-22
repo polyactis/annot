@@ -357,11 +357,18 @@ def create_columns(treeview, label_list):
 	"""
 	04-17-05
 		create columns in the treeview in the first refresh
+	04-21-05
+		remove the old columns and reset the model of treeview
 	"""
 	import gtk
 	tvcolumn_dict = {}
 	cell_dict = {}
-
+	#remove old columns
+	old_column_list = treeview.get_columns()
+	for column in old_column_list:
+		treeview.remove_column(column)
+	treeview.set_model()
+		
 	for i in range(len(label_list)):
 		tvcolumn_dict[i] = gtk.TreeViewColumn(label_list[i])	# create the TreeViewColumn to display the data
 		treeview.append_column(tvcolumn_dict[i])	# add tvcolumn to treeview
