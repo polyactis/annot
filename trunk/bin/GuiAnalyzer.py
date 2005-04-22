@@ -38,7 +38,7 @@ class GuiAnalyzer:
 		
 		self.window_cluster_info1 = xml.get_widget("window_cluster_info1")
 		self.window_cluster_info1.connect("delete_event", self.subwindow_hide)
-		self.window_cluster_info1.hide()
+		self.window_cluster_info1.show()
 		self.textview_subgraph = xml.get_widget("textview_subgraph")
 		self.treeview_dataset = xml.get_widget("treeview_dataset")
 		self.button_dataset_plot = xml.get_widget("button_dataset_plot")
@@ -49,7 +49,7 @@ class GuiAnalyzer:
 		
 		self.window_cluster_info2 = xml.get_widget("window_cluster_info2")
 		self.window_cluster_info2.connect("delete_event", self.subwindow_hide)
-		self.window_cluster_info2.hide()
+		self.window_cluster_info2.show()
 		self.treeview_recurrence = xml.get_widget("treeview_recurrence")
 		self.label_total_recurrence = xml.get_widget("label_total_recurrence")
 		self.label_total_edges = xml.get_widget("label_total_edges")
@@ -144,12 +144,10 @@ class GuiAnalyzer:
 		if self.curs==None:
 			print "db_connect first"
 			return
-		if self.cluster_info_need_init:
-			self.no_of_datasets = int(self.entry_no_of_datasets.get_text())
-			self.treeview_init(self.no_of_datasets)
-			self.gene_no2gene_id = get_gene_no2gene_id(self.curs)
-			self.gene_no2go_no = get_gene_no2go_no(self.curs)
-			self.cluster_info_need_init = 0	#flag it, has been initialized
+		self.no_of_datasets = int(self.entry_no_of_datasets.get_text())
+		self.treeview_init(self.no_of_datasets)
+		self.gene_no2gene_id = get_gene_no2gene_id(self.curs)
+		self.gene_no2go_no = get_gene_no2go_no(self.curs)
 
 		self.window_cluster_info1.show()
 		self.window_cluster_info2.show()
@@ -271,9 +269,19 @@ class GuiAnalyzer:
 		widget.hide()
 		return True
 	
+	def hide_all_subwindows(self):
+		"""
+		04-20-05
+			called after the class's initialization to hide subwindows.
+		"""
+		self.window_cluster_info1.hide()
+		self.window_cluster_info2.hide()
+		self.dialog_cluster_accuracy.hide()
+	
 	def destroy(self, widget):
 		gtk.main_quit()
 	
 
 instance = GuiAnalyzer()
+instance.hide_all_subwindows()
 gtk.main()
