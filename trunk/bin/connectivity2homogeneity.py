@@ -13,7 +13,7 @@ Option:
 	-o ..., --output_fname=...	where column data goes.
 	-n ..., --no_of_random_subgraphs=...	1e5 (default)
 	-e ..., --random_subgraph_size=...	random generate(default)
-	-y ..., --type=...	running type, 1(default)
+	-y ..., --type=...	running type, 1(default, random from summary graph), 2(get from database)
 	-r, --report	report the progress(a number)
 	-b, --debug	enable debugging, no debug by default
 	-h, --help              show this help
@@ -28,6 +28,7 @@ Description:
 import sys, os, psycopg, getopt, csv, math, random
 from sets import Set
 from codense.common import db_connect
+from codense.common import parse_splat_table_edge_set
 
 class connectivity2homogeneity:
 	"""
@@ -36,10 +37,14 @@ class connectivity2homogeneity:
 	
 	--run()
 		--db_connect
-		--get_summary_graph()
 		--get_gene_no2go_no_list()
-		--get_random_subgraph()
-			--_connectivity2homogeneity()
+		(type==1)
+			--get_summary_graph()
+			--get_random_subgraph()
+				--_connectivity2homogeneity()
+		(type==2)
+			--subgraph_fetch()
+				--_connectivity2homogeneity()
 	"""
 	def __init__(self, input_file=None, output_fname=None, hostname='zhoudb', \
 		dbname='graphdb', schema=None, splat_table=None, mcl_table=None, \
@@ -134,7 +139,29 @@ class connectivity2homogeneity:
 		04-03-05
 			counterpart of get_random_subgraph, get subgraph from database
 		"""
-	
+		sys.stderr.write("Fetching subgraphs from database...\n")
+		curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.vertex_set, \
+			s.edge_set from %s m, %s s where m.splat_id=s.splat_id"\
+			%(mcl_table, splat_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		no_of_records = 0
+		while rows:
+			for row in rows:
+				mcl_id = row[0]
+				vertex_set = row[1][1:-1].split(',')
+				vertex_set = map(int, vertex_set)
+				edge_set = parse_splat_table_edge_set(row[2])
+				self._connectivity2homogeneity(mcl_id, vertex_set, edge_set, self.gene_no2go_no, self.writer)
+				no_of_records += 1
+			if self.report:
+				sys.stderr.write('%s%s'%('\x08'*20, no_of_records))
+
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		
+		sys.stderr.write("Done.\n")
+		
 	def _connectivity2homogeneity(self, subgraph_id, node_list, edge_list, gene_no2go_no, writer):
 		"""
 		04-03-05
@@ -186,12 +213,16 @@ class connectivity2homogeneity:
 		04-03-05
 		"""
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-		self.summary_graph = self.get_summary_graph(self.input_file, min_weight=None)
 		self.gene_no2go_no = self.get_gene_no2go_no_list(curs, depth=5)
 		self.writer = csv.writer(open(self.output_fname, 'w'), delimiter='\t')
+		
 		#self.gene_no2go_no and self.writer should be ready before calling get_random_subgraph()
 		#because _connectivity2homogeneity() needs them.
-		self.get_random_subgraph(self.summary_graph, size=self.random_subgraph_size)
+		if self.type == 1:
+			self.summary_graph = self.get_summary_graph(self.input_file, min_weight=None)
+			self.get_random_subgraph(self.summary_graph, size=self.random_subgraph_size)
+		elif self.type == 2:
+			self.subgraph_fetch(curs, self.mcl_table, self.splat_table)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -230,7 +261,7 @@ if __name__ == '__main__':
 		elif opt in ("-k", "--schema"):
 			schema = arg
 		elif opt in ("-s", "--splat_table"):
-			table = arg
+			splat_table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
 		elif opt in ("-i", "--input_file"):
