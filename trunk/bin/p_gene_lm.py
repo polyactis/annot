@@ -7,6 +7,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-t ..., --table=...	the p_gene table
+	-s ..., --splat_table=...	the corresponding splat_table
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-a ..., --accuracy_cut_off=...	0.5(default)
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
@@ -38,7 +39,7 @@ from p_gene_analysis import prediction_space_attr
 from module_cc.linear_model import linear_model
 from codense.common import *
 from numarray import *
-from rpy import r
+from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
 
 class p_gene_lm:
 	"""
@@ -56,9 +57,11 @@ class p_gene_lm:
 	
 	03-27-05
 		call R to use logistic regression. No floor taking of recurrence and connectivity.
-	
+	04-05-05
+		use connectivity in the corresponding splat_table to do logistic regression(previously use
+		my definition which is in the p_gene table copied from mcl_table)
 	"""
-	def __init__(self, hostname=None, dbname=None, schema=None, table=None, \
+	def __init__(self, hostname=None, dbname=None, schema=None, table=None, splat_table=None,\
 		lm_table=None, accuracy_cut_off=0, judger_type=0, min_data_points=5, \
 		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
@@ -69,6 +72,7 @@ class p_gene_lm:
 		self.dbname = dbname
 		self.schema = schema
 		self.table = table
+		self.splat_table = splat_table
 		self.lm_table = lm_table
 		self.accuracy_cut_off = float(accuracy_cut_off)
 		self.judger_type = int(judger_type)
@@ -105,9 +109,9 @@ class p_gene_lm:
 			--prediction_space_setup()
 		"""
 		sys.stderr.write("Setting Up prediction_space...\n")
-		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, mcl_id, %s, avg_p_value, \
-			recurrence_cut_off,connectivity_cut_off, depth_cut_off from %s"\
-			%(self.is_correct_dict[self.judger_type], table))
+		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off from %s p, %s s where p.mcl_id=s.splat_id"\
+			%(self.is_correct_dict[self.judger_type], table, self.splat_table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -181,10 +185,27 @@ class p_gene_lm:
 		go_no2lm_results = {}
 		
 		for (go_no,data) in go_no2prediction_space.iteritems():
+			if len(data)<=50:
+				#two few data
+				continue
 			#convert it to a 2d array
 			data = array(data)
+			"""
+			data_frame = r("d=data.frame(p_value=c(%s),recurrence=c(%s),connectivity=c(%s), is_correct=c(%s))"%(repr(list(data[:,0]))[1:-1], \
+				repr(list(data[:,1]))[1:-1], repr(list(data[:,2]))[1:-1], repr(list(data[:,3]))[1:-1]))
+			lm_result = r("lm_result=glm(is_correct~p_value+recurrence+connectivity, data=d,family=binomial)")
+			significance_dict = r("summary(lm_result)")
+			print significance_dict['coefficients']
+			"""
+			set_default_mode(NO_CONVERSION) #04-07-05
 			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], "is_correct":data[:,3]})
 			lm_result = r.glm(r("is_correct~p_value+recurrence+connectivity"), data=data_frame, family=r("binomial"))
+			set_default_mode(BASIC_CONVERSION) #04-07-05
+			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
+			summary_stat = r.summary(lm_result)
+			print summary_stat['coefficients']	#p-values of coefficients
+			#04-07-05 convert to python dictionary form
+			lm_result = lm_result.as_py()
 			coeff_list = [lm_result["coefficients"]["(Intercept)"], lm_result["coefficients"]["p_value"], \
 				lm_result["coefficients"]["recurrence"], lm_result["coefficients"]["connectivity"], 1]
 						#the last entry is score_cut_off, replaced later in get_score_cut_off()
@@ -221,6 +242,9 @@ class p_gene_lm:
 		"""
 		sys.stderr.write("Getting score cutoff for accuracy_cut_off %s...\n"%(accuracy_cut_off))
 		for go_no,data in go_no2prediction_space.iteritems():
+			if go_no not in go_no2lm_results:
+				#this go_no has too few data, ignored.
+				continue
 			score_list = []
 			coeff_list = go_no2lm_results[go_no]
 			for entry in data:
@@ -246,10 +270,16 @@ class p_gene_lm:
 		#default no score_cut_off
 		score_cut_off = None
 		score_list.sort()
+		if self.debug:
+			print "score\tis_correct"
+			for score_tuple in score_list:
+				print "%s\t%s"%(score_tuple[0], score_tuple[1])
 		#convert to a 2d array, they have the same indices
 		score_array = array(score_list)
 		previous_score = None
 		no_of_known_predictions = len(score_array)
+		if self.debug:
+			print "score\tis_correct_array\ttotal\taccuracy"
 		#calculate the accuracy from the low score cutoff to high score cutoff, once <= accuracy_cut_off, break
 		for i in range(len(score_array)):
 			score = score_array[i,0]
@@ -260,7 +290,10 @@ class p_gene_lm:
 				#this score becomes previous_score for the next score
 				previous_score = score
 				#count the is_correct==1 entries from i-th row, and divide it by (no_of_known_predictions-i+1)
-				accuracy = sum(greater(score_array[:,1][i:],0))/float(no_of_known_predictions-i+1)
+				correct_array = score_array[:,1][i:]
+				accuracy = sum(correct_array)/float(len(correct_array))
+				if self.debug:
+					print "%s\t%s\t%s\t%s"%(score,repr(correct_array), len(correct_array), accuracy)
 				if accuracy >= accuracy_cut_off:
 					score_cut_off = score
 					break
@@ -342,9 +375,10 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:l:a:j:m:v:x:y:cru", ["help", "hostname=", \
-			"dbname=", "schema=", "table=", "lm_table=", "accuracy_cut_off=", "judger_type=",\
-			"min_data_points=", "valid_space=", "commit", "report", "debug", "recurrence_gap_size=", "connectivity_gap_size="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:j:m:v:x:y:cru", ["help", "hostname=", \
+			"dbname=", "schema=", "table=", "splat_table=", "lm_table=", "accuracy_cut_off=", \
+			"judger_type=", "min_data_points=", "valid_space=", "commit", "report", "debug", \
+			"recurrence_gap_size=", "connectivity_gap_size="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -353,6 +387,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	table = None
+	splat_table = None
 	lm_table = None
 	accuracy_cut_off = 0.5
 	judger_type = 0
@@ -375,6 +410,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-t", "--table"):
 			table = arg
+		elif opt in ("-s", "--splat_table"):
+			splat_table = arg
 		elif opt in ("-l", "--lm_table"):
 			lm_table = arg
 		elif opt in ("-a", "--accuracy_cut_off"):
@@ -396,8 +433,9 @@ if __name__ == '__main__':
 		elif opt in ("-y", "--connectivity_gap_size"):
 			connectivity_gap_size = int(arg)
 	if schema and table:
-		instance = p_gene_lm(hostname, dbname, schema, table, lm_table, accuracy_cut_off,\
-			judger_type, min_data_points, commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
+		instance = p_gene_lm(hostname, dbname, schema, table, splat_table, lm_table, \
+			accuracy_cut_off, judger_type, min_data_points, commit, report, debug, \
+			valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
