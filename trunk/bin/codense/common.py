@@ -415,3 +415,49 @@ def get_no_of_total_genes(curs, schema=None, gene_table='gene'):
 		no_of_total_genes = int(row[0])
 	sys.stderr.write("Done\n")
 	return no_of_total_genes
+
+def get_edge_vector_by_id(curs, edge_id_list, edge_table='edge_cor_vector'):
+	"""
+	04-25-05
+		return cor_2d_list and sig_2d_list given a list of edge id's 
+	"""
+	cor_2d_list = []
+	sig_2d_list = []
+	for edge_id in edge_id_list:
+		curs.execute("select cor_vector, sig_vector from %s where edge_id=%s"%(edge_table,edge_id))
+		rows = curs.fetchall()
+		if len(rows) == 0:
+			sys.stderr.write('%s not found in %s\n'%(edge_id, edge_table))
+			continue
+		cor_vector = rows[0][0][1:-1].split(',')
+		cor_vector = map(float, cor_vector)
+		cor_2d_list.append(cor_vector)
+		
+		sig_vector = rows[0][1][1:-1].split(',')
+		sig_vector = map(int, sig_vector)
+		sig_2d_list.append(sig_vector)
+	return (cor_2d_list, sig_2d_list)
+
+def get_edge_vector_by_tuple(curs, edge_set, edge_table='edge_cor_vector'):
+	"""
+	04-25-05
+		return cor_2d_list and sig_2d_list given a list of edge tuples, which
+		is like [1,7]
+	"""
+	cor_2d_list = []
+	sig_2d_list = []
+	for edge in edge_set:
+		edge_string = '{' + repr(edge)[1:-1] + '}'
+		curs.execute("select cor_vector, sig_vector from %s where edge_name='%s'"%(edge_table,edge_string))
+		rows = curs.fetchall()
+		if len(rows) == 0:
+			sys.stderr.write('%s not found in %s\n'%(edge_string, edge_table))
+			continue
+		cor_vector = rows[0][0][1:-1].split(',')
+		cor_vector = map(float, cor_vector)
+		cor_2d_list.append(cor_vector)
+		
+		sig_vector = rows[0][1][1:-1].split(',')
+		sig_vector = map(int, sig_vector)
+		sig_2d_list.append(sig_vector)
+	return (cor_2d_list, sig_2d_list)
