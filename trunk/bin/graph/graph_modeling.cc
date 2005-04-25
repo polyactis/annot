@@ -93,6 +93,35 @@ edge ind_cor(vf v1, vf v2, int position)
 	return edge_data;
 }
 
+//04-25-05	calculate the euclidean distance
+edge euc_dist(vf v1, vf v2)
+{
+	float xx = 0.0;
+	int no_of_valids=0;
+	edge edge_data;
+
+	for (int i=0; i<v1.size(); i++)
+	{
+		//100000000 is regarded as NAN
+		if ( ( v1[i]==100000000 )|| ( v2[i]==100000000 ) )
+			continue;
+		else
+		{
+			xx += (v1[i] - v2[i])*(v1[i]-v2[i]);
+			no_of_valids++;
+		}
+	}
+	
+	if(no_of_valids==0)
+		//all NAN
+		edge_data.value = -1;
+	else
+		edge_data.value = sqrt(xx);
+	//correlation is modeled as a t distribution of n-2 degree.
+	edge_data.degree = no_of_valids-2;
+	edge_data.significance = 0;
+	return edge_data;
+}
 
 //03-02-05	fill the global cor_cut_off_vector with cutoff values, if p_value_cut_off is ==0, use cor_cut_off_given instead.
 void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_given)

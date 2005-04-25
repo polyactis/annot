@@ -36,6 +36,8 @@ edge ind_min_cor(vf v1, vf v2);
 edge ind_cor(vf v1, vf v2, int position);
 void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_given);
 
+edge euc_dist(vf v1, vf v2);
+
 class graph_construct
 {
 	/*one sequence to call
