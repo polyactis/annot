@@ -33,6 +33,7 @@ class GuiAnalyzer:
 		self.entry_splat_table = xml.get_widget("entry_splat_table")
 		self.entry_mcl_table = xml.get_widget("entry_mcl_table")
 		self.entry_cluster_stat = xml.get_widget("entry_cluster_stat")
+		self.togglebutton_hide_show = xml.get_widget("togglebutton_hide_show")
 
 		self.button_db_connect = xml.get_widget("button_db_connect")
 		
@@ -83,6 +84,7 @@ class GuiAnalyzer:
 			55:self.dataset_liststore_55,
 			79:self.dataset_liststore_79,
 			80:self.dataset_liststore_80}
+		
 		
 	def dataset_liststore_54(self):
 		"""
@@ -139,7 +141,11 @@ class GuiAnalyzer:
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str,str, str,str,str,str,str)	#88 entries
-		
+	
+	
+	"""
+	window_center
+	"""
 	def on_button_cluster_info_clicked(self, button_cluster_info, *args):
 		if self.curs==None:
 			print "db_connect first"
@@ -160,7 +166,22 @@ class GuiAnalyzer:
 		dbname = self.entry_dbname.get_text()
 		schema = self.entry_schema.get_text()
 		self.conn, self.curs = db_connect(hostname, dbname, schema)
-	
+		
+	def on_togglebutton_hide_show_toggled(self, widget, data=None):
+		"""
+		04-24-05
+			a toggle button to hide or show subwindows
+		"""
+		if widget.get_active():
+			self.window_cluster_info1.hide()
+			self.window_cluster_info2.hide()
+			self.dialog_cluster_accuracy.hide()
+			widget.set_label("Subwindow Show")
+		else:
+			self.window_cluster_info1.show()
+			self.window_cluster_info2.show()
+			self.dialog_cluster_accuracy.show()
+			widget.set_label("Subwindow Hide")
 	"""
 	cluster_info part
 	"""
@@ -283,5 +304,4 @@ class GuiAnalyzer:
 	
 
 instance = GuiAnalyzer()
-instance.hide_all_subwindows()
 gtk.main()
