@@ -139,6 +139,7 @@ void biclustering::scoring()
 {
 	/*
 	*copied from Biclustering.java, no change
+	*04-26-05 add some DEBUG macros to control compilation
 	*/
 	mean = 0;
 	for (int j = 0; j < numberOfColumns; j++)
@@ -156,11 +157,27 @@ void biclustering::scoring()
 				}
 			mean += rowMean[i];
 			rowMean[i] /= smWidth;	//smWidth determined in getBicluster()
+			#if defined(DEBUG)
+				cout<<"rowMean at "<<i<<" is "<<rowMean[i]<<"; incremental mean is "<<mean<<endl;
+			#endif
 		}
 	for (int j = 0; j < numberOfColumns; j++)
 		if (remainingC[j])
+		{
 			columnMean[j] /= smHeight;	//smHeight determined in getBicluster()
+			#if defined(DEBUG)
+				cout<<"colMean at "<<j<<" is "<<columnMean[j]<<endl;
+			#endif
+		}
+	#if defined(DEBUG)
+		cout<<"mean before dividing is "<<mean<<endl;
+		cout<<"smWidth is "<<smWidth<<endl;
+		cout<<"smHeight is "<<smHeight<<endl;
+	#endif
 	mean /= smWidth * smHeight;
+	#if defined(DEBUG)
+		cout<<"mean is "<<mean<<endl;
+	#endif
 	HScore = 0;
 	for (int j = 0; j < numberOfColumns; j++)
 		if (remainingC[j])
@@ -173,13 +190,22 @@ void biclustering::scoring()
 				if (remainingC[j])
 				{
 					double r = matrix[i][j] - rowMean[i] - columnMean[j] + mean;
+					#if defined(DEBUG)
+						cout<<"r score at "<<i<<" and "<<j<<" is "<<r<<endl;
+					#endif
 					r = r * r;
 					rowScore[i] += r;
 					columnScore[j] += r;
 				}
 			HScore += rowScore[i];
 			rowScore[i] /= smWidth;
+			#if defined(DEBUG)
+				cout<<"rowScore at "<<i<<" is "<<rowScore[i]<<endl;
+			#endif
 		}
+	#if defined(DEBUG)
+		cout<<"HScore before dividing is "<<HScore<<endl;
+	#endif
 	HScore /= smWidth * smHeight;
 	for (int j = 0; j < numberOfColumns; j++)
 		if (remainingC[j])
