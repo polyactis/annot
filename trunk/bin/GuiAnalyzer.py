@@ -208,11 +208,11 @@ class GuiAnalyzer:
 		fill_treeview(self.treeview_recurrence, liststore_recurrence, \
 			[self.cluster.recurrence_array])
 		
-		self.label_total_recurrence.set_text("Total recurrence: %f"%(sum(self.cluster.recurrence_array)) )
-		self.label_total_edges.set_text("Total no of edges: %d"%(len(self.cluster.edge_set)) )
-		self.label_avg_connectivity.set_text("Average connectivity: %f"%(self.cluster.connectivity) )
-		self.label_splat_connectivity.set_text("Splat connectivity: %f"%(self.cluster.splat_connectivity) )
-		self.label_original_connectivity.set_text("Original connectivity: %f"%(self.cluster.connectivity_original) )
+		self.label_total_recurrence.set_text("Total recurrence: %s"%(sum(self.cluster.recurrence_array)) )
+		self.label_total_edges.set_text("Total no of edges: %s"%(len(self.cluster.edge_set)) )
+		self.label_avg_connectivity.set_text("Average connectivity: %s"%(self.cluster.connectivity) )
+		self.label_splat_connectivity.set_text("Splat connectivity: %s"%(self.cluster.splat_connectivity) )
+		self.label_original_connectivity.set_text("Original connectivity: %s"%(self.cluster.connectivity_original) )
 		
 		
 		liststore_edge_correlation = self.dataset_liststore_dict[self.no_of_datasets+1]()	#it's one column bigger than before
