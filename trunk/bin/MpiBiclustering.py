@@ -12,6 +12,9 @@ Option:
 	-e ..., --min_height=...	5 (default)
 	-w ..., --min_width=...		6 (default)
 	-o ..., --batchThreshold=...	100 (default)
+	-x ..., --cor_cut_off=...	0.9(default), for seed_grow
+	-y ..., --euc_dist_cut_off=...	0.02(default) for seed_grow
+	-p ..., --outfname=...	the output filename
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-b, --debug
@@ -27,7 +30,7 @@ Description:
 
 import sys, os, psycopg, getopt, csv, re, random
 from sets import Set
-from codense.common import db_connect
+from codense.common import db_connect, get_vertex_edge_list_by_edge_id
 from Numeric import array, Float, take, zeros, Int
 from Scientific import MPI
 from graph import biclustering
@@ -63,7 +66,8 @@ class MpiBiclustering:
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
 		table=None, mcl_table=None, hscore_cut_off=0.1, min_height=5, min_width=6,\
-		batchThreshold=100,	report=0, needcommit=0, debug=0):
+		batchThreshold=100,	cor_cut_off=0.9, euc_dist_cut_off=0.02, \
+		outfname=None, report=0, needcommit=0, debug=0):
 		
 		self.hostname = hostname
 		self.dbname = dbname
@@ -74,6 +78,9 @@ class MpiBiclustering:
 		self.min_height = int(min_height)
 		self.min_width = int(min_width)
 		self.batchThreshold = int(batchThreshold)
+		self.cor_cut_off = float(cor_cut_off)
+		self.euc_dist_cut_off = float(euc_dist_cut_off)
+		self.outfname = outfname
 		self.report = int(report)
 		self.needcommit = int(needcommit)
 		#debugging flag
@@ -93,12 +100,21 @@ class MpiBiclustering:
 		"""
 		04-15-05
 			different from get_gene_no2go_no, the value is a set.
+		04-27-05
+			only depth ==5
 		"""
-		from codense.common import get_gene_no2go_no
+		sys.stderr.write("Preparing gene_no2go_no...")
+		from codense.common import get_gene_no2go_no, get_go_no2depth
+		go_no2depth = get_go_no2depth(curs)
 		gene_no2go_no = get_gene_no2go_no(curs)
+		gene_no2go_no_set = {}
 		for gene_no,go_no_list in gene_no2go_no.iteritems():
-			gene_no2go_no[gene_no] = Set(go_no_list)
-		return gene_no2go_no
+			gene_no2go_no_set[gene_no] = Set()
+			for go_no in go_no_list:
+				if go_no2depth[go_no] == 5:
+					gene_no2go_no_set[gene_no].add(go_no)
+		sys.stderr.write("Done.\n")
+		return gene_no2go_no_set
 	
 	def get_function_edge_matrix_data(self, curs, edge_table='edge_cor_vector'):
 		"""
@@ -174,12 +190,13 @@ class MpiBiclustering:
 		
 		curs.execute("fetch 5000 from crs1")
 		rows = curs.fetchall()
+		no_of_records = 0
 		while rows:
 			for row in rows:
 				self._get_candidate_edge_matrix_data(row)
-				self.no_of_records+=1
+				no_of_records+=1
 			if self.report:
-				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+				sys.stderr.write('%s%s'%('\x08'*20, no_of_records))
 			if self.debug:
 				break
 			curs.execute("fetch 5000 from crs1")
@@ -201,14 +218,16 @@ class MpiBiclustering:
 		"""
 		04-15-05
 			return True if the edge contains one unknown gene, False otherwise
+		04-27-05
+			unknown gene's go_no set is nothing, change the judging rule
 		"""
 		gene_no1, gene_no2 = edge
-		if 0 in self.gene_no2go_no[gene_no1] | self.gene_no2go_no[gene_no2]:
+		if len(self.gene_no2go_no[gene_no1]) ==0 or len(self.gene_no2go_no[gene_no2])==0:
 			return True
 		else:
 			return False
 		
-	def seed_grow(self, node_rank):
+	def seed_grow(self, node_rank, cor_cut_off, euc_dist_cut_off):
 		"""
 		04-20-05
 			add candidate edge based on its correlation with consensus_list, (>=0.8)
@@ -226,7 +245,9 @@ class MpiBiclustering:
 					selected_candidate_edge_vector = list(take(candidate_edge_vector, bicluster.column_index_list))
 					edge_data = graph_modeling.ind_cor(selected_candidate_edge_vector, \
 						bicluster.consensus_list, -1)	#leave_one_out = -1, means no leave_one_out
-					if edge_data.value>=0.8:
+					euc_edge_data = graph_modeling.euc_dist(selected_candidate_edge_vector,\
+						bicluster.consensus_list)
+					if edge_data.value>=cor_cut_off and euc_edge_data.value/(euc_edge_data.degree+2)<=euc_dist_cut_off:	#average euclidean distance
 						bicluster.added_edge_id_list.append(edge_id)
 						bicluster.added_edge_matrix.append(selected_candidate_edge_vector)
 						cluster_group.bicluster_list[j] = bicluster	#update the list values, different from dictionary
@@ -263,17 +284,58 @@ class MpiBiclustering:
 		del biclustering_instance
 		sys.stderr.write('Node %s go_no %s Done.\n'%(node_rank, go_no))
 
-	def output(self, node_rank):
+	def _output(self, outfname, node_rank):
 		"""
 		04-20-05
 			output go_no2cluster_group
+		04-25-05
+			cluster_id redefined
 		"""
-		print "biclusters from %s:"%node_rank
+		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+		
+		outf = open(outfname, 'a')
+		writer = csv.writer(outf, delimiter='\t')
 		for go_no, cluster_group in self.go_no2cluster_group.iteritems():
+			counter = 0
 			for bicluster in cluster_group.bicluster_list:
-				print "seed edges: %s"%repr(list(take(cluster_group.edge_id_array, bicluster.row_index_list)))
-				print "candidate edges: %s"%repr(bicluster.added_edge_id_list)
-				print "column_index_list: %s"%repr(bicluster.column_index_list)
+				seed_edge_id_list = list(take(cluster_group.edge_id_array, bicluster.row_index_list))
+				edge_id_list = seed_edge_id_list + bicluster.added_edge_id_list
+				vertex_list , edge_list = get_vertex_edge_list_by_edge_id(curs, edge_id_list)
+				no_of_nodes = len(vertex_list)
+				connectivity = len(edge_list)*2.0/(no_of_nodes*(no_of_nodes-1))
+				vertex_string = '{' + ';'.join(vertex_list) + ';}'
+				edge_string  = self.edge_string_from_edge_list(edge_list)
+				cluster_id = "%s.%s.%s"%(node_rank, go_no, counter)
+				writer.writerow([cluster_id, connectivity, vertex_string, edge_string])
+				counter += 1
+		del writer
+		outf.close()
+		
+	def output(self, outfname, node_rank):
+		"""
+		04-26-05
+			output the information about the seed
+		"""
+		outf = open(outfname, 'a')
+		writer = csv.writer(outf, delimiter='\t')
+		for go_no, cluster_group in self.go_no2cluster_group.iteritems():
+			counter = 0
+			for bicluster in cluster_group.bicluster_list:
+				cluster_id = "%s.%s.%s"%(node_rank, go_no, counter)
+				seed_edge_id_list = list(take(cluster_group.edge_id_array, bicluster.row_index_list))
+				edge_id_list = seed_edge_id_list + bicluster.added_edge_id_list
+				writer.writerow([cluster_id, bicluster.score, repr(edge_id_list), repr(bicluster.column_index_list)])
+				counter += 1
+	
+	def edge_string_from_edge_list(self, edge_list):
+		"""
+		04-25-05
+		"""
+		edge_string  = ''
+		for edge in edge_list:
+			edge_string += "(%s,%s );"%(edge[0], edge[1])
+		edge_string = '{'+edge_string+'}'
+		return edge_string
 	
 	def pop_edge_data_of_one_function(self, go_no2edge_matrix_data):
 		"""
@@ -417,7 +479,7 @@ class MpiBiclustering:
 		
 		#seed_grow
 		if node_rank!=0:
-			self.seed_grow(node_rank)
+			self.seed_grow(node_rank, self.cor_cut_off, self.euc_dist_cut_off)
 		
 		self.mpi_synchronize(communicator)
 		
@@ -432,7 +494,8 @@ class MpiBiclustering:
 		else:
 			return_value, source, tag = communicator.receiveString(0, None)	#get 'output' signal from node 0
 			if return_value=='output':
-				self.output(node_rank)
+				self.output(self.outfname,node_rank)
+				self._output(self.outfname+'.2', node_rank)
 				communicator.send("finished", 0, node_rank)	#tell node 0 after done.
 
 if __name__ == '__main__':
@@ -441,10 +504,10 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=",\
-		"hscore_cut_off=", "min_height=", "min_width=", "batchThreshold=",\
-		"report", "commit", "debug"]
+		"hscore_cut_off=", "min_height=", "min_width=", "batchThreshold=", "cor_cut_off=",\
+		"euc_dist_cut_off=", "outfname=", "report", "commit", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:s:e:w:o:rcb", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:s:e:w:o:x:y:p:rcb", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -458,6 +521,9 @@ if __name__ == '__main__':
 	min_height = 5
 	min_width = 6
 	batchThreshold = 100
+	cor_cut_off = 0.9
+	euc_dist_cut_off = 0.02
+	outfname = None
 	report = 0
 	commit = 0
 	debug = 0
@@ -483,6 +549,12 @@ if __name__ == '__main__':
 			min_width = int(arg)
 		elif opt in ("-o", "--batchThreshold"):
 			batchThreshold = int(arg)
+		elif opt in ("-x", "--cor_cut_off"):
+			cor_cut_off = float(arg)
+		elif opt in ("-y", "--euc_dist_cut_off"):
+			euc_dist_cut_off = float(arg)
+		elif opt in ("-p", "--outfname"):
+			outfname = arg
 		elif opt in ("-r", "--report"):
 			report = 1
 		elif opt in ("-c", "--commit"):
@@ -490,9 +562,10 @@ if __name__ == '__main__':
 		elif opt in ("-b", "--debug"):
 			debug = 1
 
-	if schema:
+	if schema and outfname:
 		instance = MpiBiclustering(hostname, dbname, schema, table, mcl_table, hscore_cut_off,\
-			min_height, min_width, batchThreshold, report, commit, debug)
+			min_height, min_width, batchThreshold, cor_cut_off, euc_dist_cut_off, outfname, \
+			report, commit, debug)
 		instance.run()
 	else:
 		print __doc__
