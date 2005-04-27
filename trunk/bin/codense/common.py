@@ -461,3 +461,24 @@ def get_edge_vector_by_tuple(curs, edge_set, edge_table='edge_cor_vector'):
 		sig_vector = map(int, sig_vector)
 		sig_2d_list.append(sig_vector)
 	return (cor_2d_list, sig_2d_list)
+
+def get_vertex_edge_list_by_edge_id(curs, edge_id_list, edge_table='edge_cor_vector'):
+	"""
+	04-25-05
+		return vertex_list and edge_list given a list of edge id's 
+	"""
+	vertex_set = Set()
+	edge_list = []
+	for edge_id in edge_id_list:
+		curs.execute("select edge_name from %s where edge_id=%s"%(edge_table,edge_id))
+		rows = curs.fetchall()
+		if len(rows) == 0:
+			sys.stderr.write('%s not found in %s\n'%(edge_id, edge_table))
+			continue
+		edge = rows[0][0][1:-1].split(',')
+		#edge = map(int, edge)	no need to cast to int. do it later
+		edge_list.append(edge)
+		vertex_set.add(edge[0])
+		vertex_set.add(edge[1])
+
+	return (list(vertex_set), edge_list)
