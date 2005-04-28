@@ -2,7 +2,7 @@
 """
 04-12-05
 Usage:
-	test_biclustering.py INPUTFILE HSCORE_CUT_OFF
+	test_biclustering.py INPUTFILE HSCORE_CUT_OFF MINHEIGHT MINWIDTH BTHRESHOLD
 
 Decription:
 	A program to test the biclustering module.
@@ -15,12 +15,16 @@ import biclustering
 from Numeric import array
 import random
 
-if len(sys.argv)!=3:
+if len(sys.argv)!=6:
 	print __doc__
 	sys.exit(0)
 
 filename=sys.argv[1]
 hscore_cut_off = float(sys.argv[2])
+min_height = int(sys.argv[3])
+min_width = int(sys.argv[4])
+bThreshold = int(sys.argv[5])
+
 inf = open(filename,'r')
 reader = csv.reader(inf,delimiter='\t')
 ls = []
@@ -36,7 +40,7 @@ for row in reader:
 		one_row.append(data)
 	ls.append(one_row)
 
-instance = biclustering.biclustering(hscore_cut_off,5,6,100)
+instance = biclustering.biclustering(hscore_cut_off,min_height, min_width, bThreshold)
 biclustering.set_module_and_type('Numeric', 'ArrayType')
 instance.data_read_in(array(ls))
 ls1 = instance.return_matrix_data()
