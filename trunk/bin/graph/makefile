@@ -1,4 +1,4 @@
-BoostPythonTarget	= clustering.so biclustering.so
+BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so
 BoostPythonLib  = -lboost_python
 
 swig_py		= graph_modeling.py
