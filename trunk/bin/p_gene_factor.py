@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """
-Usage: p_gene_analysis.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION] STAT_TABLE_FILE
+Usage: p_gene_factor.py -k SCHEMA -p P_VALUE_CUT_OFF [OPTION] STAT_TABLE_FILE
 
 Option:
 	STAT_TABLE_FILE is the file where the output goes.
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	cluster_stat(default)
+	-t ..., --table=...	splat_table
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
@@ -101,9 +101,7 @@ class p_gene_factor:
 		
 		
 	
-	def init(self):	
-
-
+	def init(self):
 		#an is_correct dictionary used in database fetch
 		self.is_correct_dict = {0: 'is_correct',
 			1: 'is_correct_L1',
@@ -123,17 +121,24 @@ class p_gene_factor:
 		
 		self.prediction_data = []
 	
-	def data_fetch(self, curs, gene_table):
+	def data_fetch(self, curs, splat_table, mcl_table, gene_table):
 		"""
 		02-21-05
 			--_p_gene_analysis()
 		"""
 		sys.stderr.write("Setting up prediction_space and prediction_pair...\n")
+		"""
 		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, %s, avg_p_value, \
 			recurrence_cut_off,connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, \
 			depth_cut_off,lca_list,p_gene_id,mcl_id from %s"\
 			%(self.is_correct_dict[self.judger_type], gene_table))
-		
+		"""
+		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.%s, p.avg_p_value, \
+			p.recurrence_cut_off,s.connectivity, p.cluster_size_cut_off, p.unknown_cut_off, \
+			p.depth_cut_off,p.lca_list,p.p_gene_id,p.mcl_id,s.no_of_edges from %s p, \
+			%s s ,%s m\
+			where s.splat_id=p.mcl_id and p.mcl_id=m.mcl_id"\
+			%(self.is_correct_dict[self.judger_type], gene_table, splat_table, mcl_table))
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		while rows:
@@ -166,7 +171,8 @@ class p_gene_factor:
 		lca_list = row[9]
 		p_gene_id = row[10]
 		mcl_id = row[11]
-		
+		no_of_edges = row[12]
+
 		if lca_list and is_correct ==1:
 			lca_list = lca_list[1:-1].split(',')
 			lca_list = map(int,lca_list)
@@ -177,18 +183,22 @@ class p_gene_factor:
 		else:
 			#no unknown genes
 			return
-		
+
 		if p_value ==0:
 			p_value = 1e-8
 		#-log transforms p_value
 		p_value = -math.log(p_value)
-		
-		
-		self.prediction_data.append([gene_no, go_no, is_correct, is_correct_ratio, p_value, recurrence, \
-			connectivity, cluster_size, unknown, p_gene_id, mcl_id])
 
-		
-	def group_data(self, data_list_2d, key_column=0, no_of_groups=6, cluster_column=-1):
+		#connectivity = no_of_edges/float(cluster_size)
+		data_row = [gene_no, go_no, is_correct, is_correct_ratio, p_value, recurrence, \
+			connectivity, cluster_size, unknown, p_gene_id, mcl_id]
+		self.prediction_data.append(data_row)
+		if self.debug:
+			print data_row
+			raw_input("pause:")
+
+
+	def group_data(self, data_list_2d, key_column=0, no_of_groups=6, group_size=None, cluster_column=-1):
 		"""
 		03-30-05
 			output: a dictionary
@@ -198,7 +208,10 @@ class p_gene_factor:
 		data_array = array(data_list_2d)
 		cluster_list = list(data_array[:,cluster_column])
 		cluster_set = Set(cluster_list)
-		unit_length = len(cluster_set)/no_of_groups
+		if group_size:
+			unit_length = group_size
+		else:
+			unit_length = len(cluster_set)/no_of_groups
 		
 		key2cluster_set = {}
 		for i in range(len(data_array)):
@@ -243,18 +256,21 @@ class p_gene_factor:
 	
 	def prediction_space_output(self, outf, prediction_space2attr):
 		writer = csv.writer(outf, delimiter='\t')
-		writer.writerow(['p_value', 'recurrence', 'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no'])
+		header_row = ['gene_no','go_no','is_correct', 'is_correct_ratio', 'p_value', 'recurrence', \
+			'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no']
+		writer.writerow([header_row[8],header_row[4], 'acc1', 'acc2', 'no', 'mcl_no'])
 		for (prediction_space,unit) in prediction_space2attr.iteritems():
 			unit_array = array(unit)
 
 			row = list(prediction_space)
 			row.append(get_average(unit_array,2))	#average is_correct
 			row.append(get_average(unit_array, 3))	#average is_correct_ratio
-			row.append(len(unit_array))	#no of predictions
+			#row.append(len(unit_array))	#no of predictions
+			row.append(len(Set(unit_array[:,-2])))
 			row.append(len(Set(unit_array[:,-1])))	#no of clusters
 			writer.writerow(row)
 		del writer
-		
+
 	def run(self):
 		"""
 		03-30-05
@@ -264,12 +280,15 @@ class p_gene_factor:
 		from codense.common import  get_go_no2depth
 		self.go_no2depth = get_go_no2depth(curs)
 		
-		self.data_fetch(curs, self.gene_table)
-		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=4, no_of_groups=4)	#4 is p_value
+		self.data_fetch(curs, self.table, self.mcl_table, self.gene_table)
+		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=5, no_of_groups=40)	#4 is p_value, 6 is connectivity,
 		for key, unit in local_prediction_space2attr.iteritems():
-			local_prediction_space2attr_2 = self.group_data(unit, key_column=5, no_of_groups=5)	#5 is recurrence
+			self.prediction_space2attr[(key,)] = unit
+			"""
+			local_prediction_space2attr_2 = self.group_data(unit, key_column=5, no_of_groups=5)	#5 is recurrence 7 is cluster_size, 8 is unknown
 			for key2, unit2 in local_prediction_space2attr_2.iteritems():
 				self.prediction_space2attr[(key,key2)] = unit2
+			"""
 		#open a file
 		if self.stat_table_fname:
 			stat_table_f = open(self.stat_table_fname, 'w')
