@@ -72,9 +72,9 @@ class graph_construct
 		graph_construct(char* inf_name, char* outf_name, char* g_name);
 		graph_construct(char* outf_name, vector<int> edge_vector);
 		~graph_construct();
-		void cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given);
+		void cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree);
 		void input();
-		void edge_construct();
+		void edge_construct(bool leave_one_out);	//04-30-05	flag leave_one_out to control whether leave_one_out or not.
 		void output();
 		edge min_cor(vf v1, vf v2);
 		edge cor(vf v1, vf v2, int position);
@@ -90,5 +90,6 @@ class graph_construct
 		string graph_name;
 		hash_map<const char*, int > gene_label2index;
 		vector<int> edge_tuple_vector;
+
 
 };

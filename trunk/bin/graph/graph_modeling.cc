@@ -179,10 +179,14 @@ void graph_construct::input()
 	no_of_cols = gene_array[0].size();
 }
 
-void graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given)
+void graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree)
 {
+	/*
+	*04-30-05
+	*	max_degree to control the length of the cor_cut_off_array
+	*/
 	double cor_cut_off, t;
-	for(int i=1; i<400; i++)
+	for(int i=1; i<max_degree; i++)
 	{
 		if(p_value_cut_off != 0)
 		{
@@ -302,15 +306,21 @@ void graph_construct::split(string line)
 	}
 }
 
-void graph_construct::edge_construct()
+void graph_construct::edge_construct(bool leave_one_out)
 {
+	/*04-30-05
+	*	flag leave_one_out to control leave_one_out or not
+	*/
 	edge edge_data;
 	out<<"t\t#\t"<<graph_name<<endl;
 	for (int i=0; i<no_of_genes; i++)
 	{
 		for (int j=i+1; j<no_of_genes; j++)
 		{
-			edge_data = min_cor(gene_array[i], gene_array[j]);
+			if (leave_one_out)
+				edge_data = min_cor(gene_array[i], gene_array[j]);
+			else
+				edge_data = cor(gene_array[i], gene_array[j], -1);	//leave_one_out position=-1 means no leave_one_out
 			if((edge_data.degree+2)>=JK_CUT_OFF && edge_data.value >= cor_cut_off_array[edge_data.degree-1] && edge_data.value<=1.0)
 			{
 				no_of_01++;
@@ -456,11 +466,14 @@ void print_usage(FILE* stream,int exit_code)
 	assert(stream !=NULL);
         fprintf(stream,"Usage: %s options inputfile\n",program_name);
 	fprintf(stream,"\t-h  --help	Display the usage infomation.\n"\
-		"\t-o --output filename	Write output to file, gph_output(default)\n"\
-		"\t-n --name datasetname	Same as output_filename(default)\n"\
-		"\t-p --p_value_cut_off	p_value significance cutoff,0.01(default)\n"\
-		"\t-c --cor_cut_off	correlation cutoff, 0.6(default)\n"\
-		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n");
+		"\t-o ..., --output=...	Write output to file, gph_output(default)\n"\
+		"\t-n ..., --name=...	Same as output_filename(default)\n"\
+		"\t-p .., --p_value_cut_off=...	p_value significance cutoff,0.01(default)\n"\
+		"\t-c ..., --cor_cut_off=...	correlation cutoff, 0.6(default)\n"\
+		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n"\
+		"\t-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).\n"\
+		"\t-l, --leave_one_out	leave_one_out.\n"\
+		"\tFor long option, = or ' '(blank) is same.\n");
 	exit(3);
 }
 
@@ -468,13 +481,15 @@ void print_usage(FILE* stream,int exit_code)
 int main(int argc, char* argv[])
 {
 	int next_option;
-	const char* const short_options="ho:n:p:c:";
+	const char* const short_options="ho:n:p:c:d:l";
 	const struct option long_options[]={
 	  {"help",0,NULL,'h'},
 	  {"output",1,NULL,'o'},
 	  {"name",1,NULL,'n'},
 	  {"p_value_cut_off", 1, NULL, 'p'},
 	  {"cor_cut_off", 1, NULL, 'c'},
+	  {"max_degree", 1, NULL, 'd'},
+	  {"leave_one_out", 0, NULL, 'l'},
 	  {NULL,0,NULL,0}
 	};
 	
@@ -483,6 +498,8 @@ int main(int argc, char* argv[])
 	program_name=argv[0];
 	double p_value_cut_off = 0.01;
 	double cor_cut_off = 0.6;
+	int max_degree = 10000;
+	bool leave_one_out=false;
 
 	do
 	{
@@ -504,6 +521,12 @@ int main(int argc, char* argv[])
 		case 'c':
 			cor_cut_off = atof(optarg);
 			break;
+		case 'd':
+			max_degree = atoi(optarg);
+			break;
+		case 'l':
+			leave_one_out = true;
+			break;
 		case '?':
 			print_usage(stderr,-1);
 		case -1:
@@ -523,9 +546,9 @@ int main(int argc, char* argv[])
 	{
 		
 		graph_construct instance(argv[optind], output_filename, name);
-		instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off);
+		instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
 		instance.input();
-		instance.edge_construct();
+		instance.edge_construct(leave_one_out);
 		instance.output();
 		/*
 		//testing
