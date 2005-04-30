@@ -101,15 +101,7 @@ class p_gene_analysis:
 		submit(): gene_p table enlarged, p_gene_id_src is for gene_p_map_redundancy.py
 	03-08-05
 		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
-	run()
-		--init()
-		--db_connect()
-		--data_fetch()
-			--_p_gene_analysis()
-		--overview_stats()
-			--return_known_unknown_gene_sets()
-		--go_no_accuracy()
-		--table_output()
+
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
 		table=None, mcl_table=None, p_value_cut_off=0.01, report=0, \
@@ -180,17 +172,19 @@ class p_gene_analysis:
 		03-01-05
 			for each go_no, get its linear model parameters
 			also return 2d matrix for a general linear model(see get_general_lm_results)
+		03-27-05
+			p_gene_lm.py changed the lm_table format.(logistic regression)
 		"""
 		sys.stderr.write("Getting linear model parameters...")
 		go_no2lm_results = {}
 		lm_results_2d_list = []
-		curs.execute("select go_no, intercept, coeff1, coeff2 from %s"%lm_table)
+		curs.execute("select go_no, intercept, coeff1, coeff2, coeff3, score_cut_off from %s"%lm_table)
 		rows = curs.fetchall()
 		for row in rows:
 			go_no = row[0]
-			lm_results = row[1:]		#intercept coeff1 coeff2
-			go_no2lm_results[go_no] = lm_results
-			lm_results_2d_list.append(lm_results)
+			coeff_list = row[1:]		#intercept coeff1 coeff2 coeff3 score_cut_off
+			go_no2lm_results[go_no] = coeff_list
+			lm_results_2d_list.append(coeff_list)
 		sys.stderr.write("Done\n")		
 		return (go_no2lm_results, lm_results_2d_list)
 		
@@ -198,28 +192,37 @@ class p_gene_analysis:
 		"""
 		03-01-05
 			return (intercept, coeff1, coeff2) by averaging the known parameters
+		03-27-05
+			p_gene_lm.py changed the lm_table format.(logistic regression)
 		"""
 		no_of_models = len(lm_results_2d_list)
 		lm_results_array = array(lm_results_2d_list)
 		intercept = sum(lm_results_array[:,0])/no_of_models
 		coeff1 = sum(lm_results_array[:,1])/no_of_models
 		coeff2 = sum(lm_results_array[:,2])/no_of_models
-		
-		return (intercept, coeff1, coeff2)
+		coeff3 = sum(lm_results_array[:,3])/no_of_models
+		score_cut_off = sum(lm_results_array[:,4])/no_of_models
+		return (intercept, coeff1, coeff2, coeff3, score_cut_off)
 	
-	def return_p_value_cut_off(self, go_no, recurrence, connectivity):
+	def prediction_accepted(self, go_no, property_list):
 		"""
 		03-01-05
 			if go_no in self.go_no2lm_results, go and get it
 			otherwise, use the general linear model
+		03-27-05
+			change to return (is_accepted, score)
 		"""
 		if go_no in self.go_no2lm_results:
 			lm_results = self.go_no2lm_results[go_no]
-			p_value_cut_off = lm_results[0] + recurrence*lm_results[1] + connectivity*lm_results[2]
+			#intercept + coeff1*(-lg(p_value)) + coeff2*recurrence + coeff3*connectivity
+			score = lm_results[0] + lm_results[1]*property_list[0] + lm_results[2]*property_list[1] +\
+				lm_results[3]*property_list[2]
+			is_accepted = (score>=lm_results[4])
 		else:
-			p_value_cut_off = self.general_lm_results[0] + recurrence*self.general_lm_results[1]+\
-				connectivity*self.general_lm_results[2]
-		return p_value_cut_off
+			score = self.general_lm_results[0] + self.general_lm_results[1]*property_list[0]+\
+				self.general_lm_results[2]*property_list[1]+self.general_lm_results[3]*property_list[2]
+			is_accepted = (score>=self.general_lm_results[4])
+		return (is_accepted, score)
 		
 
 
@@ -228,7 +231,7 @@ class p_gene_analysis:
 		02-21-05
 			--_p_gene_analysis()
 		"""
-		sys.stderr.write("Setting up prediction_space and prediction_pair...")
+		sys.stderr.write("Setting up prediction_space and prediction_pair...\n")
 		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, mcl_id, %s, avg_p_value, \
 			recurrence_cut_off,connectivity_cut_off, depth_cut_off,p_gene_id from %s"\
 			%(self.is_correct_dict[self.judger_type], gene_table))
@@ -237,7 +240,9 @@ class p_gene_analysis:
 		rows = curs.fetchall()
 		while rows:
 			for row in rows:
-				self._p_gene_analysis(row)
+				self._p_gene_analysis(row)	
+				self.no_of_records+=1
+
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 			
@@ -256,6 +261,8 @@ class p_gene_analysis:
 			seperate the data of different function categories, into go_no2prediction_space
 		03-08-05
 			Take the floor of recurrence and connectivity
+		03-27-05
+			is_accepted is used to judge whether the prediction is good or not.
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -267,20 +274,25 @@ class p_gene_analysis:
 		depth_cut_off = row[7]
 		p_gene_id = row[8]
 		
+		
+		if self.p_value_cut_off == 0:
+			#the model is based on -log(p_value).
+			if p_value ==0:
+				p_value = 1e-8
+			(is_accepted, score) = self.prediction_accepted(go_no, [-math.log(p_value), recurrence, connectivity])
+		else:
+			is_accepted = (p_value <= self.p_value_cut_off)
+			score = p_value
+		
+		if is_accepted:
+			self.gene_p_list.append([p_gene_id, score])
+		else:
+			return
+
 		#take the floor of the recurrence
 		recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
 		#take the floor of the connectivity *10
 		connectivity = int(math.floor(connectivity*10/self.connectivity_gap_size)*self.connectivity_gap_size)
-		
-		if self.p_value_cut_off == 0:
-			p_value_cut_off = self.return_p_value_cut_off(go_no, recurrence, connectivity)
-		else:
-			p_value_cut_off = self.p_value_cut_off
-		
-		if p_value > p_value_cut_off:
-			return
-		else:
-			self.gene_p_list.append([p_gene_id, p_value_cut_off])
 		
 		if go_no not in self.go_no2prediction_space:
 			self.go_no2prediction_space[go_no] = {}
@@ -642,6 +654,22 @@ class p_gene_analysis:
 		03-07-05
 			implementing two posterior maneuvering of go_no2prediction_space, grouping and accumulatiing.
 			See log of 2005, section 'linear model overfitting' for detail.
+		
+		--init()
+		--db_connect()
+		--IF self.p_value_cut_off==0
+			--get_go_no2lm_results
+			--get_general_lm_results
+		
+		--data_fetch()
+			--_p_gene_analysis()
+		--IF self.stat_table_fname
+			--overview_stats()
+				--return_known_unknown_gene_sets()
+			--go_no_accuracy()
+			--table_output()
+		--IF self.gene_p_table
+			--gene_p_table_submit()
 		"""
 		self.init()
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
@@ -659,12 +687,13 @@ class p_gene_analysis:
 			self.overview_stats(self.stat_table_f)
 			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
 			self.table_output(self.stat_table_f, self.prediction_space2attr)
+			"""
 			#first grouping the data of parent-child go functions
 			distance_table = 'go.node_dist'
 			go_no_group2prediction_space = self.return_go_no_group2prediction_space(self.go_no2prediction_space, curs, distance_table)
 			#output the prediction_space go_no by go_no
 			self.prediction_space_split_output(self.stat_table_f, go_no_group2prediction_space, self.recurrence_gap_size, self.connectivity_gap_size)
-
+			"""
 
 		if self.gene_p_table:
 			self.gene_p_table_submit(curs, self.gene_p_table, self.gene_p_list)
