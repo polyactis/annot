@@ -295,7 +295,9 @@ class subgraph_visualize:
 					edge = subgraph.edge_by_node(vertex, neighbor)
 				else:
 					edge = subgraph.edge_by_node(neighbor, vertex)
-				weight_list.append(subgraph.edges[edge][2])
+				if weighted:
+					#04-06-05, non-weighted graphs might not have the weight information.
+					weight_list.append(subgraph.edges[edge][2])
 				#Note +1 to index
 				nbr_list.append(vertex_set.index(neighbor)+1)
 			if weighted:
