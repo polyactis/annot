@@ -134,7 +134,7 @@ class MpiBiclustering:
 				counter +=1
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, counter))
-			if self.debug:
+			if self.debug and counter>10000:
 				break
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
@@ -171,7 +171,7 @@ class MpiBiclustering:
 		edge_vector = []
 		for item in edge_vector_string[1:-1].split(','):
 			if item=='1.1':	#1.1 is 'NA', convention because of haiyan's copath
-				edge_vector.append(random.randint(-800,800))
+				edge_vector.append(random.uniform(-1,1))	#don't use (-800,800)
 			else:
 				edge_vector.append(float(item))
 		return edge_vector
@@ -197,7 +197,7 @@ class MpiBiclustering:
 				no_of_records+=1
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, no_of_records))
-			if self.debug:
+			if self.debug and no_of_records>10000:
 				break
 			curs.execute("fetch 5000 from crs1")
 			rows = curs.fetchall()
@@ -251,12 +251,14 @@ class MpiBiclustering:
 						bicluster.added_edge_id_list.append(edge_id)
 						bicluster.added_edge_matrix.append(selected_candidate_edge_vector)
 						cluster_group.bicluster_list[j] = bicluster	#update the list values, different from dictionary
-		sys.stderr.write("Done.\n")
+		sys.stderr.write("Node %s, Done.\n"%(node_rank))
 	
 	def generate_seeds(self, node_rank, go_no, edge_id_array, edge_matrix):
 		"""
 		04-20-05
 			stop when the hscore_cut_off is not met
+		04-29-05
+			try 4 times more after hscore_cut_off is not met.
 		"""
 		sys.stderr.write("Node %s, generate seeds on function %s...\n"%(node_rank, go_no))
 		if edge_matrix.shape[0] < self.min_height:
@@ -270,6 +272,7 @@ class MpiBiclustering:
 			self.min_width, self.batchThreshold)
 		biclustering_instance.data_read_in(edge_matrix)
 		result = biclustering_instance.getbicluster()
+		no_of_retries = 0	#try to get more clusters.
 		while result:
 			if result.score<=self.hscore_cut_off:
 				bicluster_unit = bicluster()
@@ -279,12 +282,14 @@ class MpiBiclustering:
 				bicluster_unit.consensus_list = result.consensus_list
 				self.go_no2cluster_group[go_no].bicluster_list.append(bicluster_unit)
 			else:
-				break
+				no_of_retries += 1
+				if no_of_retries == 4:
+					break
 			result = biclustering_instance.getbicluster()
 		del biclustering_instance
 		sys.stderr.write('Node %s go_no %s Done.\n'%(node_rank, go_no))
 
-	def _output(self, outfname, node_rank):
+	def output_in_copath_format(self, outfname, node_rank):
 		"""
 		04-20-05
 			output go_no2cluster_group
@@ -305,7 +310,7 @@ class MpiBiclustering:
 				connectivity = len(edge_list)*2.0/(no_of_nodes*(no_of_nodes-1))
 				vertex_string = '{' + ';'.join(vertex_list) + ';}'
 				edge_string  = self.edge_string_from_edge_list(edge_list)
-				cluster_id = "%s.%s.%s"%(node_rank, go_no, counter)
+				cluster_id = "%s.%s"%(go_no, counter)
 				writer.writerow([cluster_id, connectivity, vertex_string, edge_string])
 				counter += 1
 		del writer
@@ -314,14 +319,16 @@ class MpiBiclustering:
 	def output(self, outfname, node_rank):
 		"""
 		04-26-05
-			output the information about the seed
+			output the information about the bicluster, easy to check
+		04-25-05
+			cluster_id redefined
 		"""
 		outf = open(outfname, 'a')
 		writer = csv.writer(outf, delimiter='\t')
 		for go_no, cluster_group in self.go_no2cluster_group.iteritems():
 			counter = 0
 			for bicluster in cluster_group.bicluster_list:
-				cluster_id = "%s.%s.%s"%(node_rank, go_no, counter)
+				cluster_id = "%s.%s"%(go_no, counter)
 				seed_edge_id_list = list(take(cluster_group.edge_id_array, bicluster.row_index_list))
 				edge_id_list = seed_edge_id_list + bicluster.added_edge_id_list
 				writer.writerow([cluster_id, bicluster.score, repr(edge_id_list), repr(bicluster.column_index_list)])
@@ -342,15 +349,32 @@ class MpiBiclustering:
 		04-16-05
 			pop edge_data of one function out of the dictionary
 			package both go-no and edge_data in numeric array
+		04-29-05
+			if self.report, output the edge_data.
 		"""
 		if len(go_no2edge_matrix_data)>0:
 			go_no, edge_data = go_no2edge_matrix_data.popitem()
 			edge_data[0] = edge_data[0]*len(edge_data[1])	#go-no in the first row is duplicated to be packaged in a Numeric array
 			edge_data[0][1] = len(edge_data[1])	#no_of_columns is encoded in the 2nd entry of the first row.
+			if self.report:
+				self.edge_data_output(go_no, edge_data)
 			return array(edge_data)
 		else:
 			return None
 
+	
+	def edge_data_output(self, go_no, edge_data):
+		"""
+		04-27-05
+			output edge data to investigate separately
+		"""
+		filename = 'edge_data_%s'%go_no
+		file = open(filename, 'w')
+		writer = csv.writer(file, delimiter='\t')
+		for row in edge_data:
+			writer.writerow(row)
+		del writer
+		file.close()
 	
 	def mpi_synchronize(self, communicator):
 		"""
@@ -494,8 +518,8 @@ class MpiBiclustering:
 		else:
 			return_value, source, tag = communicator.receiveString(0, None)	#get 'output' signal from node 0
 			if return_value=='output':
-				self.output(self.outfname,node_rank)
-				self._output(self.outfname+'.2', node_rank)
+				self.output_in_copath_format(self.outfname,node_rank)
+				self.output(self.outfname+'.1', node_rank)
 				communicator.send("finished", 0, node_rank)	#tell node 0 after done.
 
 if __name__ == '__main__':
