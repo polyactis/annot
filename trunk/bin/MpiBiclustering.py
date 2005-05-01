@@ -1,6 +1,6 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiBiclustering.py -k SCHEMA [OPTION]
+Usage: MpiBiclustering.py -k SCHEMA -p OUTPUTFILE [OPTION]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
@@ -16,12 +16,13 @@ Option:
 	-y ..., --euc_dist_cut_off=...	0.02(default) for seed_grow
 	-p ..., --outfname=...	the output filename
 	-c, --commit	commit this database transaction
-	-r, --report	report the progress(a number)
-	-b, --debug
+	-r, --report	report the progress(a number) and output the edge_data
+		in the current directory(name like edge_data_xx)
+	-b, --debug	just fetch 15000 edges and do a demo
 	-h, --help	show this help
 	
 Examples:
-	mpirun N MpiBiclustering.py -k sc_54_6661 -r
+	mpirun N MpiBiclustering.py -k sc_54_6661 -s 0.005 -r -p mpibiclustering.out
 	
 Description:
 	Biclustering on the edge matrix. MPI version.
