@@ -46,6 +46,10 @@ edge ind_min_cor(vf v1, vf v2)
 
 edge ind_cor(vf v1, vf v2, int position)
 {
+	/*
+	*05-12-05
+	*	add gsl_isnan() to check whether it's NAN, for graph_construct class usage
+	*/
 	float xx = 0.0;
 	float yy = 0.0;
 	float xy = 0.0;
@@ -57,7 +61,7 @@ edge ind_cor(vf v1, vf v2, int position)
 	for (int i=0; i<v1.size(); i++)
 	{
 		//100000000 is regarded as NAN
-		if ( (i == position) || ( v1[i]==100000000 )|| ( v2[i]==100000000 ) )
+		if ( (i == position) || ( v1[i]==100000000 )|| ( v2[i]==100000000 )|| ( gsl_isnan(v1[i]) )|| ( gsl_isnan(v2[i]) ) )
 			continue;
 		else
 		{
@@ -72,7 +76,7 @@ edge ind_cor(vf v1, vf v2, int position)
 	
 	for (int i=0; i<v1.size(); i++)
 	{
-		if ( (i == position) || ( v1[i]==100000000 )|| ( v2[i]==100000000) )
+		if ( (i == position) || ( v1[i]==100000000 )|| ( v2[i]==100000000) || ( gsl_isnan(v1[i]) )|| ( gsl_isnan(v2[i]) ) )
 			continue;
 		else
 		{
@@ -170,6 +174,7 @@ graph_construct::~graph_construct()
 
 void graph_construct::input()
 {
+	std::cerr<<"Read in the data...";
 	string line;
 	while(getline(in, line))
 	{
@@ -177,14 +182,18 @@ void graph_construct::input()
 	}
 	no_of_genes = gene_array.size();
 	no_of_cols = gene_array[0].size();
+	std::cerr<<"Done."<<endl;
 }
 
-void graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree)
+vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree)
 {
 	/*
 	*04-30-05
 	*	max_degree to control the length of the cor_cut_off_array
+	*05-12-05
+	*	return cor_cut_off_array for global cor_cut_off_vector
 	*/
+	std::cerr<<"constructing cor_cut_off_array...";
 	double cor_cut_off, t;
 	for(int i=1; i<max_degree; i++)
 	{
@@ -207,7 +216,8 @@ void graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double
 		*/
 
 	}
-	
+	std::cerr<<"Done."<<std::endl;
+	return cor_cut_off_array;
 }
 
 void graph_construct::gene_label2index_setup(vector<string> label_vector)
@@ -310,7 +320,10 @@ void graph_construct::edge_construct(bool leave_one_out)
 {
 	/*04-30-05
 	*	flag leave_one_out to control leave_one_out or not
+	*05-12-05
+	*	use ind_min_cor(), as min_cor() is outdated. And ind_min_cor() is modified to be closest to graph.cc.
 	*/
+	std::cerr<<"Constructing edges...";
 	edge edge_data;
 	out<<"t\t#\t"<<graph_name<<endl;
 	for (int i=0; i<no_of_genes; i++)
@@ -318,7 +331,7 @@ void graph_construct::edge_construct(bool leave_one_out)
 		for (int j=i+1; j<no_of_genes; j++)
 		{
 			if (leave_one_out)
-				edge_data = min_cor(gene_array[i], gene_array[j]);
+				edge_data = ind_min_cor(gene_array[i], gene_array[j]);
 			else
 				edge_data = cor(gene_array[i], gene_array[j], -1);	//leave_one_out position=-1 means no leave_one_out
 			if((edge_data.degree+2)>=JK_CUT_OFF && edge_data.value >= cor_cut_off_array[edge_data.degree-1] && edge_data.value<=1.0)
@@ -328,7 +341,7 @@ void graph_construct::edge_construct(bool leave_one_out)
 			}
 		}
 	}
-
+	std::cerr<<"Done."<<endl;
 }
 
 vf graph_construct::edge_construct_no_cut_off()
@@ -341,7 +354,7 @@ vf graph_construct::edge_construct_no_cut_off()
 	{
 		gene_one = edge_tuple_vector[i];
 		gene_two  = edge_tuple_vector[i+1];
-		edge_data = min_cor(gene_array[gene_one], gene_array[gene_two]);
+		edge_data = ind_min_cor(gene_array[gene_one], gene_array[gene_two]);
 		//haiyan's program needs the value*1000 and only the integer part
 		variant_value = (short)(edge_data.value*1000);
 		data_vector.push_back(variant_value);
@@ -546,7 +559,7 @@ int main(int argc, char* argv[])
 	{
 		
 		graph_construct instance(argv[optind], output_filename, name);
-		instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
+		cor_cut_off_vector = instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
 		instance.input();
 		instance.edge_construct(leave_one_out);
 		instance.output();
