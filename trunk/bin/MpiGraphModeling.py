@@ -15,6 +15,9 @@ Option:
 Examples:
 	mpirun.lam N MpiGraphModeling.py -i datasets/hs -o gph_result/hs
 	
+	mpirun.lam N MpiGraphModeling.py -l -i datasets/hs -o gph_result/hs
+		leave_one_out version
+	
 Description:
 	The MPI version of graph_modeling, which replaces batch_graph_cc.py
 	
