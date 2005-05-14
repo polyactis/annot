@@ -69,7 +69,7 @@ class MpiGraphModeling:
 					stop_signal = "-1"
 					communicator.send(stop_signal, node, 0)	#no more jobs, stop that node,
 					if self.debug:
-						sys.stderr.write("node %s stopped.\n"%source)
+						sys.stderr.write("node %s stopped.\n"%node)
 				else:
 					input_file = files.pop(0)	#the first item poped first.
 					communicator.send(input_file, node, 0)
