@@ -9,6 +9,7 @@ Option:
 	-c ..., --cor_cut_off=...	correlation cutoff, 0.6(default)
 		if p_value_cut_off=0, this cut_off is used instead.
 	-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).
+	-b, --debug	debug version.
 	-l, --leave_one_out	leave_one_out.
 	-h, --help	Display the usage infomation.
 	
@@ -35,7 +36,7 @@ class MpiGraphModeling:
 		the mpi version of graph_modeling.cc
 	"""
 	def __init__(self, input_dir=None, output_dir=None, p_value_cut_off='0.01', cor_cut_off='0.6', \
-		max_degree='10000', leave_one_out=0):
+		max_degree='10000', leave_one_out=0, debug=0):
 		"""
 		05-13-05
 			parameters to be passed to graph_modeling must be in string form.
@@ -45,14 +46,16 @@ class MpiGraphModeling:
 		self.p_value_cut_off = p_value_cut_off
 		self.cor_cut_off = cor_cut_off
 		self.max_degree = max_degree
-		self.leave_one_out = leave_one_out
-		
+		self.leave_one_out = int(leave_one_out)
+		self.debug = int(debug)
 		
 	
 	def schedule_jobs(self, communicator, bin_path, input_dir, output_dir, parameters):
 		"""
 		05-13-05
 			the schedule mechanism is copied from MpiBiclustering.py
+			
+			if #nodes > #jobs, tell those nodes to break the listening loop.
 		"""
 		node_rank = communicator.rank
 		if node_rank == 0:
@@ -62,22 +65,25 @@ class MpiGraphModeling:
 			files = os.listdir(input_dir)
 			seed_utilized = Set()
 			for node in range(1, communicator.size):
-				input_file = files.pop(0)	#the first item poped first.
-				if input_file:
-					communicator.send(input_file, node, 0)
-					sys.stderr.write("Node %s schedule a job to %s\n"%(node_rank, node))
-					seed_utilized.add(node)
+				if len(files)==0:	#if #nodes > #jobs, tell those nodes to break their listening loop.
+					stop_signal = "-1"
+					communicator.send(stop_signal, node, 0)	#no more jobs, stop that node,
+					if self.debug:
+						sys.stderr.write("node %s stopped.\n"%source)
 				else:
-					break
-			seed_to_tell_output = seed_utilized.copy()	#seed_utilized will be emptied soon, seed_to_tell_output is used later.
+					input_file = files.pop(0)	#the first item poped first.
+					communicator.send(input_file, node, 0)
+					if self.debug:
+						sys.stderr.write("Node %s schedule a job to %s\n"%(node_rank, node))
+					seed_utilized.add(node)
 			
 			received_value, source, tag = communicator.receiveString(None, None)	#listen
 			while received_value:		#??check what the received_value is
 				if len(files) == 0:	#first check if there're still files left, otherwise pop(0) raises error.
 					stop_signal = "-1"
 					communicator.send(stop_signal, source, 0)	#no more jobs, stop that node,
-						#array([0.0]) is the stopping signal cause the receiver requires the data type to be Numeric.Float
-					sys.stderr.write("node %s stopped.\n"%source)
+					if self.debug:
+						sys.stderr.write("node %s stopped.\n"%source)
 					seed_utilized.remove(source)
 					if len(seed_utilized) == 0:	#all seed used have finished their jobs
 						break
@@ -85,14 +91,16 @@ class MpiGraphModeling:
 					input_file = files.pop(0)
 					if input_file:
 						communicator.send(input_file, source, 0)	#more jobs
-						sys.stderr.write("Node %s get one more job\n"%source)
+						if self.debug:
+							sys.stderr.write("Node %s get one more job\n"%source)
 				received_value, source, tag = communicator.receiveString(None, None)	#listen
 		else:
 			received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0,
 				#04-24-05 the array is one-dimension no matter what dimension the original array is
 			while received_data:
 				if received_data=="-1":	#it's array([0.0]), stopping signal, don't use 'received_data==array([0.0])' to judge.
-					sys.stderr.write("node %s breaked\n"%node_rank)
+					if self.debug:
+						sys.stderr.write("node %s breaked.\n"%node_rank)
 					break
 				else:
 					input_file = received_data
@@ -100,8 +108,9 @@ class MpiGraphModeling:
 					input_file = os.path.join(input_dir, input_file)	#absolute path
 					output_file = os.path.join(output_dir, output_file)	#absolute path
 					jobrow = '%s -o %s %s %s'%(bin_path, output_file, parameters, input_file)
-					print "node %s working on %s..."%(communicator.rank, received_data)
+					sys.stderr.write("node %s working on %s...\n"%(node_rank, received_data))
 					os.system(jobrow)
+					sys.stderr.write("node %s work on %s finished.\n"%(node_rank, received_data))
 					communicator.send("finished", 0, node_rank)
 					
 				received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0
@@ -128,9 +137,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "input_dir=", "output_dir=", "p_value_cut_off=", "cor_cut_off=", "max_degree=",\
-		"leave_one_out"]
+		"leave_one_out", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hi:o:p:c:d:l", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hi:o:p:c:d:lb", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -141,6 +150,7 @@ if __name__ == '__main__':
 	cor_cut_off = "0.6"
 	max_degree = "10000"
 	leave_one_out = 0
+	debug = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -155,9 +165,11 @@ if __name__ == '__main__':
 			max_degree = arg
 		elif opt in ("-l", "--leave_one_out"):
 			leave_one_out = 1
+		elif opt in ("-b", "--debug"):
+			debug = 1
 
 	if input_dir and output_dir:
-		instance = MpiGraphModeling(input_dir, output_dir, p_value_cut_off, cor_cut_off, max_degree, leave_one_out)
+		instance = MpiGraphModeling(input_dir, output_dir, p_value_cut_off, cor_cut_off, max_degree, leave_one_out, debug)
 		instance.run()
 	else:
 		print __doc__
