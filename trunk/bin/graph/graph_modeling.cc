@@ -173,8 +173,10 @@ graph_construct::~graph_construct()
 }
 
 void graph_construct::input()
-{
-	std::cerr<<"Read in the data...";
+{	
+	#if defined(DEBUG)
+		std::cerr<<"Read in the data...";
+	#endif
 	string line;
 	while(getline(in, line))
 	{
@@ -182,7 +184,10 @@ void graph_construct::input()
 	}
 	no_of_genes = gene_array.size();
 	no_of_cols = gene_array[0].size();
-	std::cerr<<"Done."<<endl;
+	#if defined(DEBUG)
+		std::cerr<<"Done."<<endl;
+	#endif
+
 }
 
 vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree)
@@ -193,7 +198,9 @@ vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_of
 	*05-12-05
 	*	return cor_cut_off_array for global cor_cut_off_vector
 	*/
-	std::cerr<<"constructing cor_cut_off_array...";
+	#if defined(DEBUG)
+		std::cerr<<"constructing cor_cut_off_array...";
+	#endif
 	double cor_cut_off, t;
 	for(int i=1; i<max_degree; i++)
 	{
@@ -216,7 +223,9 @@ vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_of
 		*/
 
 	}
-	std::cerr<<"Done."<<std::endl;
+	#if defined(DEBUG)
+		std::cerr<<"Done."<<std::endl;
+	#endif
 	return cor_cut_off_array;
 }
 
@@ -323,7 +332,9 @@ void graph_construct::edge_construct(bool leave_one_out)
 	*05-12-05
 	*	use ind_min_cor(), as min_cor() is outdated. And ind_min_cor() is modified to be closest to graph.cc.
 	*/
-	std::cerr<<"Constructing edges...";
+	#if defined(DEBUG)
+		std::cerr<<"Constructing edges...";
+	#endif
 	edge edge_data;
 	out<<"t\t#\t"<<graph_name<<endl;
 	for (int i=0; i<no_of_genes; i++)
@@ -341,7 +352,9 @@ void graph_construct::edge_construct(bool leave_one_out)
 			}
 		}
 	}
-	std::cerr<<"Done."<<endl;
+	#if defined(DEBUG)
+		std::cerr<<"Done."<<endl;
+	#endif
 }
 
 vf graph_construct::edge_construct_no_cut_off()
@@ -466,7 +479,9 @@ vector<string> graph_construct::general_split(string line, char ch)
 
 void graph_construct::output()
 {
-	cout<<no_of_01<<endl;
+	#if defined(DEBUG)
+		std::cerr<<no_of_01<<std::endl;
+	#endif
 	//gsl_histogram_fprintf (stdout, histogram, "%g", "%g");
 
 }
