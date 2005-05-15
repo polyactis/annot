@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env mpipython.lam
 """
 Usage: complete_cor_vector.py  -i INPUT_FILE -o OUTPUT_FILE [OPTION] DATADIR
 
@@ -12,16 +12,17 @@ Option:
 	-o ..., --output_file=...	the edge correlation vector file, for CODENSE and COPATH
 	-s ..., --significance_file=...	the edge significance flag vector file.
 	-b ..., --label=...	use gene 1(index, default) or 2(no) or 3(id) to label
-	-f ..., --dir_files=...	the directory to store the temporary files, /tmp/yh(default)
+	-f ..., --dir_files=...	the directory to store the temporary files, /tmp/yh(default)(IGNORE)
 	-p ..., --p_value_cut_off=...	the p_value_cut_off for an edge to be significant, 0.01(default)
 	-c ..., --cor_cut_off=...	the cor_cut_off for an edge to be significant, 0.6(default)
 		priority gives p_value_cut_off, cor_cut_off is used only when p_value_cut_off=0
 	-r, --report	report the progress(a number)
+	-u, --debug	enable debugging output.
 	-h, --help              show this help
 	
 Examples:
 	#create a file to dump into database by haiyan_cor_vector2db.py
-	complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector
+	mpirun.lam N complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector
 		-s /tmp/edge_significance_vector ~/datasets/sc_54
 	
 	#output cor_vector from database
@@ -38,6 +39,8 @@ Description:
 
 import sys, os, getopt, csv, re, math, psycopg
 import graph_modeling
+from Scientific import MPI
+from sets import Set
 
 	
 def string_convert_to_three_int(str):
@@ -52,31 +55,21 @@ class complete_cor_vector:
 	03-02-05
 		Now, graph_modeling can return the significance flag for an edge.
 		Add a significance_file to hold those flags.
+		
+	05-14-05
+		modified to be MPI-capable
+		
+		cor_vector_from_files() almost overhauled.
+		add collect_and_merge_output(), node_fire() and modify file_combine()
 	
-	run
-		--cor_vector_from_db
-		or
-		--cor_vector_from_files
-	cor_vector_from_files
-		--dstruc_loadin
-		--edge_tuple_list_output
-		--files_sort
-		(loop begins)
-			--gene_index2expr_array_setup
-			--cor_calculate
-			--file_combine
 	'''
 	def __init__(self, data_dir, hostname, dbname, schema, table, input_file, output_file, \
 		significance_file, label, dir_files=None, p_value_cut_off=0.01, cor_cut_off=0.6, \
-		report=0):
+		report=0, debug=0):
 		"""
-		run	--dstruc_loadin
-			--edge_tuple_list_output
-			--files_sort
-			(loop)
-				gene_index2expr_array_setup
-				cor_calculate
-				file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
+		05-14-05
+			add debug flag.
+			dir_files is useless.
 		"""
 		self.dir = data_dir
 		self.schema = schema
@@ -88,6 +81,8 @@ class complete_cor_vector:
 		self.dir_files = dir_files
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.cor_cut_off = float(cor_cut_off)
+		self.debug = int(debug)
+		
 		if self.schema:
 			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 			self.curs = self.conn.cursor()
@@ -96,18 +91,7 @@ class complete_cor_vector:
 			if self.dir == None:
 				sys.stderr.write("Either schema or data directory should be specified\n")
 				sys.exit(2)
-			else:
-				self.files = os.listdir(self.dir)
 		
-			#check if the temporary directory already exists
-			if not os.path.isdir(self.dir_files):
-				os.makedirs(self.dir_files)
-			else:
-				sys.stderr.write("Warning, directory %s already exists.\n"%(self.dir_files))
-
-		self.tmp_file1 = os.path.join(self.dir_files, 'tmp_complete_cor_vector1')
-		self.tmp_file2 = os.path.join(self.dir_files, 'tmp_complete_cor_vector2')
-		self.significance_tmp_file = os.path.join(self.dir_files, 'significance_tmp')
 		#mapping between gene_no and gene_id
 		self.gene_index2no = {}
 		self.gene_no2index = {}
@@ -127,11 +111,13 @@ class complete_cor_vector:
 		#04-03-05, Important bug.
 		self.gene_cut_off = 8
 
-	def dstruc_loadin(self):
+	def dstruc_loadin(self, communicator):
 		'''
 		This method loads in the data structures from database.
+		05-14-05
+			add some stderr's
 		'''
-		sys.stderr.write("Loading Data STructure...")
+		sys.stderr.write("Node %s Loading Data STructure...\n"%communicator.rank)
 		#setup three mapping stuff and setup the self.edge_tuple_list
 		reader = csv.reader(file(self.input_file), delimiter=' ')
 		self.no_of_genes = 0
@@ -158,7 +144,7 @@ class complete_cor_vector:
 		self.label_dict = {1: gene_index_list,
 			2: self.gene_index2no,
 			3: self.gene_index2id}
-		sys.stderr.write("Done\n")
+		sys.stderr.write("Node %s: Structure Loading Done\n"%communicator.rank)
 
 	def gene_index2expr_array_setup(self, f_path):
 		gene_index2expr_array = {}
@@ -205,16 +191,29 @@ class complete_cor_vector:
 		return expr_list
 
 	def file_combine(self, output_file, tmp_file1, tmp_file2):
+		"""
+		05-14-05
+			concatenate output_file and tmp_file1 to be output_file via tmp_file2
+			
+			replace os.spawnvp with os.system
+		"""
 		#use the unix command 'paste' to merge lines of two files
 		job_fname = 'paste %s %s > %s'%(output_file, tmp_file1, tmp_file2)
-		wl = ['sh', '-c', job_fname]
-		os.spawnvp(os.P_WAIT, 'sh', wl)
+		os.system(job_fname)	#spawnvp gets dead under MPI
+		#wl = ['sh', '-c', job_fname]
+		#os.spawnvp(os.P_WAIT, 'sh', wl)
 		#overlapping the first file by 'mv'
 		job_fname = 'mv %s %s'%(tmp_file2, output_file)
-		wl = ['sh', '-c', job_fname]
-		os.spawnvp(os.P_WAIT, 'sh', wl)
+		os.system(job_fname)
+		#wl = ['sh', '-c', job_fname]
+		#os.spawnvp(os.P_WAIT, 'sh', wl)
 
 	def edge_tuple_list_output(self, output_file):
+		"""
+		05-14-05
+			add some stderr's
+		"""
+		sys.stderr.write("Outputting edge_tuples to %s..."%output_file)
 		of = open(output_file, 'w')
 		#start from 0, one step by 2
 		for i in range(0, len(self.edge_tuple_list), 2):
@@ -226,6 +225,7 @@ class complete_cor_vector:
 			else:
 				of.write("%s\t%s\n"%(self.label_dict[self.label][gene_index2], self.label_dict[self.label][gene_index1]))
 		of.close()
+		sys.stderr.write("Done.\n")
 	
 	def files_sort(self, files_list):
 		new_files_list = ['']*len(files_list)
@@ -275,44 +275,169 @@ class complete_cor_vector:
 			row += cor_vector
 			writer.writerow(row)
 		del writer
+	
+	def collect_and_merge_output(self, final_fname, no_of_datasets, tmp_fname):
+		"""
+		05-14-05
+			concatenate all files(=no_of_datasets) into final_fname
+		"""
+		sys.stderr.write("Collecting for %s...\n"%final_fname)
+		for i in range(no_of_datasets):
+			dataset_fname = "%s_%s"%(final_fname, i)
+			self.file_combine(final_fname, dataset_fname, tmp_fname)
+			#remove the dataset_fname
+			os.remove(dataset_fname)
+		sys.stderr.write("Done.\n")
+	
+	def node_fire(self, dir, files, file_index, cor_fname, sig_fname):
+		"""
+		05-14-05
+			mpi unit
+			
+			--gene_index2expr_array_setup()
+			--cor_calculate()
+		"""
+		f = files[file_index]
+		f_path = os.path.join(dir, f)	#the path to the dataset file
+		gene_index2expr_array = self.gene_index2expr_array_setup(f_path)
+		cor_tmp_file = "%s_%s"%(cor_fname, file_index)
+		sig_tmp_file = "%s_%s"%(sig_fname, file_index)
+		self.cor_calculate(cor_tmp_file, sig_tmp_file, gene_index2expr_array)
+		
+	def mpi_synchronize(self, communicator):
+		"""
+		05-14-05
+			copied from MpiBiclustering.py
+		"""
+		sys.stdout.flush()
+		sys.stderr.flush()
+		communicator.barrier()
+	
+	def cor_vector_from_files(self, communicator, dir, cor_fname, sig_fname, p_value_cut_off, cor_cut_off):
+		"""
+		05-14-05
+			modify to be mpi form, feed mode(in MpiBiclustering.py and MpiGraphModeling.py)
+				
+			--files_sort
+			if node_rank==0:
+				--edge_tuple_list_output(output_file)
+				--edge_tuple_list_output(significance_file)
+			else:
+				--graph_modeling.cor_cut_off_vector_construct()
+				
+			if node_rank==0:
+				(send signal to other nodes)
+			else:
+				--node_fire()
+					--gene_index2expr_array_setup()
+					--cor_calculate()
+			if node_rank==0:
+				--collect_and_merge_output()
+					--file_combine()
+		"""
+		files = os.listdir(dir)
+		#sort all the files based on the dataset number, to order the columns of the outputed edge correlation vector
+		files = self.files_sort(files)
+		
+		file_index_list = range(len(files))
+		node_rank = communicator.rank
+		
+		if node_rank == 0:
+			#output the name first
+			self.edge_tuple_list_output(cor_fname)
+			self.edge_tuple_list_output(sig_fname)
+		else:
+			#set the cor_cut_off_vector, internal structure of graph_modeling
+			graph_modeling.cor_cut_off_vector_construct(p_value_cut_off, cor_cut_off)
+		
+		self.mpi_synchronize(communicator)
+		
+		if node_rank == 0:
+			sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 
+			seed_utilized = Set()
+			for node in range(1, communicator.size):
+				if len(file_index_list)==0:	#if #nodes > #jobs, tell those nodes to break their listening loop.
+					stop_signal = "-1"
+					communicator.send(stop_signal, node, 0)	#no more jobs, stop that node,
+					if self.debug:
+						sys.stderr.write("node %s stopped.\n"%node)
+				else:
+					input_file_index = file_index_list.pop(0)	#the first item poped first.
+					communicator.send(repr(input_file_index), node, 0)	#string format
+					if self.debug:
+						sys.stderr.write("Node %s schedule a job to %s\n"%(node_rank, node))
+					seed_utilized.add(node)
+			
+			received_value, source, tag = communicator.receiveString(None, None)	#listen
+			while received_value:		#??check what the received_value is
+				if len(file_index_list) == 0:	#first check if there're still files left, otherwise pop(0) raises error.
+					stop_signal = "-1"
+					communicator.send(stop_signal, source, 0)	#no more jobs, stop that node,
+					if self.debug:
+						sys.stderr.write("node %s stopped.\n"%source)
+					seed_utilized.remove(source)
+					if len(seed_utilized) == 0:	#all seed used have finished their jobs
+						break
+				else:
+					input_file_index = file_index_list.pop(0)
+					if input_file_index:
+						communicator.send(repr(input_file_index), source, 0)	#string format,
+						if self.debug:
+							sys.stderr.write("Node %s get one more job\n"%source)
+				received_value, source, tag = communicator.receiveString(None, None)	#listen
+		else:
+			received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0,
+				#04-24-05 the array is one-dimension no matter what dimension the original array is
+			while received_data:
+				if received_data=="-1":	#stop signal
+					if self.debug:
+						sys.stderr.write("node %s breaked.\n"%node_rank)
+					break
+				else:
+					input_file_index = int(received_data)	#convert it to integer
+					sys.stderr.write("node %s working on %s...\n"%(node_rank, received_data))
+					self.node_fire(dir, files, input_file_index, cor_fname, sig_fname)
+					sys.stderr.write("node %s work on %s finished.\n"%(node_rank, received_data))
+					communicator.send("finished", 0, node_rank)
+					
+				received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0
+		
+		self.mpi_synchronize(communicator)
+		
+		if node_rank==0:
+			tmp_fname = "%s_%s"%(cor_fname, tmp)
+			self.collect_and_merge_output(cor_fname, len(files), tmp_fname)
+		elif node_rank==1:
+			tmp_fname = "%s_%s"%(sig_fname, tmp)
+			self.collect_and_merge_output(sig_fname, len(files), tmp_fname)
+		
+		#tmp_fname is removed in the last call of file_combine() by 'mv'
 	
 	def run(self):
-		self.dstruc_loadin()
+		"""
+		05-14-05
+		if node_rank==0:
+			--dstruc_loadin()
+		if self.schema:
+			--cor_vector_from_db
+			or
+			--cor_vector_from_files
+		"""
+		communicator = MPI.world.duplicate()
+		
+		self.dstruc_loadin(communicator)
+		
+		self.mpi_synchronize(communicator)
+		
 		if self.schema:
 			self.cor_vector_from_db(self.output_file)
 		else:
 			if self.significance_file==None:
 				sys.stderr.write("Error: where's the significance file?\n")
 				sys.exit(2)
-			self.cor_vector_from_files()
-
-	def cor_vector_from_files(self):
-		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
-		self.edge_tuple_list_output(self.output_file)
-		self.edge_tuple_list_output(self.significance_file)
-		#set the cor_cut_off_vector, internal structure of graph_modeling
-		graph_modeling.cor_cut_off_vector_construct(self.p_value_cut_off, self.cor_cut_off)
-		#sort all the files based on the dataset number, to order the columns of the outputed edge correlation vector
-		self.files = self.files_sort(self.files)
-		for f in self.files:
-			sys.stderr.write("%d/%d:\t%s\n"%(self.files.index(f)+1,len(self.files),f))
-			f_path = os.path.join(self.dir, f)
-			#get the expression values only for those genes
-			gene_index2expr_array = self.gene_index2expr_array_setup(f_path)
-			self.cor_calculate(self.tmp_file1, self.significance_tmp_file, gene_index2expr_array)
-			"""#convert the expression values dictionary to a list for python_call
-			expr_list = self.expr_array2expr_list(gene_index2expr_array)
-			#call the C++ module
-			python_call(self.tmp_file1, self.edge_tuple_list, expr_list, self.no_of_genes)
-			"""
-			#combine the self.output_file and self.tmp_file1 into self.output_file by means of self.tmp_file2
-			self.file_combine(self.output_file, self.tmp_file1, self.tmp_file2)
-			self.file_combine(self.significance_file, self.significance_tmp_file, self.tmp_file2)
-		os.remove(self.significance_tmp_file)
-		os.remove(self.tmp_file1)
-		#self.tmp_file2 is removed in the last call to file_combine
-		os.rmdir(self.dir_files)
+			self.cor_vector_from_files(communicator, self.dir, self.output_file, \
+				self.significance_file, self.p_value_cut_off, self.cor_cut_off)
 
 	
 if __name__ == '__main__':
@@ -321,9 +446,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:s:b:f:p:c:r", ["help",  "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:s:b:f:p:c:ru", ["help",  "hostname=", \
 			"dbname=", "schema=", "table=", "input_file=", "output_file=", "significance_file=", \
-			"label=", "dir_files=", "p_value_cut_off=", "cor_cut_off=", "report"])
+			"label=", "dir_files=", "p_value_cut_off=", "cor_cut_off=", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -340,6 +465,7 @@ if __name__ == '__main__':
 	p_value_cut_off = 0.01
 	cor_cut_off = 0.6
 	report = 0
+	debug = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -368,6 +494,8 @@ if __name__ == '__main__':
 			cor_cut_off = float(arg)
 		elif opt in ("-r", "--report"):
 			report = 1
+		elif opt in ("-u", "--debug"):
+			debug = 1
 			
 	if len(args) == 1:
 		data_dir = args[0]
@@ -376,7 +504,7 @@ if __name__ == '__main__':
 	if input_file and output_file:
 		instance = complete_cor_vector(data_dir, hostname, dbname, schema, table, \
 			input_file, output_file, significance_file, label, dir_files, p_value_cut_off, \
-			cor_cut_off, report)
+			cor_cut_off, report, debug)
 		instance.run()
 	else:
 		print __doc__
