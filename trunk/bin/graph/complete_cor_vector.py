@@ -406,10 +406,10 @@ class complete_cor_vector:
 		self.mpi_synchronize(communicator)
 		
 		if node_rank==0:
-			tmp_fname = "%s_%s"%(cor_fname, tmp)
+			tmp_fname = "%s_tmp"%(cor_fname)
 			self.collect_and_merge_output(cor_fname, len(files), tmp_fname)
 		elif node_rank==1:
-			tmp_fname = "%s_%s"%(sig_fname, tmp)
+			tmp_fname = "%s_tmp"%(sig_fname)
 			self.collect_and_merge_output(sig_fname, len(files), tmp_fname)
 		
 		#tmp_fname is removed in the last call of file_combine() by 'mv'
