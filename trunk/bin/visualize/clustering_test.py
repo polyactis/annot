@@ -32,6 +32,7 @@ import sys, os, psycopg, getopt, csv
 from graphlib import Graph
 from sets import Set
 from rpy import r
+from Numeric import array, Float, take, zeros, Int
 		
 class clustering_test:
 	"""
@@ -104,7 +105,7 @@ class clustering_test:
 			elif row[0] == 'e':
 				gene_no1 = int (row[1])
 				gene_no2 = int(row[2])
-				weight = row[3]
+				weight = int(row[3])
 				gene_index1 = self.gene_no2index[gene_no1]
 				gene_index2 = self.gene_no2index[gene_no2]
 				if gene_index1 < gene_index2:
@@ -113,6 +114,7 @@ class clustering_test:
 					self.input_graph.add_edge(gene_index2, gene_index1, weight)
 
 		gene_index_list = range(self.no_of_genes)
+		
 		self.label_dict = {1: gene_index_list,
 			2: self.gene_index2no,
 			3: self.gene_index2id}
@@ -120,6 +122,10 @@ class clustering_test:
 		sys.stderr.write("Done\n")
 	
 	def get_weight(self, graph, gene_index1, gene_index2):
+		"""
+		05-15-05
+			defunct
+		"""
 		if gene_index1<gene_index2:
 			edge_id = graph.edge_by_node(gene_index1, gene_index2)
 		else:
@@ -130,20 +136,22 @@ class clustering_test:
 	def reformat(self, graph, outfname, no_of_genes):
 		"""
 		reformat a graph file in gspan formt to a haiyan's matrix format
+		05-15-05
+			use graphlib too slow, so resort to direct matrix assignment.
 		"""
+		sys.stderr.write("Reformating into matrix form...")
+		graph_matrix = zeros((no_of_genes,no_of_genes), Int)
+		for edge_id in graph.edges:
+			i, j, weight = graph.edges[edge_id]
+			graph_matrix[i,j] = weight
+			graph_matrix[j,i] = weight
+			
 		writer = csv.writer(open(outfname, 'w'), delimiter = '\t')
-		for i in range(no_of_genes):
-			nbrs = Set(graph.all_nbrs(i))
-			row = []
-			for j in range(no_of_genes):
-				if j in nbrs:
-					weight = self.get_weight(graph, i, j)
-					row.append(weight)
-				else:
-					#this includes i itself and other unlinked nodes
-					row.append(0)
+		for row in graph_matrix:
 			writer.writerow(row)
+
 		del writer
+		sys.stderr.write("Done.\n")
 	
 	def visualize_clusters(self, cluster_file, graph, label_dict, outfname, functioncolor='green', plot_type="dot"):
 		reader = csv.reader(file(cluster_file), delimiter='\t')
