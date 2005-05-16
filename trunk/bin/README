@@ -1,0 +1,17 @@
+Annot pipeline(05-16-05, yh)
+
+run annot/bin/MpiGraphModeling.py to construct correlation graphs
+shell/SchemaDatasetSetup.sh to setup datasets and gph files
+shell/SchemaPreSetup.sh to setup database gene, go tables
+annot/bin/graph_reorganize.py to transform gph files into gspan format
+shell/graph_merge.sh
+	generate the summary graph
+	generate the cor_vector and sig_vector files
+	convert the summary graph(gspan format) into matrix format(netmine)
+	dump cor_vector and sig_vector files into database
+calculate #edges, #genes
+shell/netmine.sh
+	annot/bin/netmine_wrapper.py
+	shell/cluster_stat.sh
+	annot/bin/EdgeClusterFromCopathOutput.py
+	shell/cluster_stat.sh
