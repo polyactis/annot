@@ -1,4 +1,4 @@
-#!/usr/bin/env mpipython
+#!/usr/bin/env mpipython.lam
 """
 Usage: netmine_wrapper.py --mp=FILEPREFIX [OPTIONS]
 
@@ -61,6 +61,7 @@ Description:
 
 import sys, os, math, getopt, time, csv, Numeric
 from Scientific import MPI
+from codense.common import system_call
 
 class netmine_wrapper:
 	"""
@@ -180,6 +181,8 @@ class netmine_wrapper:
 			output: number of clusters
 			
 			nothing to do with mpi
+		05-16-05
+			os.system() might fail on some platforms, so use recursive system_call()
 		"""
 		sys.stderr.write("Running netmine...")
 		#wl = ['ssh', 'node%s'%node, '%s'%' '.join(netmine_parameter_list)]
@@ -187,13 +190,15 @@ class netmine_wrapper:
 		04-08-05 spawnvp gets dead under MPI, use system instead.
 		"""
 		#return_code = os.spawnvp(os.P_WAIT, netmine_parameter_list[0], netmine_parameter_list)
-		return_code = os.system('%s'%' '.join(netmine_parameter_list))
+		commandline = '%s'%' '.join(netmine_parameter_list)
+		exit_code = system_call(commandline)	#05-16-05 use the recursive one.
+		#exit_code = os.system('%s'%' '.join(netmine_parameter_list))
 		op = netmine_parameter_list[8]	#the 8th is the output file
 		no_of_clusters = 0
 		of = open(op, 'r')
 		for line in of:
 			no_of_clusters += 1
-		sys.stderr.write("total clusters:%s...Done.\n"%no_of_clusters)
+		sys.stderr.write("total clusters:%s. exit_code: %s.\n"%(no_of_clusters, exit_code))
 		return no_of_clusters
 	
 	def schedule_netmine2nd(self, rank_range, netmine2nd_parameter_list, no_of_clusters):
@@ -273,6 +278,8 @@ class netmine_wrapper:
 		"""
 		04-08-05
 			mpi form
+		05-16-05
+			os.system() might fail on some platforms, so use recursive system_call()
 		"""
 		#get the output filename prefix
 		ofname_prefix = netmine2nd_parameter_list[20]
@@ -282,8 +289,9 @@ class netmine_wrapper:
 			#fire repeatedly
 			for cluster_no in node_rank2cluster_no[communicator.rank]:
 				jobrow = netmine2nd_parameter_list + ['-f', repr(cluster_no)]
-				print "node %s working on cluster %s..."%(communicator.rank, cluster_no)
-				os.system("%s"%' '.join(jobrow))
+				sys.stderr.write("node %s working on cluster %s...\n"%(communicator.rank, cluster_no))
+				exit_code = system_call("%s"%' '.join(jobrow))
+				sys.stderr.write("node %s on cluster %s done, exit_code: %s\n"%(communicator.rank, cluster_no, exit_code))
 				ofname_list.append('%s_%sh'%(ofname_prefix, cluster_no))	#04-09-05 haiyan puts 'h' after cluster_no.??
 		
 			#join the list by blank and send it back to node 0
@@ -295,6 +303,8 @@ class netmine_wrapper:
 			only for rank 0
 			1. receive the concatenated ofname_list from all nodes
 			2. cat all files together into final_ofname and delete the intermediary files.
+		05-16-05
+			os.system() might fail on some platforms, so use recursive system_call()
 		"""
 		sys.stderr.write("Collecting output filenames from each node...")
 		con_ofname_list = []
@@ -315,8 +325,8 @@ class netmine_wrapper:
 		for ofname in con_ofname_list:
 			#do it one by one because 'cat * >final_ofname' might cause error 'Argument list too long'
 			#which is the case for 'rm' when there're thousands of files represented by '*'.
-			os.system("cat %s >> %s"%(ofname, final_ofname))	#it's >> not >
-			os.system("rm %s"%ofname)	#delete it immediately
+			exit_code = system_call("cat %s >> %s"%(ofname, final_ofname))	#it's >> not >
+			exit_code = system_call("rm %s"%ofname)	#delete it immediately
 		sys.stderr.write("Done.\n")
 		
 	def run(self):
@@ -328,7 +338,7 @@ class netmine_wrapper:
 		parameter_list = self.parameter_list_init()
 		no_of_clusters_broadcast  = Numeric.zeros((1,), Numeric.Int)
 		if communicator.rank == 0:
-			print "this is node %s"%communicator.rank
+			sys.stderr.write("this is node %s\n"%communicator.rank)
 			no_of_clusters = self.run_netmine(rank_range[0], parameter_list[0])
 			no_of_clusters_broadcast[0] = no_of_clusters
 		#let every node know no_of_clusters
