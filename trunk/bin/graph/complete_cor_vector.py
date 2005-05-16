@@ -276,16 +276,31 @@ class complete_cor_vector:
 			writer.writerow(row)
 		del writer
 	
-	def collect_and_merge_output(self, final_fname, no_of_datasets, tmp_fname):
+	def collect_and_merge_output(self, final_fname, no_of_datasets):
 		"""
 		05-14-05
 			concatenate all files(=no_of_datasets) into final_fname
+			use file_combine() recursively
+		05-16-05
+			don't use file_combine(), the 'paste' and 'mv' in file_combine() become slow as final_fname gets larger and larger 
+			paste all files at once and delete them one by one.
+			
 		"""
 		sys.stderr.write("Collecting for %s...\n"%final_fname)
-		for i in range(no_of_datasets):
+		job_word_list = ['paste']	#later concatenate this list to be a command
+		dataset_fname_list = []	#the list of files to be removed
+		for i in range(no_of_datasets+1):	#0th is edge tuple file, 1-no_of_datasets are data files
 			dataset_fname = "%s_%s"%(final_fname, i)
-			self.file_combine(final_fname, dataset_fname, tmp_fname)
-			#remove the dataset_fname
+			job_word_list.append(dataset_fname)
+			dataset_fname_list.append(dataset_fname)
+		job_word_list.append('>')
+		job_word_list.append(final_fname)
+		exit_code = os.system(' '.join(job_word_list))	#recursive until success
+		while exit_code:
+			exit_code = os.system(' '.join(job_word_list))
+			
+		#remove the dataset_fname
+		for dataset_fname in dataset_fname_list:
 			os.remove(dataset_fname)
 		sys.stderr.write("Done.\n")
 	
@@ -296,12 +311,14 @@ class complete_cor_vector:
 			
 			--gene_index2expr_array_setup()
 			--cor_calculate()
+		05-16-05
+			suffix each unit file with index+1
 		"""
 		f = files[file_index]
 		f_path = os.path.join(dir, f)	#the path to the dataset file
 		gene_index2expr_array = self.gene_index2expr_array_setup(f_path)
-		cor_tmp_file = "%s_%s"%(cor_fname, file_index)
-		sig_tmp_file = "%s_%s"%(sig_fname, file_index)
+		cor_tmp_file = "%s_%s"%(cor_fname, file_index+1)	#index+1
+		sig_tmp_file = "%s_%s"%(sig_fname, file_index+1)
 		self.cor_calculate(cor_tmp_file, sig_tmp_file, gene_index2expr_array)
 		
 	def mpi_synchronize(self, communicator):
@@ -317,11 +334,14 @@ class complete_cor_vector:
 		"""
 		05-14-05
 			modify to be mpi form, feed mode(in MpiBiclustering.py and MpiGraphModeling.py)
-				
+		
+		05-16-05
+			output the edge tuple into 0th file.
+			
 			--files_sort
 			if node_rank==0:
-				--edge_tuple_list_output(output_file)
-				--edge_tuple_list_output(significance_file)
+				--edge_tuple_list_output()
+				--edge_tuple_list_output()
 			else:
 				--graph_modeling.cor_cut_off_vector_construct()
 				
@@ -333,7 +353,6 @@ class complete_cor_vector:
 					--cor_calculate()
 			if node_rank==0:
 				--collect_and_merge_output()
-					--file_combine()
 		"""
 		files = os.listdir(dir)
 		#sort all the files based on the dataset number, to order the columns of the outputed edge correlation vector
@@ -344,8 +363,8 @@ class complete_cor_vector:
 		
 		if node_rank == 0:
 			#output the name first
-			self.edge_tuple_list_output(cor_fname)
-			self.edge_tuple_list_output(sig_fname)
+			self.edge_tuple_list_output("%s_0"%cor_fname)	#05-16-05 output the edge tuple into 0th file.
+			self.edge_tuple_list_output("%s_0"%sig_fname)
 		else:
 			#set the cor_cut_off_vector, internal structure of graph_modeling
 			graph_modeling.cor_cut_off_vector_construct(p_value_cut_off, cor_cut_off)
@@ -406,14 +425,10 @@ class complete_cor_vector:
 		self.mpi_synchronize(communicator)
 		
 		if node_rank==0:
-			tmp_fname = "%s_tmp"%(cor_fname)
-			self.collect_and_merge_output(cor_fname, len(files), tmp_fname)
+			self.collect_and_merge_output(cor_fname, len(files))
 		elif node_rank==1:
-			tmp_fname = "%s_tmp"%(sig_fname)
-			self.collect_and_merge_output(sig_fname, len(files), tmp_fname)
-		
-		#tmp_fname is removed in the last call of file_combine() by 'mv'
-	
+			self.collect_and_merge_output(sig_fname, len(files))
+			
 	def run(self):
 		"""
 		05-14-05
