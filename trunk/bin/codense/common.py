@@ -482,3 +482,15 @@ def get_vertex_edge_list_by_edge_id(curs, edge_id_list, edge_table='edge_cor_vec
 		vertex_set.add(edge[1])
 
 	return (list(vertex_set), edge_list)
+
+def system_call(commandline):
+	"""
+	05-16-05
+		call external program recursively based on the exit_code
+		exit_code non-zero means error, needs calling again
+	"""
+	import os
+	exit_code = os.system(commandline)
+	while exit_code:
+		exit_code = os.system(commandline)
+	return exit_code
