@@ -56,6 +56,9 @@ class MpiGraphModeling:
 			the schedule mechanism is copied from MpiBiclustering.py
 			
 			if #nodes > #jobs, tell those nodes to break the listening loop.
+		05-16-05
+			record the exit code to conquer the weird problem(os.system() fails on the first time on some machines)
+			#while exit_code not zero, means os.system() fails, rerun it.
 		"""
 		node_rank = communicator.rank
 		if node_rank == 0:
@@ -109,8 +112,12 @@ class MpiGraphModeling:
 					output_file = os.path.join(output_dir, output_file)	#absolute path
 					jobrow = '%s -o %s %s %s'%(bin_path, output_file, parameters, input_file)
 					sys.stderr.write("node %s working on %s...\n"%(node_rank, received_data))
-					os.system(jobrow)
-					sys.stderr.write("node %s work on %s finished.\n"%(node_rank, received_data))
+					exit_code = os.system(jobrow)
+						#05-16-05 record the exit code to conquer the weird problem(os.system() fails on the first time on some machines)
+						#while exit_code not zero, means os.system() fails, rerun it.
+					while exit_code:
+						exit_code = os.system(jobrow)
+					sys.stderr.write("node %s work on %s done, exit_code: %s.\n"%(node_rank, received_data, exit_code))
 					communicator.send("finished", 0, node_rank)
 					
 				received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0
