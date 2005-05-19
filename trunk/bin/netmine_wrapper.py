@@ -30,7 +30,7 @@ Option:
 	-y ..., --type=...	0(coden, default), 1(copath) (IGNORE)
 	--id=...	input directory, '~/bin/hhu_clustering/data/input' (default)
 	--od=...	output directory, '~/bin/hhu_clustering/data/ouput/netmine' (default)
-	-bd=...	the binary directory, '~/bin/hhu_clustering/bin' (default)
+	--bd=...	the binary directory, '~/bin/hhu_clustering/bin' (default)
 	--mp=...	the prefix of the input matrix filename, i.e. 'sc_54_6661_merge_6'
 		Their suffix should be .matrix. The corresponding correlation vector files are suffixed as .cor_vector.
 	--op=...	output file prefix, default is 
@@ -39,7 +39,8 @@ Option:
 	--rr=...	rank range, i.e. 0-3,5,7-9 means useing 0,1,2,3,5,7,8,9
 		This is used to specify the nodes to use. (IGNORE, mpirun specifies this)
 	--js=...	job file starting no, 0 (default)
-	--help              show this help
+	--debug	enable debug
+	--help	show this help
 	
 Examples:
 	#simplest:
@@ -61,7 +62,21 @@ Description:
 
 import sys, os, math, getopt, time, csv, Numeric
 from Scientific import MPI
-from codense.common import system_call
+from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize
+from sets import Set
+		
+def run_netmine2nd(cluster_no, netmine2nd_parameter_list):
+	"""
+	05-19-05
+		similar to node_fire() of class netmine_wrapper
+	"""
+	import sys
+	#get the output filename prefix
+	ofname_prefix = netmine2nd_parameter_list[20]
+	jobrow = netmine2nd_parameter_list + ['-f', repr(cluster_no)]
+	exit_code = system_call("%s"%' '.join(jobrow))
+	ofname = '%s_%sh'%(ofname_prefix, cluster_no)	#04-09-05 haiyan puts 'h' after cluster_no.??
+	return ofname
 
 class netmine_wrapper:
 	"""
@@ -75,7 +90,8 @@ class netmine_wrapper:
 		min_edge_freq_list=['6'], first_density_cutoff_list=['0.4'], second_density_cutoff_list=['0.4'],\
 		max_pre_graph_size_list=['80'], conn_perc_list=['0.5'], match_cut='4.0', intersect2union_cut='0.4',\
 		euclidean_ratio='0.2', selection_code='0110', max_degree='500', type=0, \
-		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None, js=0):
+		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None, \
+		js=0, debug=0):
 		"""
 		03-16-05
 			those None's in the argument list will be given default values
@@ -107,6 +123,7 @@ class netmine_wrapper:
 		self.op = op
 		self.rank_range = rank_range
 		self.js = int(js)
+		self.debug = int(debug)
 
 	def parameter_list_init(self):
 		"""
@@ -254,13 +271,19 @@ class netmine_wrapper:
 				
 			job_number+=1
 
-	def distribute_jobs(self, rank_range, no_of_clusters):
+	def distribute_jobs(self, communicator, no_of_clusters, node_function, netmine2nd_parameter_list):
 		"""
 		04-09-05
 			input: rank_range, no_of_clusters
 			output: node_rank2cluster_no
 			
 			distribute jobs among the nodes in the rank_range based on no_of_clusters
+		05-19-05
+			(rewritten)
+		"""
+		job_list = range(no_of_clusters)
+		of_name_list = mpi_schedule_jobs(communicator, job_list, node_function, netmine2nd_parameter_list, self.debug)
+		return of_name_list
 		"""
 		#map clusters to each node
 		node_rank2cluster_no = {}
@@ -273,6 +296,8 @@ class netmine_wrapper:
 			else:
 				node_rank2cluster_no[node_rank].append(i)
 		return node_rank2cluster_no
+		"""
+		
 		
 	def node_fire(self, communicator, node_rank2cluster_no, netmine2nd_parameter_list):
 		"""
@@ -297,7 +322,7 @@ class netmine_wrapper:
 			#join the list by blank and send it back to node 0
 			communicator.send("%s"%' '.join(ofname_list),0,communicator.rank)
 	
-	def collect_and_merge_output(self, communicator, rank_range, final_ofname):
+	def collect_and_merge_output(self, of_name_list, final_ofname):
 		"""
 		04-08-05
 			only for rank 0
@@ -305,24 +330,12 @@ class netmine_wrapper:
 			2. cat all files together into final_ofname and delete the intermediary files.
 		05-16-05
 			os.system() might fail on some platforms, so use recursive system_call()
+		05-19-05
+			collecting output filenames is NOT necessary, it's done in distribute_jobs()
+				(via mpi_schedule_jobs())
 		"""
-		sys.stderr.write("Collecting output filenames from each node...")
-		con_ofname_list = []
-		for rank in rank_range:
-			data, source, tag = communicator.receiveString(rank, None)
-			if data:
-				#got the output filenames from that rank
-				con_ofname_list.append(data)
-			else:
-				#something wrong here
-				sys.stderr.write("Warning: receive nothing from %s\n"%rank)
-		sys.stderr.write("Done.\n")
-		#entries in con_ofname_list are concatenated ofnames, now concatenate entries also by ' ' to ease split
-		con_ofname_list = ' '.join(con_ofname_list)
-		#split them by ' '
-		con_ofname_list = con_ofname_list.split(' ')
 		sys.stderr.write("Catting them together...")
-		for ofname in con_ofname_list:
+		for ofname in of_name_list:
 			#do it one by one because 'cat * >final_ofname' might cause error 'Argument list too long'
 			#which is the case for 'rm' when there're thousands of files represented by '*'.
 			exit_code = system_call("cat %s >> %s"%(ofname, final_ofname))	#it's >> not >
@@ -332,6 +345,14 @@ class netmine_wrapper:
 	def run(self):
 		"""
 		04-01-05
+		
+		05-19-05
+			--parameter_list_init()
+			--run_netmine()
+			
+			--distribute_jobs()
+				--run_netmine2nd()
+			--collect_and_merge_output()
 		"""
 		communicator = MPI.world.duplicate()
 		rank_range = range(communicator.size)
@@ -343,21 +364,18 @@ class netmine_wrapper:
 			no_of_clusters_broadcast[0] = no_of_clusters
 		#let every node know no_of_clusters
 		communicator.broadcast(no_of_clusters_broadcast, 0)
-		#synchronize here
-		sys.stdout.flush()
-		sys.stderr.flush()
-		communicator.barrier()
+		
+		mpi_synchronize(communicator)
 		
 		#ignite each node
-		node_rank2cluster_no = self.distribute_jobs(rank_range, no_of_clusters_broadcast[0])
-		self.node_fire(communicator, node_rank2cluster_no, parameter_list[1])
-		#synchronize again.
-		sys.stdout.flush()
-		communicator.barrier()
+		of_name_list = self.distribute_jobs(communicator, no_of_clusters_broadcast[0], run_netmine2nd, parameter_list[1])
+		
+		mpi_synchronize(communicator)
+		
 		#collecting
 		if communicator.rank==0:
 			final_ofname = os.path.join(self.od, 'F'+self.op)
-			self.collect_and_merge_output(communicator, node_rank2cluster_no.keys(), final_ofname)
+			self.collect_and_merge_output(of_name_list, final_ofname)
 				#receive only from those fired nodes
 		
 		#self.schedule_netmine2nd(self.rank_range, parameter_list[1], no_of_clusters)
@@ -373,7 +391,7 @@ if __name__ == '__main__':
 			"min_edge_freq_list=", "first_density_cutoff_list=", "second_density_cutoff_list=", \
 			"max_pre_graph_size_list=", "conn_perc_list=", "match_cut=", "intersect2union_cut=",\
 			"euclidean_ratio=", "selection_code=", "max_degree=", "type=", "id=", "od=", \
-			"bd=", "mp=", "op=", "rr=", "js="])
+			"bd=", "mp=", "op=", "rr=", "js=", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -405,6 +423,7 @@ if __name__ == '__main__':
 	op = None
 	rank_range = []
 	js = 0
+	debug = 0
 	
 	for opt, arg in opts:
 		if opt in ("--help"):
@@ -472,14 +491,15 @@ if __name__ == '__main__':
 					rank_range += rank			
 		elif opt in ("--js"):
 			js = int(arg)
-			
+		elif opt in ("--debug"):
+			debug = 1
 	if mp:
 		instance = netmine_wrapper(run_mode, genenum, svnum, sv_length,\
 			ttablefile, cut_loop_num_list, min_graph_size_list, \
 			min_edge_freq_list, first_density_cutoff_list, second_density_cutoff_list,\
 			max_pre_graph_size_list, conn_perc_list, match_cut, intersect2union_cut,\
 			euclidean_ratio, selection_code, max_degree, type,\
-			id, od, bd, mp, op, rank_range, js)
+			id, od, bd, mp, op, rank_range, js, debug)
 		
 		instance.run()
 		
