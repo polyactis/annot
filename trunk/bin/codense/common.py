@@ -494,3 +494,82 @@ def system_call(commandline):
 	while exit_code:
 		exit_code = os.system(commandline)
 	return exit_code
+
+
+def mpi_synchronize(communicator):
+	"""
+	05-19-05
+		copied from MpiBiclustering.py
+	"""
+	import sys
+	sys.stdout.flush()
+	sys.stderr.flush()
+	communicator.barrier()
+	
+def mpi_schedule_jobs(communicator, job_list, node_function, node_parameter_list, debug=0):
+	"""
+	05-19-05
+		a universal scheduling function, the elements in job_list
+		maybe string, integer, or something else, It's 'repr'ed before send.
+		WARNING: NO -1 in job_list.
+		So node_function should handle it as 'repr'ed.
+		
+		node_function()
+			input: (element of the job_list, node_parameter_list).
+			output: returns a value('repr'ed)
+		
+		
+	"""
+	import sys
+	from sets import Set
+	node_returned_value_list = []
+	node_rank = communicator.rank
+	if node_rank == 0:
+		sys.stderr.write("\tTotally, %d jobs to be scheduled.\n"%len(job_list))
+		seed_utilized = Set()
+		for node in range(1, communicator.size):
+			if len(job_list)==0:	#if #nodes > #jobs, tell those nodes to break their listening loop.
+				stop_signal = "-1"
+				communicator.send(stop_signal, node, 0)	#no more jobs, stop that node,
+				if debug:
+					sys.stderr.write("node %s stopped.\n"%node)
+			else:
+				job = job_list.pop(0)	#the first item poped first.
+				communicator.send(repr(job), node, 0)	#string format
+				if debug:
+					sys.stderr.write("node %s schedule a job, %s to %s\n"%(node_rank, repr(job), node))
+				seed_utilized.add(node)
+		
+		received_value, source, tag = communicator.receiveString(None, None)	#listen
+		while received_value:
+			node_returned_value_list.append(received_value)
+			if len(job_list) == 0:	#first check if there're still files left, otherwise pop(0) raises error.
+				stop_signal = "-1"
+				communicator.send(stop_signal, source, 0)	#no more jobs, stop that node,
+				if debug:
+					sys.stderr.write("node %s stopped.\n"%source)
+				seed_utilized.remove(source)
+				if len(seed_utilized) == 0:	#all seed used have finished their jobs
+					break
+			else:
+				job = job_list.pop(0)
+				communicator.send(repr(job), source, 0)	#string format,
+				if debug:
+					sys.stderr.write("node %s get one more job, %s\n"%(source, repr(job)) )
+			received_value, source, tag = communicator.receiveString(None, None)	#listen
+	else:
+		received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0,
+		while received_data:
+			if received_data=="-1":	#stop signal
+				if debug:
+					sys.stderr.write("node %s breaked.\n"%node_rank)
+				break
+			else:
+				sys.stderr.write("node %s working on %s...\n"%(node_rank, received_data))
+				node_return_value = node_function(received_data, node_parameter_list)
+				sys.stderr.write("node %s work on %s finished.\n"%(node_rank, received_data))
+				communicator.send(repr(node_return_value), 0, node_rank)
+				
+			received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0
+	
+	return node_returned_value_list
