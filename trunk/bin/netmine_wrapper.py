@@ -208,6 +208,8 @@ class netmine_wrapper:
 		"""
 		#return_code = os.spawnvp(os.P_WAIT, netmine_parameter_list[0], netmine_parameter_list)
 		commandline = '%s'%' '.join(netmine_parameter_list)
+		if self.debug:
+			sys.stderr.write("The commandline of netmine is %s\n"%commandline)
 		exit_code = system_call(commandline)	#05-16-05 use the recursive one.
 		#exit_code = os.system('%s'%' '.join(netmine_parameter_list))
 		op = netmine_parameter_list[8]	#the 8th is the output file
@@ -282,6 +284,8 @@ class netmine_wrapper:
 			(rewritten)
 		"""
 		job_list = range(no_of_clusters)
+		if self.debug:
+			sys.stderr.write("The common parameter_list of netmine2nd is %s.\n"%repr(netmine2nd_parameter_list))
 		of_name_list = mpi_schedule_jobs(communicator, job_list, node_function, netmine2nd_parameter_list, self.debug)
 		return of_name_list
 		"""
