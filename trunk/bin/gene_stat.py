@@ -10,7 +10,7 @@ Option:
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-e ..., --depth_cut_off=...	the minimum depth for a go node to be valid, 3(default)
-	-f ..., --dir_files=...	the directory containing all the files outputed by cluster_stat.py
+	-f ..., --dir_files=...	the file outputed by cluster_stat.py
 	-x ..., --recurrence_gap_size=...	2(default, IGNORE)
 	-y ..., --connectivity_gap_size=...	2(default, IGNORE)
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
@@ -30,6 +30,8 @@ Description:
 		a slim version of gene_stat_plot.py, only does _gene_stat_leave_one_out and
 	submit(), another part goes to p_gene_analysis.py
 	
+	05-19-05
+		cluster_stat_table can be replaced by the file outputed by cluster_stat.py.
 
 """
 
@@ -126,7 +128,17 @@ class gene_stat:
 		
 		sys.stderr.write("Done\n")
 
-	def core_from_files(self):
+	def core_from_files(self, curs):
+		"""
+		05-19-05
+			It's outdated compared with core(). So update it.
+		"""	
+		sys.stderr.write("Starting gene-stat...\n")
+		from gene_p_map_redundancy import gene_p_map_redundancy
+		node_distance_class = gene_p_map_redundancy()
+		"""
+		05-19-05
+			#read from a single file
 		#following codes are attaching directory path to each file in the list
 		file_list = os.listdir(self.dir_files)
 		file_path_list = []
@@ -134,6 +146,8 @@ class gene_stat:
 			file_path_list.append(os.path.join(self.dir_files, filename))
 		#multiple files constitute the source of data
 		self.files = fileinput.input(file_path_list)
+		"""
+		self.files = open(self.dir_files, 'r')
 		#wrap it with a reader
 		self.reader = csv.reader(self.files, delimiter='\t')
 		for row in self.reader:
@@ -147,12 +161,13 @@ class gene_stat:
 			#second append the vertex_set
 			row.append(rows[0][1])
 			#only leave_one_out
-			self._gene_stat_leave_one_out(row)
+			self._gene_stat_leave_one_out(row, node_distance_class, curs)
 
 			if self.report and self.no_of_records%2000==0:
 				sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
 		if self.report:
 			sys.stderr.write('%s%s'%('\x08'*20, self.no_of_records))
+		sys.stderr.write("Done.\n")
 
 	def core(self, curs):
 		"""
@@ -551,7 +566,7 @@ class gene_stat:
 			sys.stderr.write("working on files of cluster_stat.py results, it must be leave_one_out.\n")
 			sys.exit(2)
 		if self.dir_files:
-			self.core_from_files()
+			self.core_from_files(curs)
 		else:
 			self.core(curs)
 
