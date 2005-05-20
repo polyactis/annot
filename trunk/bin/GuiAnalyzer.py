@@ -82,6 +82,8 @@ class GuiAnalyzer:
 		self.r_fname = '/tmp/GuiAnalyzer.R'
 		self.dataset_liststore_dict = {54:self.dataset_liststore_54,
 			55:self.dataset_liststore_55,
+			73:self.dataset_liststore_73,
+			74:self.dataset_liststore_74,
 			79:self.dataset_liststore_79,
 			80:self.dataset_liststore_80}
 		
@@ -111,6 +113,38 @@ class GuiAnalyzer:
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str, str)	#55 entries
+	
+	
+	def dataset_liststore_73(self):
+		"""
+		05-19-05
+			return a 73 column liststore
+		"""
+		return gtk.ListStore(\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str)	
+	
+	
+	def dataset_liststore_74(self):
+		"""
+		05-19-05
+			return a 74 column liststore
+		"""
+		return gtk.ListStore(\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str)	
 	
 	def dataset_liststore_79(self):
 		"""
