@@ -285,7 +285,7 @@ class netmine_wrapper:
 		"""
 		job_list = range(no_of_clusters)
 		if self.debug:
-			sys.stderr.write("The common parameter_list of netmine2nd is %s.\n"%repr(netmine2nd_parameter_list))
+			sys.stderr.write("The common parameter_list of netmine2nd is %s.\n"%repr(' '.join(netmine2nd_parameter_list)))
 		of_name_list = mpi_schedule_jobs(communicator, job_list, node_function, netmine2nd_parameter_list, self.debug)
 		return of_name_list
 		"""
