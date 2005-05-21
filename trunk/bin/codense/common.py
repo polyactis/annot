@@ -382,9 +382,15 @@ def create_columns(treeview, label_list):
 def fill_treeview(treeview, liststore, list_2d, reorderable=True):
 	"""
 	04-17-05
+	05-20-05
+		expand the data in list_2d if it's too short
 	"""
 	import gtk
-	for data in list_2d:
+	length_of_treeview = len(treeview.get_columns())
+	for ls in list_2d:
+		data = ls[:]	#copy the list to avoid change the content in ls, 'data=ls' changes the content of ls
+		for i in range(length_of_treeview-len(data)):
+			data.append('')
 		liststore.append(data)
 	# set the TreeView mode to be liststore
 	treeview.set_model(liststore)
