@@ -186,7 +186,7 @@ class netmine_wrapper:
 		'-p', self.svnum, '-l', self.sv_length, '-t', self.input_ttable_file, '-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
 		'-s', max_pre_graph_size, '-c', conn_perc, '-h', self.match_cut, '-j', self.intersect2union_cut,\
-		'-w', self.euclidean_ratio, '-z', self.selection_code, '-u', self.max_degree])
+		'-w', self.euclidean_ratio, '-z', self.selection_code, '-u', self.max_degree, '-y', self.svnum])
 
 		return parameter_list
 
