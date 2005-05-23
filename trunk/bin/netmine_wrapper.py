@@ -179,7 +179,7 @@ class netmine_wrapper:
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, \
 		'-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
-		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree])
+		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree, '-y', self.svnum])
 									#second is netmine2nd's parameter
 									parameter_list.append([program_path2nd, '-r', cut_loop_num,\
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file, '-a', self.input_bv_file,\
@@ -339,6 +339,10 @@ class netmine_wrapper:
 				(via mpi_schedule_jobs())
 		"""
 		sys.stderr.write("Catting them together...")
+		#05-22-05 remove the final_ofname first to avoid '>>' to add up
+		if os.path.isfile(final_ofname):
+			os.remove(final_ofname)
+		
 		for ofname in of_name_list:
 			#do it one by one because 'cat * >final_ofname' might cause error 'Argument list too long'
 			#which is the case for 'rm' when there're thousands of files represented by '*'.
