@@ -138,18 +138,16 @@ class clustering_test:
 		reformat a graph file in gspan formt to a haiyan's matrix format
 		05-15-05
 			use graphlib too slow, so resort to direct matrix assignment.
+		05-20-05
+			netmine(copath) could accept edge-form input file. So...
 		"""
 		sys.stderr.write("Reformating into matrix form...")
-		graph_matrix = zeros((no_of_genes,no_of_genes), Int)
-		for edge_id in graph.edges:
-			i, j, weight = graph.edges[edge_id]
-			graph_matrix[i,j] = weight
-			graph_matrix[j,i] = weight
-			
 		writer = csv.writer(open(outfname, 'w'), delimiter = '\t')
-		for row in graph_matrix:
-			writer.writerow(row)
-
+		for edge_id in graph.edges:
+			writer.writerow(graph.edges[edge_id])
+			#i, j, weight = graph.edges[edge_id]
+			#graph_matrix[i,j] = weight
+			#graph_matrix[j,i] = weight
 		del writer
 		sys.stderr.write("Done.\n")
 	
