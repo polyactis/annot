@@ -55,12 +55,11 @@ class clustering
 		gsl_vector *return_eigen_vector(gsl_matrix* graph_matrix, int which_eigen_vector);
 		double connectivity_of_graph(Graph &graph);
 		std::vector<Graph> subgraph_components(Graph &subgraph, Graph &graph, std::vector<int> component, int no_of_components);
-		void cluster(Graph &graph);
-		void normalized_cut(Graph &graph, int max_size, int eigen_vector_no);	//05-25-05
+		void normalized_cut(std::ofstream &outf, Graph &subgraph, Graph &graph, int max_size, int eigen_vector_no);	//05-25-05
 		void old_run(dict graph_dict);
 		void run();	//05-25-05
-		void walk_graph(Graph &subgraph, Graph &graph, vertexNamePropertyMap vertex2name);	//05-25-05
-		void output();	//05-25-05
+		void walk_graph(std::ofstream &outf, Graph &subgraph, Graph &graph);	//05-25-05
+		void output(std::string output_filename);	//05-25-05
 		
 		Graph g;
 		//for input purpose
@@ -103,7 +102,6 @@ clustering::clustering(std::string input_filename_option, std::string output_fil
 	cut_loop_num = cut_loop_num_option;
 	connectivity_cutoff = density_cutoff_option;
 	min_edge_weight = min_edge_weight_option;
-	eigen_vector_no = 1;
 }
 
 clustering::~clustering()
@@ -178,7 +176,7 @@ void clustering::init_graph_from_file(std::string input_filename, Graph &graph, 
 		std::string gene2 = *i++;
 		std::string edge_weight_string = *i;
 		int edge_weight = atoi(edge_weight_string.c_str());
-		if (edge_weight>min_edge_weight)
+		if (edge_weight>=min_edge_weight)
 		{
 			std::map<std::string, vertexDescriptor>::iterator pos;
 			bool inserted;
@@ -249,7 +247,7 @@ gsl_matrix* clustering::graph2gsl_matrix(Graph &graph)
 {
 	int dimension = num_vertices(graph);
 	#if defined(DEBUG)
-		std::cout<<"Dimension of the graph is "<<dimension<<std::endl;
+		std::cerr<<"Dimension of the graph is "<<dimension<<std::endl;
 	#endif
 	gsl_matrix* m = gsl_matrix_calloc(dimension, dimension);	//calloc sets all elements to 0, different from alloc
 	boost::property_map<Graph, vertex_index_t>::type
@@ -319,6 +317,7 @@ double clustering::connectivity_of_graph(Graph &graph)
 
 std::vector<Graph> clustering::subgraph_components(Graph &subgraph, Graph &graph, std::vector<int> component, int no_of_components)
 {
+	int global_index;
 	//initialize the vector_subgraph with the number of components
 	std::vector<Graph> vector_subgraph(no_of_components);
 	for(int i=0;i<no_of_components;i++)
@@ -338,95 +337,72 @@ std::vector<Graph> clustering::subgraph_components(Graph &subgraph, Graph &graph
 		//find the global descriptor
 		vertex_global = subgraph.local_to_global(vertex_local);
 		//get the global index and add it to the subgraph
-		add_vertex(get(vertex_index_global, vertex_global), vector_subgraph[component_no]);
+		global_index = get(vertex_index_global, vertex_global);
+		#if defined(DEBUG)
+			std::cerr<<global_index<<" goes to component "<<component_no<<std::endl;
+		#endif
+		add_vertex(global_index, vector_subgraph[component_no]);
 	}
 	
 	return vector_subgraph;
 }
 
 
-void clustering::cluster(Graph &graph)
-{
-	gsl_matrix* m = graph2gsl_matrix(graph);
-	#if defined(DEBUG)
-		std::cout<<"The matrix is "<<std::endl;
-		gsl_matrix_fprintf(stdout, m, "%g");		//check matrix
-	#endif
-	gsl_vector* evec_i = return_eigen_vector(m, eigen_vector_no);
-	#if defined(DEBUG)
-		gsl_vector_fprintf (stdout,evec_i, "%g");
-	#endif
-	int i;
-	std::cout<<"Second minimum eigenvector: "<<std::endl;
-	for(i=0;i<evec_i->size;++i)
-		std::cout<<gsl_vector_get(evec_i, i)<<"\t";
-	std::cout<<std::endl;
-	//split the big graph based on eigenvector, >0 or <0
-	std::vector<Graph> vector_subgraph(2);
-	vector_subgraph[0] = graph.create_subgraph();
-	vector_subgraph[1] = graph.create_subgraph();
-	for(i=0;i<evec_i->size;++i)
-	{
-		if (gsl_vector_get(evec_i, i)<0)
-			add_vertex(i, vector_subgraph[0]);
-		else
-			add_vertex(i, vector_subgraph[1]);
-	}
-	
-	for(i=0; i<2; i++)
-	{
-		int num_vertices_of_subgraph = num_vertices(vector_subgraph[i]);
-		if (num_vertices_of_subgraph < min_cluster_size)
-			//stop here, too small, even it could be empty
-			continue;
-		//get all the components and check
-		std::vector<int> component(num_vertices_of_subgraph);
-		int no_of_components = connected_components(vector_subgraph[i], &component[0]);
-		//the second parameter is g, not graph
-		std::vector<Graph> vector_sub_subgraph = subgraph_components(vector_subgraph[i], g, component, no_of_components);
-		
-		std::vector<Graph>::iterator g_iterator;
-		std::cout<<"No. of components in subgraph "<<i<<" is: "<<no_of_components<<std::endl;
-		for(g_iterator=vector_sub_subgraph.begin();g_iterator!=vector_sub_subgraph.end();++g_iterator)
-		{
-			if(num_vertices(*g_iterator)>=min_cluster_size)
-			{
-				double connectivity = connectivity_of_graph(*g_iterator);
-				if (connectivity>=connectivity_cutoff)
-				{
-					//the second parameter is g not graph
-					good_clusters.append(graph2dict(*g_iterator, g));
-				}
-				else
-					cluster(*g_iterator);
-			}
-		}
-	}
-}
-
-void clustering::normalized_cut(Graph &graph, int max_size, int eigen_vector_no)
+void clustering::normalized_cut(std::ofstream &outf, Graph &subgraph, Graph &graph, int max_size, int eigen_vector_no)
 /*
 *05-25-05	normalized_cut, similar to cluster()
+*05-26-05	fix an important bug
 */
 {
-	int i;
-	gsl_matrix* m = graph2gsl_matrix(graph);
+	int i, global_index;
+	gsl_matrix* m = graph2gsl_matrix(subgraph);	//05-26-05	transform subgraph to matrix
 	#if defined(DEBUG)
-		std::cout<<"The matrix is "<<std::endl;
+		std::cerr<<"The matrix is "<<std::endl;
 		gsl_matrix_fprintf(stdout, m, "%g");		//check matrix
 	#endif
 	gsl_vector* evec_i = return_eigen_vector(m, eigen_vector_no);
-
+	
+	//two vertex_descriptor
+	boost::graph_traits<Graph>::vertex_descriptor
+	vertex_local, vertex_global;
+	//the vertex_index_global map is used to translate the global descriptor to the global index.
+	boost::property_map<Graph, vertex_index_t>::type
+	vertex_index_global;
+	vertex_index_global = get(vertex_index, graph);
+	
 	//split the big graph based on eigenvector, >0 or <0
 	std::vector<Graph> vector_subgraph(2);
-	vector_subgraph[0] = graph.create_subgraph();
+	vector_subgraph[0] = graph.create_subgraph();	//05-26-05 always use the ancestor graph to create subgraph
 	vector_subgraph[1] = graph.create_subgraph();
+	
 	for(i=0;i<evec_i->size;++i)
 	{
 		if (gsl_vector_get(evec_i, i)<0)
-			add_vertex(i, vector_subgraph[0]);
+		{
+			//i is the local index, get a descriptor from it
+			vertex_local = vertex(i, subgraph);
+			//find the global descriptor
+			vertex_global = subgraph.local_to_global(vertex_local);
+			//get the global index and add it to the subgraph
+			global_index = get(vertex_index_global, vertex_global);
+			#if defined(DEBUG)
+				std::cerr<<global_index<<" goes to the first subgraph"<<std::endl;
+			#endif
+			add_vertex(global_index, vector_subgraph[0]);
+		}
 		else
-			add_vertex(i, vector_subgraph[1]);
+		{
+			//i is the local index, get a descriptor from it
+			vertex_local = vertex(i, subgraph);
+			//find the global descriptor
+			vertex_global = subgraph.local_to_global(vertex_local);
+			//get the global index and add it to the subgraph
+			global_index = get(vertex_index_global, vertex_global);
+			#if defined(DEBUG)
+				std::cerr<<global_index<<" goes to the second subgraph"<<std::endl;
+			#endif
+			add_vertex(global_index, vector_subgraph[1]);
+		}
 	}
 	
 	for(i=0; i<2; i++)
@@ -436,54 +412,57 @@ void clustering::normalized_cut(Graph &graph, int max_size, int eigen_vector_no)
 		std::vector<int> component(num_vertices_of_subgraph);
 		int no_of_components = connected_components(vector_subgraph[i], &component[0]);
 		//the second parameter is g, not graph
-		std::vector<Graph> vector_sub_subgraph = subgraph_components(vector_subgraph[i], g, component, no_of_components);
+		std::vector<Graph> vector_sub_subgraph = subgraph_components(vector_subgraph[i], graph, component, no_of_components);
 		
 		std::vector<Graph>::iterator g_iterator;
 		#if defined(DEBUG)
-			std::cout<<"No. of components in subgraph "<<i<<" is: "<<no_of_components<<std::endl;
+			std::cerr<<"No. of components in subgraph "<<i<<" is: "<<no_of_components<<std::endl;
 		#endif
 		for(g_iterator=vector_sub_subgraph.begin();g_iterator!=vector_sub_subgraph.end();++g_iterator)
 		{
 			if(num_vertices(*g_iterator)>max_size)
 			{
-				normalized_cut(*g_iterator, max_size, eigen_vector_no);
+				normalized_cut(outf, *g_iterator, graph, max_size, eigen_vector_no);
 			}
 			else
 			{
-				good_clusters_vector.push_back(*g_iterator);
+				walk_graph(outf, *g_iterator, graph);
+				//good_clusters_vector.push_back(*g_iterator);
 			}
 		}
 	}
 }
 
 
-void clustering::walk_graph(Graph &subgraph, Graph &graph, vertexNamePropertyMap vertex2name)
+void clustering::walk_graph(std::ofstream &outf, Graph &subgraph, Graph &graph)
 /*
 *05-25-05
 *	copied from bgl_test.cc, modified, combine walk_edges and walk_vertices
 */
 {
+	std::cerr<<"Outputting subgraph...";
 	
 	boost::property_map<Graph, vertex_index_t>::type
 	vertex_id = get(vertex_index, graph);
+	vertexNamePropertyMap vertex2name = get(vertex_name, graph);
 	boost::graph_traits<Graph>::vertex_descriptor
 	vertex_local, vertex_local1, vertex_global, vertex_global1;
 	
-	std::cout<<"no. of vertices: "<<num_vertices(subgraph)<<std::endl;
+	outf<<"no. of vertices: "<<num_vertices(subgraph)<<std::endl;
 	
 	typedef graph_traits<Graph>::vertex_iterator vertex_iter;
 	std::pair<vertex_iter, vertex_iter> vp;
-	std::cout << "vertices(g) = ";
+	outf << "vertices(g) = ";
 	for (vp = vertices(subgraph); vp.first != vp.second; ++vp.first)
 	{
 		vertex_global = subgraph.local_to_global(*vp.first);
-		std::cout << get(vertex2name, vertex_global) <<  " ";
+		outf << get(vertex2name, vertex_global) <<  " ";
 	}
-	std::cout << std::endl;
+	outf << std::endl;
 	
-	std::cout << "no of edges: "<<num_edges(subgraph)<<std::endl;
+	outf << "no of edges: "<<num_edges(subgraph)<<std::endl;
 	graph_traits<Graph>::edge_iterator ei, ei_end;
-	std::cout << "edges(g)= ";
+	outf << "edges(g)= ";
 	for (tie(ei,ei_end) = edges(subgraph); ei != ei_end; ++ei)
 	{
 		vertex_local = source(*ei, subgraph);
@@ -491,39 +470,46 @@ void clustering::walk_graph(Graph &subgraph, Graph &graph, vertexNamePropertyMap
 		vertex_global = subgraph.local_to_global(vertex_local);
 		vertex_global1 = subgraph.local_to_global(vertex_local1);
 		#if defined(DEBUG)
-			std::cout << "(" << get(vertex_id, vertex_global)
+			outf << "(" << get(vertex_id, vertex_global)
 			<< "," << get(vertex_id, vertex_global1) << ") ";
 		#endif
-		std::cout << "[" << get(vertex2name, vertex_global)
+		outf << "[" << get(vertex2name, vertex_global)
 		<< "," << get(vertex2name, vertex_global1) << "] ";
 	}
-	std::cout << std::endl<<std::endl;
+	outf << std::endl<<std::endl;
 	
+	std::cerr<<"Done."<<std::endl;
 }
 
-void clustering::output()
+void clustering::output(std::string output_filename)
 /*
 *05-25-05
 *	copied from bgl_test.cc
 */
 {
 	std::cerr<<"Outputting subgraphs..."<<std::endl;
+	std::ofstream outf(output_filename.c_str());
 	std::vector<Graph>::iterator g_iterator;
 	for(g_iterator=good_clusters_vector.begin();g_iterator!=good_clusters_vector.end();++g_iterator)
-		walk_graph(*g_iterator, g, vertex2name);
+		walk_graph(outf, *g_iterator, g);
+	outf.close();
 	std::cerr<<"Done"<<std::endl;
 }
 
 void clustering::old_run(dict graph_dict)
 {
 	init_graph_from_dict(graph_dict, g);
-	cluster(g);
+	//cluster(g);
 }
 
 void clustering::run()
 {
 	init_graph_from_file(input_filename, g, min_edge_weight);
+	std::ofstream outf(output_filename.c_str());
+	eigen_vector_no = 1;
+	//normalized_cut(outf, g, g, max_size, eigen_vector_no);
 	
+	//05-26-05 g itself might have several connected components
 	//get all the components and check
 	std::vector<int> component(num_vertices(g));
 	int no_of_components = connected_components(g, &component[0]);
@@ -532,20 +518,23 @@ void clustering::run()
 	
 	std::vector<Graph>::iterator g_iterator;
 	#if defined(DEBUG)
-		std::cout<<"No. of components in the g is: "<<no_of_components<<std::endl;
+		std::cerr<<"No. of components in the g is: "<<no_of_components<<std::endl;
 	#endif
 	for(g_iterator=vector_sub_subgraph.begin();g_iterator!=vector_sub_subgraph.end();++g_iterator)
 	{
 		if(num_vertices(*g_iterator)>max_size)
 		{
-			normalized_cut(*g_iterator, max_size, eigen_vector_no);
+			normalized_cut(outf, *g_iterator, g, max_size, eigen_vector_no);
 		}
 		else
 		{
-			good_clusters_vector.push_back(*g_iterator);
+			walk_graph(outf, *g_iterator, g);
+			//good_clusters_vector.push_back(*g_iterator);
 		}
 	}
-	output();
+	
+	outf.close();
+	//output(output_filename);
 }
 
 BOOST_PYTHON_MODULE(clustering)
