@@ -243,6 +243,8 @@ gsl_matrix* clustering::graph2gsl_matrix(Graph &graph)
 /*
 *05-26-05
 *	transformed into a laplacian matrix
+*05-26-05
+*	transformed into a normalized laplacian matrix
 */
 {
 	int dimension = num_vertices(graph);
@@ -264,10 +266,10 @@ gsl_matrix* clustering::graph2gsl_matrix(Graph &graph)
 		degree2 = degree(vertex2, graph);
 		index1 = get(vertex_id, vertex1);
 		index2 = get(vertex_id, vertex2);
-		gsl_matrix_set(m, index1, index1, degree1);
-		gsl_matrix_set(m, index2, index2, degree2);
-		gsl_matrix_set(m, index1, index2, -1.0);
-		gsl_matrix_set(m, index2, index1, -1.0);	//undirected, symmetric
+		gsl_matrix_set(m, index1, index1, 1.0);
+		gsl_matrix_set(m, index2, index2, 1.0);
+		gsl_matrix_set(m, index1, index2, -1.0*pow(degree1,-0.5)*pow(degree2,-0.5));
+		gsl_matrix_set(m, index2, index1, -1.0*pow(degree1,-0.5)*pow(degree2,-0.5));	//undirected, symmetric
 	}
 	return m;
 }
