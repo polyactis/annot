@@ -46,10 +46,11 @@ class clustering
 	public:
 		clustering(double connectivity, int which_eigen_vector, int cluster_size);
 		clustering(std::string input_filename_option, std::string output_filename_option, int max_size_option,
-			int cut_loop_num_option, double density_cutoff_option, int min_edge_weight_option);	//05-25-05
+			int cut_loop_num_option, double density_cutoff_option, int min_edge_weight_option, int matrix_format_option);	//05-25-05
 		~clustering();
 		void init_graph_from_dict(dict graph_dict, Graph &graph);
 		void init_graph_from_file(std::string input_filename, Graph &graph, int min_edge_weight);	//05-25-05
+		void init_graph_from_file_matrix(std::string input_filename, Graph &graph, int min_edge_weight);	//05-26-05
 		dict graph2dict(Graph &subgraph, Graph &graph);
 		gsl_matrix *graph2gsl_matrix(Graph &graph);
 		gsl_vector *return_eigen_vector(gsl_matrix* graph_matrix, int which_eigen_vector);
@@ -76,6 +77,7 @@ class clustering
 		int max_size;
 		int cut_loop_num;
 		int min_edge_weight;
+		int matrix_format;
 		//the weight map
 		iterator_property_map<int*, EdgeIndexMap, int, int&> weight_pa;
 		//store the final results
@@ -94,7 +96,7 @@ clustering::clustering(double connectivity, int which_eigen_vector, int cluster_
 }
 
 clustering::clustering(std::string input_filename_option, std::string output_filename_option, int max_size_option,
-			int cut_loop_num_option, double density_cutoff_option, int min_edge_weight_option)
+			int cut_loop_num_option, double density_cutoff_option, int min_edge_weight_option, int matrix_format_option)
 {
 	input_filename = input_filename_option;
 	output_filename = output_filename_option;
@@ -102,6 +104,7 @@ clustering::clustering(std::string input_filename_option, std::string output_fil
 	cut_loop_num = cut_loop_num_option;
 	connectivity_cutoff = density_cutoff_option;
 	min_edge_weight = min_edge_weight_option;
+	matrix_format = matrix_format_option;
 }
 
 clustering::~clustering()
@@ -156,7 +159,7 @@ void clustering::init_graph_from_dict(dict graph_dict, Graph &graph)
 
 void clustering::init_graph_from_file(std::string input_filename, Graph &graph, int min_edge_weight)
 {
-	std::cerr<<"Read in graph from "<<input_filename<<std::endl;
+	std::cerr<<"Read in graph from "<<input_filename<<" ...";
 	std::ifstream datafile(input_filename.c_str());
 	std::vector<int> weight_array;	//05-25-05	a local weight_array
 	vertex2name = get(vertex_name, graph);
@@ -164,17 +167,17 @@ void clustering::init_graph_from_file(std::string input_filename, Graph &graph, 
 		char_separator<char> sep(" \t");		//05-25-05	blank or '\t' is the separator
 		typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
 		tokenizer line_toks(line, sep);
-		tokenizer::iterator i = line_toks.begin();
-		if(*i=="t")
+		tokenizer::iterator tokenizer_iter = line_toks.begin();
+		if(*tokenizer_iter=="t")
 			continue;	//skip the whole line
-		if(*i=="v")
+		if(*tokenizer_iter=="v")
 			continue;	//skip the whole line
-		if(*i=="e")
-			*i++;	//skip 'e'
+		if(*tokenizer_iter=="e")
+			*tokenizer_iter++;	//skip 'e'
 		
-		std::string gene1 = *i++;
-		std::string gene2 = *i++;
-		std::string edge_weight_string = *i;
+		std::string gene1 = *tokenizer_iter++;
+		std::string gene2 = *tokenizer_iter++;
+		std::string edge_weight_string = *tokenizer_iter;
 		int edge_weight = atoi(edge_weight_string.c_str());
 		if (edge_weight>=min_edge_weight)
 		{
@@ -201,6 +204,65 @@ void clustering::init_graph_from_file(std::string input_filename, Graph &graph, 
 			if (inserted)
 				weight_array.push_back(edge_weight);
 		}
+	}
+	datafile.close();
+	std::cerr<<"Done."<<std::endl;
+}
+
+void clustering::init_graph_from_file_matrix(std::string input_filename, Graph &graph, int min_edge_weight)
+/*
+*05-26-05
+*	add this function to read in matrix format input file.
+*/
+{
+	std::cerr<<"Read in graph from matrix_file "<<input_filename<<"...";
+	std::ifstream datafile(input_filename.c_str());
+	std::vector<int> weight_array;	//05-25-05	a local weight_array
+	vertex2name = get(vertex_name, graph);
+	int i=0;
+	int j=0;
+	for (std::string line; std::getline(datafile, line);) {
+		char_separator<char> sep(" \t");		//05-25-05	blank or '\t' is the separator
+		typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
+		tokenizer line_toks(line, sep);
+		j=0;
+		for (tokenizer::iterator tokenizer_iter = line_toks.begin(); tokenizer_iter!=line_toks.end();++tokenizer_iter)
+		{
+			if(i<j)	//05-26-05 only triangle
+			{
+				int edge_weight = atoi((*tokenizer_iter).c_str());
+				if(edge_weight>=min_edge_weight)
+				{
+					std::map<int, vertexDescriptor>::iterator pos;
+					bool inserted;
+					vertexDescriptor u, v;
+					tie(pos, inserted) = geneNoMap.insert(std::make_pair(i, vertexDescriptor()));
+					if (inserted) {
+						u = add_vertex(graph);
+						vertex2name[u] = i;
+						pos->second = u;
+					} else
+						u = pos->second;
+					
+					tie(pos, inserted) = geneNoMap.insert(std::make_pair(j, vertexDescriptor()));
+					if (inserted) {
+						v = add_vertex(graph);
+						vertex2name[v] = j;
+						pos->second = v;
+					} else
+						v = pos->second;
+					
+					graph_traits < Graph >::edge_descriptor e;
+					tie(e, inserted) = add_edge(u, v, graph);
+					if (inserted)
+						weight_array.push_back(edge_weight);
+				}
+			}
+			
+			j++;
+		}
+		
+		i++;
 	}
 	datafile.close();
 	std::cerr<<"Done."<<std::endl;
@@ -442,7 +504,9 @@ void clustering::walk_graph(std::ofstream &outf, Graph &subgraph, Graph &graph)
 *	copied from bgl_test.cc, modified, combine walk_edges and walk_vertices
 */
 {
-	std::cerr<<"Outputting subgraph...";
+	#if defined(DEBUG)
+		std::cerr<<"Outputting subgraph...";
+	#endif
 	
 	boost::property_map<Graph, vertex_index_t>::type
 	vertex_id = get(vertex_index, graph);
@@ -480,7 +544,9 @@ void clustering::walk_graph(std::ofstream &outf, Graph &subgraph, Graph &graph)
 	}
 	outf << std::endl<<std::endl;
 	
-	std::cerr<<"Done."<<std::endl;
+	#if defined(DEBUG)
+		std::cerr<<"Done."<<std::endl;
+	#endif
 }
 
 void clustering::output(std::string output_filename)
@@ -506,7 +572,10 @@ void clustering::old_run(dict graph_dict)
 
 void clustering::run()
 {
-	init_graph_from_file(input_filename, g, min_edge_weight);
+	if(matrix_format)
+		init_graph_from_file_matrix(input_filename, g, min_edge_weight);
+	else
+		init_graph_from_file(input_filename, g, min_edge_weight);
 	std::ofstream outf(output_filename.c_str());
 	eigen_vector_no = 1;
 	//normalized_cut(outf, g, g, max_size, eigen_vector_no);
@@ -553,13 +622,14 @@ void print_usage(FILE* stream, char* program_name)
 	assert(stream !=NULL);
         fprintf(stream,"Usage: %s options -i INPUTFILE\n",program_name);
 	fprintf(stream,"\t-h  --help	Display the usage infomation.\n"\
-		"\t-i ..., --input=...	INPUTFILE\n"\
+		"\t-i ..., --input=...	INPUTFILE(gspan or haiyan's edge format)\n"\
 		"\t-o ..., --output=...	Write output to file, INPUTFILE.1st(default)\n"\
 		"\t-s ..., --max_size=...	Min graph size, 200(default)\n"\
 		"\t-r .., --cut_loop_num=...	cut_loop_num, 2(default)\n"\
 		"\t-d ..., --density_cutoff=...	density cutoff, 0.2(default)\n"\
 		"\t\tif max_size=0, this cut_off is used instead.\n"\
 		"\t-e ..., --min_edge_weight=...	minimum edge weight, 5(default).\n"\
+		"\t-m, --matrix_format	the inputfile is in matrix format.\n"\
 		"\tFor long option, = or ' '(blank) is same.\n");
 	exit(3);
 }
@@ -568,7 +638,7 @@ void print_usage(FILE* stream, char* program_name)
 int main(int argc, char* argv[])
 {
 	int next_option;
-	const char* const short_options="hi:o:s:r:d:e:";
+	const char* const short_options="hi:o:s:r:d:e:m";
 	const struct option long_options[]={
 	  {"help",0,NULL,'h'},
 	  {"input", 1, NULL, 'i'},
@@ -577,6 +647,7 @@ int main(int argc, char* argv[])
 	  {"cut_loop_num", 1, NULL, 'r'},
 	  {"density_cutoff", 1, NULL, 'd'},
 	  {"min_edge_weight", 1, NULL, 'e'},
+	  {"matrix_format",0,NULL,'m'},
 	  {NULL,0,NULL,0}
 	};
 	
@@ -587,6 +658,7 @@ int main(int argc, char* argv[])
 	int cut_loop_num = 2;
 	double density_cutoff = 0.2;
 	int min_edge_weight = 5;
+	int matrix_format = 0;
 
 	do
 	{
@@ -614,6 +686,9 @@ int main(int argc, char* argv[])
 		case 'e':
 			min_edge_weight = atoi(optarg);
 			break;
+		case 'm':
+			matrix_format = 1;
+			break;
 		case '?':
 			print_usage(stderr, program_name);
 		case -1:
@@ -632,7 +707,7 @@ int main(int argc, char* argv[])
 
 	if (input_filename!="")
 	{
-		clustering instance(input_filename, output_filename, max_size, cut_loop_num, density_cutoff, min_edge_weight);
+		clustering instance(input_filename, output_filename, max_size, cut_loop_num, density_cutoff, min_edge_weight, matrix_format);
 		instance.run();
 	}
 	else
