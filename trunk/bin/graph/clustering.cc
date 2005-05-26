@@ -242,6 +242,10 @@ dict clustering::graph2dict(Graph &subgraph, Graph &graph)
 }
 
 gsl_matrix* clustering::graph2gsl_matrix(Graph &graph)
+/*
+*05-26-05
+*	transformed into a laplacian matrix
+*/
 {
 	int dimension = num_vertices(graph);
 	#if defined(DEBUG)
@@ -250,15 +254,22 @@ gsl_matrix* clustering::graph2gsl_matrix(Graph &graph)
 	gsl_matrix* m = gsl_matrix_calloc(dimension, dimension);	//calloc sets all elements to 0, different from alloc
 	boost::property_map<Graph, vertex_index_t>::type
 	vertex_id = get(vertex_index, graph);
-	
+	vertexDescriptor vertex1, vertex2;
 	int index1,index2;
+	int degree1, degree2;
 	graph_traits<Graph>::edge_iterator ei, ei_end;
 	for (tie(ei, ei_end) = edges(graph); ei!=ei_end; ++ei)
 	{
-		index1 = get(vertex_id, source(*ei, graph));
-		index2 = get(vertex_id, target(*ei, graph));
-		gsl_matrix_set(m, index1, index2, 1.0);
-		gsl_matrix_set(m, index2, index1, 1.0);	//undirected, symmetric
+		vertex1 = source(*ei, graph);
+		vertex2 = target(*ei, graph);
+		degree1 = degree(vertex1, graph);
+		degree2 = degree(vertex2, graph);
+		index1 = get(vertex_id, vertex1);
+		index2 = get(vertex_id, vertex2);
+		gsl_matrix_set(m, index1, index1, degree1);
+		gsl_matrix_set(m, index2, index2, degree2);
+		gsl_matrix_set(m, index1, index2, -1.0);
+		gsl_matrix_set(m, index2, index1, -1.0);	//undirected, symmetric
 	}
 	return m;
 }
@@ -472,7 +483,7 @@ void clustering::walk_graph(Graph &subgraph, Graph &graph, vertexNamePropertyMap
 	
 	std::cout << "no of edges: "<<num_edges(subgraph)<<std::endl;
 	graph_traits<Graph>::edge_iterator ei, ei_end;
-	std::cout << "edges(g)= "<<std::endl;
+	std::cout << "edges(g)= ";
 	for (tie(ei,ei_end) = edges(subgraph); ei != ei_end; ++ei)
 	{
 		vertex_local = source(*ei, subgraph);
@@ -486,7 +497,7 @@ void clustering::walk_graph(Graph &subgraph, Graph &graph, vertexNamePropertyMap
 		std::cout << "[" << get(vertex2name, vertex_global)
 		<< "," << get(vertex2name, vertex_global1) << "] ";
 	}
-	std::cout << std::endl;
+	std::cout << std::endl<<std::endl;
 	
 }
 
@@ -512,7 +523,28 @@ void clustering::old_run(dict graph_dict)
 void clustering::run()
 {
 	init_graph_from_file(input_filename, g, min_edge_weight);
-	normalized_cut(g, max_size, eigen_vector_no);
+	
+	//get all the components and check
+	std::vector<int> component(num_vertices(g));
+	int no_of_components = connected_components(g, &component[0]);
+	//the second parameter is g, not graph
+	std::vector<Graph> vector_sub_subgraph = subgraph_components(g, g, component, no_of_components);
+	
+	std::vector<Graph>::iterator g_iterator;
+	#if defined(DEBUG)
+		std::cout<<"No. of components in the g is: "<<no_of_components<<std::endl;
+	#endif
+	for(g_iterator=vector_sub_subgraph.begin();g_iterator!=vector_sub_subgraph.end();++g_iterator)
+	{
+		if(num_vertices(*g_iterator)>max_size)
+		{
+			normalized_cut(*g_iterator, max_size, eigen_vector_no);
+		}
+		else
+		{
+			good_clusters_vector.push_back(*g_iterator);
+		}
+	}
 	output();
 }
 
