@@ -146,6 +146,13 @@ void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_giv
 	}
 }
 
+//05-27-05
+vector<float> cor_cut_off_vector_return(double p_value_cut_off, double cor_cut_off_given)
+{
+	cor_cut_off_vector_construct(p_value_cut_off, cor_cut_off_given);
+	return cor_cut_off_vector;
+}
+	
 
 graph_construct::graph_construct(char* outf_name, vector<int> edge_vector)
 {

@@ -38,6 +38,9 @@ void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_giv
 
 edge euc_dist(vf v1, vf v2);
 
+//05-27-05 declare to let python have the cor_cut_off_vector.
+vector<float> cor_cut_off_vector_return(double p_value_cut_off, double cor_cut_off_given);
+
 class graph_construct
 {
 	/*one sequence to call
