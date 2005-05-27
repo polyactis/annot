@@ -179,7 +179,7 @@ class netmine_wrapper:
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, \
 		'-o', op, '-g', min_graph_size,\
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
-		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree, '-y', self.svnum])
+		'-s', max_pre_graph_size, '-c', conn_perc, '-u', self.max_degree, '-y', self.svnum, '-r', cut_loop_num])
 									#second is netmine2nd's parameter
 									parameter_list.append([program_path2nd, '-r', cut_loop_num,\
 		'-m', self.run_mode, '-i', self.input_matrix_file, '-n', self.genenum, '-v', self.input_sv_file, '-a', self.input_bv_file,\
