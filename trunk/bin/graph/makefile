@@ -1,65 +1,79 @@
+ARPACKPP_INC	= ~/script/hhu_clustering/include/arpack++/include/
+
+ARPACK_LIB	= ~/script/hhu_clustering/lib/libarpack_i686.a
+SUPERLU_LIB	= ~/script/hhu_clustering/lib/superlu_linux.a
+LAPACK_LIB	= ~/script/hhu_clustering/lib/liblapack.a
+BLAS_LIB	= ~/script/hhu_clustering/lib/libblas.a
+FORTRAN_LIB	= ~/script/hhu_clustering/lib/libg2c.a
+
+
+
+
 BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so
 BoostPythonBinary	= clustering
 BoostPythonLib  = -lboost_python
 
-swig_include	= -I/usr/include/python2.3
-cxx_swig_targets	= _graph_modeling.so
-swig_py		= graph_modeling.py
-cxx_wrap	= graph_modeling_wrap.cc
+SwigInclude	= /usr/include/python2.3
+CxxSwigTargets	= _graph_modeling.so
+SwigPy		= graph_modeling.py
+CxxWrap	= graph_modeling_wrap.cc
 
 
-c_flags		= -O2
-cxx_flags	= -O2 -fPIC
-shared_lib_flags	= -shared -fPIC
+CFlags		= -O2
+CxxFlags	= -O2 -fPIC
+SharedLibFlags	= -shared -fPIC
 
 .SUFFIXES:	.i .cc .c .so .o _wrap.o .py
 .PHONY:	swig
 
-gsl_lib		= -lgsl -lgslcblas
-gsl_c_targets	= 
-gsl_cxx_targets	= graph_modeling
+GslLib		= -lgsl -lgslcblas
+GslCTargets	= 
+GslCxxTargets	= graph_modeling
 
-c_compiler	= gcc
-cxx_compiler	= g++
+CCompiler	= gcc
+CxxCompiler	= g++
 
+IncludeDirs	= -I $(ARPACKPP_INC) -I $(SwigInclude)
 
-all:	$(gsl_cxx_targets) $(gsl_c_targets) $(BoostPythonTarget) $(cxx_swig_targets) $(BoostPythonBinary)
+Libs	= $(GslLib) $(LEDA_LIB) $(ARPACK_LIB) $(SUPERLU_LIB) $(LAPACK_LIB) $(BLAS_LIB) $(FORTRAN_LIB)
 
-swig:	$(cxx_swig_targets)
+all:	$(GslCxxTargets) $(GslCTargets) $(BoostPythonTarget) $(CxxSwigTargets) $(BoostPythonBinary)
 
-$(gsl_cxx_targets):	%:	%.o
-	$(cxx_compiler) $(cxx_flags) $(gsl_lib) $< -o $@
+swig:	$(CxxSwigTargets)
+
+$(GslCxxTargets):	%:	%.o
+	$(CxxCompiler) $(CxxFlags) $(GslLib) $< -o $@
 
 .cc.o:
-	$(cxx_compiler) $(cxx_flags) $(swig_include) -c $< -o $@
+	$(CxxCompiler) $(CxxFlags) $(IncludeDirs) -c $< -o $@
 
-$(gsl_c_targets):	%:	%.o
-	$(c_compiler) $(c_flags) $(gsl_lib) $< -o $@
+$(GslCTargets):	%:	%.o
+	$(CCompiler) $(CFlags) $(GslLib) $< -o $@
 
 .c.o:
-	$(c_compiler) $(c_flags) -c $< -o $@
+	$(CCompiler) $(CFlags) $(IncludeDirs) -c $< -o $@
 
 
 #for swig
-$(cxx_wrap):	%_wrap.cc:	%.i %.cc
+$(CxxWrap):	%_wrap.cc:	%.i %.cc
 	swig -c++ -python -o $@ $<
 
 %_wrap.o:	%_wrap.cc
-	$(cxx_compiler) $(swig_include) $(cxx_flags) -c $< -o $@
+	$(CxxCompiler) $(IncludeDirs) $(CxxFlags) -c $< -o $@
 
-$(cxx_swig_targets):	_%.so:	%.o %_wrap.o
-	$(cxx_compiler)  $(gsl_lib) $(shared_lib_flags) $^ -o $@
+$(CxxSwigTargets):	_%.so:	%.o %_wrap.o
+	$(CxxCompiler)  $(GslLib) $(SharedLibFlags) $^ -o $@
 
 
 #for boost.python target(shared libraries)
 $(BoostPythonTarget):	%.so:	%.o
-	$(cxx_compiler) $(gsl_lib) $(BoostPythonLib) $(shared_lib_flags) $< -o $@
+	$(CxxCompiler) $(GslLib) $(BoostPythonLib) $(SharedLibFlags) $< -o $@
 
 #for boost python binary 
 $(BoostPythonBinary):	%:	%.o
-	$(cxx_compiler) $(cxx_flags) $(gsl_lib) $(BoostPythonLib) $< -o $@
+	$(CxxCompiler) $(CxxFlags) $(BoostPythonLib) $< $(Libs) -o $@
 
 
 
 clean:
-	-rm -f *.class *.o $(gsl_cxx_targets) $(gsl_c_targets) $(cxx_swig_targets) $(cxx_wrap) *.pyc $(swig_py) $(BoostPythonTarget) $(BoostPythonBinary)
+	-rm -f *.class *.o $(GslCxxTargets) $(GslCTargets) $(CxxSwigTargets) $(CxxWrap) *.pyc $(SwigPy) $(BoostPythonTarget) $(BoostPythonBinary)
