@@ -10,6 +10,8 @@
 #include <boost/config.hpp>
 #include <iostream>                      // for std::cout
 #include <utility>                       // for std::pair
+#include <algorithm>		//for std::sort and std::copy	05-30-05
+#include "areig.h"	//for AREig()	05-30-05
 #include <boost/utility.hpp>             // for boost::tie
 #include <boost/graph/subgraph.hpp>	//for boost::subgraph
 #include <boost/graph/graph_traits.hpp>  // for boost::graph_traits
@@ -54,6 +56,7 @@ class clustering
 		dict graph2dict(Graph &subgraph, Graph &graph);
 		gsl_matrix *graph2gsl_matrix(Graph &graph);
 		gsl_vector *return_eigen_vector(gsl_matrix* graph_matrix, int which_eigen_vector);
+		gsl_vector *return_eigen_vector_by_arpack(Graph &graph, int which_eigen_vector);
 		double connectivity_of_graph(Graph &graph);
 		std::vector<Graph> subgraph_components(Graph &subgraph, Graph &graph, std::vector<int> component, int no_of_components);
 		void normalized_cut(std::ofstream &outf, Graph &subgraph, Graph &graph, int max_size, int eigen_vector_no);	//05-25-05
@@ -367,6 +370,119 @@ gsl_vector* clustering::return_eigen_vector(gsl_matrix* graph_matrix, int which_
 	return evec_i;
 }
 
+gsl_vector* clustering::return_eigen_vector_by_arpack(Graph &graph, int which_eigen_vector)
+/*
+*05-30-05
+*	use AREig() to get eigenvector for large matrix fastly.
+*	see areig.h for more information
+*	it's a laplacian matrix, different from bgl_test.cc
+*/
+{
+	int n;
+	int nnz;
+	int* irow;
+	int* pcol;
+	double* A;
+	
+	n = num_vertices(graph);
+	nnz = num_edges(graph)+n;
+	A = new double[nnz];
+	irow = new int[nnz];
+	pcol = new int[n+1];
+	
+	std::vector<vertexDescriptor> adjacency_vector;
+	boost::graph_traits<Graph>::adjacency_iterator a_it, a_it_end;
+	boost::graph_traits<Graph>::vertex_descriptor s, t;
+	std::vector<vertexDescriptor>::iterator av_it;
+	int j=0;
+	int i=0;
+	pcol[0] = 0;	//first one is always the first element of the first column.
+	int degree1, degree2;
+	for(i=0; i<n; i++)
+	{
+		s = vertex(i, graph);
+		adjacency_vector.clear();
+		for(tie(a_it, a_it_end)=adjacent_vertices(s, graph); a_it!=a_it_end; ++a_it)
+		{
+			adjacency_vector.push_back(*a_it);
+		}
+		std::sort(adjacency_vector.begin(), adjacency_vector.end());
+		#if defined(DEBUG)
+			std::cout<<"The sorted adjacency list of vertex "<<s<<" is: ";
+			std::copy(adjacency_vector.begin(), adjacency_vector.end(), std::ostream_iterator<vertexDescriptor>(std::cout, " "));
+			std::cout<<std::endl;
+		#endif
+		
+		//the diagonal element
+		irow[j] = i;
+		A[j++] = 1;
+		
+		av_it = adjacency_vector.begin();
+		for(av_it = adjacency_vector.begin(); av_it!=adjacency_vector.end(); ++av_it)
+		{
+			if(*av_it>i)
+			{
+				//if(*av_it<pcol[i])
+				//	pcol[i] = int(*av_it);
+				t = vertex(*av_it, graph);
+				degree1 = degree(s, graph);
+				degree2 = degree(t, graph);
+				irow[j] = int(*av_it);
+				A[j++] = -1.0*pow(degree1,-0.5)*pow(degree2,-0.5);	//normalized laplacian
+			}
+		}
+		pcol[i+1] = j;
+		
+	}
+	#if defined(DEBUG)
+		std::cout<<"The number of non-zero elements in A is "<<j<<"."<<std::endl;
+		std::copy(A, A+nnz, std::ostream_iterator<double>(std::cout, " "));
+		std::cout<<std::endl;
+		std::cout<<"Elements of irow is ";
+		std::copy(irow, irow+nnz, std::ostream_iterator<int>(std::cout, " "));
+		std::cout<<std::endl;
+		std::cout<<"Elements of pcol is ";
+		std::copy(pcol, pcol+n+1, std::ostream_iterator<int>(std::cout, " "));
+		std::cout<<std::endl;
+	#endif
+	
+	//prepare to do AREig()
+	double* EigVal;
+	double* EigVec;
+	EigVal = new double[n+1];
+	EigVec = new double[n*(which_eigen_vector+1)*2+1];	//including the number of eigenvectors before which_eigen_vector, 
+		//It's given in complex eigenvectors with two consecutive vectors.
+	char uplo='L';
+	int nev = which_eigen_vector+1;	//which_eigen_vector starts from 0.
+	char* which="SM";
+	int ncv = nev*2+1;
+	double tol = 0.0001;	//Stopping criterion (relative accuracy of Ritz values), 0.01 or 0.00001 doesn't matter.
+	int maxit = 100000;
+	
+	int nconv = AREig(EigVal, EigVec, n, nnz, A, irow, pcol, uplo, nev, which, ncv, tol, maxit);
+	gsl_vector* evec_i = gsl_vector_alloc(n);
+	for(i=0; i<n; i++)
+		gsl_vector_set(evec_i, i, EigVec[n*which_eigen_vector+i]);	//it's in value(not absolute) ascending order).
+	
+	#if defined(DEBUG)
+		std::cout<<"No of converged eigen values is "<<nconv<<std::endl;
+		std::copy(EigVal, EigVal+nconv, std::ostream_iterator<double>(std::cout, " "));
+		std::cout<<std::endl;
+		//output the eigen vector
+		std::cout<<"The "<<which_eigen_vector<<"th eigenvector: "<<std::endl;
+		for(i=0;i<evec_i->size;++i)
+			std::cout<<gsl_vector_get(evec_i, i)<<"\t";
+		std::cout<<std::endl;
+	#endif
+
+	delete[] EigVal;
+	delete[] EigVec;
+	delete[] A;
+	delete[] irow;
+	delete[] pcol;
+	return evec_i;
+}
+
 double clustering::connectivity_of_graph(Graph &graph)
 {
 
@@ -416,16 +532,19 @@ void clustering::normalized_cut(std::ofstream &outf, Graph &subgraph, Graph &gra
 /*
 *05-25-05	normalized_cut, similar to cluster()
 *05-26-05	fix an important bug
+*05-30-05	replace gsl functions with return_eigen_vector_by_arpack()
 */
 {
 	int i, global_index;
+	/*
 	gsl_matrix* m = graph2gsl_matrix(subgraph);	//05-26-05	transform subgraph to matrix
 	#if defined(DEBUG)
 		std::cerr<<"The matrix is "<<std::endl;
 		gsl_matrix_fprintf(stdout, m, "%g");		//check matrix
 	#endif
 	gsl_vector* evec_i = return_eigen_vector(m, eigen_vector_no);
-	
+	*/
+	gsl_vector* evec_i = return_eigen_vector_by_arpack(subgraph, eigen_vector_no);	
 	//two vertex_descriptor
 	boost::graph_traits<Graph>::vertex_descriptor
 	vertex_local, vertex_global;
