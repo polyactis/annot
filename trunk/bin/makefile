@@ -1,4 +1,4 @@
-SUBDIRS	= module_cc graph
+SUBDIRS	= module_cc graph tightClust
 .PHONY:	clean_subdirs subdirs $(SUBDIRS)
 
 all:	graph.bin subdirs
