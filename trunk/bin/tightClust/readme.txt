@@ -43,4 +43,4 @@ program finishes. The following 12 parameters are needed for tightClust.
     9. seqNum: the number of subsequent k_0 that finds the tight cluster.
     10. resampNum: total number of resampling to obtain comembership matrix.
     11. subSampPercnt: percentage of subsamples selected
-    12. npass: number of different random inital for
+    12. npass: number of different random inital for K-means
