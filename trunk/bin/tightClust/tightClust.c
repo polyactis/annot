@@ -100,11 +100,14 @@ int main(int argc, char* argv[])
 	npass=atoi(argv[12]);
 		
 	combineChars(workingDir, dataFile, fullDataFileName);
-	combineChars(workingDir, "temp_confirmData.txt", fullTempDataFileName);
-	combineChars(workingDir, "temp_clust.txt", fullTempClustFileName);
+	
+	//06-03-05	modify the names of these outputfile
+	combineChars(fullDataFileName, ".confirmData", fullTempDataFileName);
+	combineChars(fullDataFileName, ".clust.stdout", fullTempClustFileName);
 	//outputFileName
-	combineChars(workingDir, "tightClust_", outputFileName);
+	combineChars(fullDataFileName, ".tightClust", outputFileName);
 	//Note: _itoa and _gcvt only works in Visual C++ in Windows
+	/*
 	combineChars(outputFileName, argv[3], outputFileName);
 	combineChars(outputFileName, "_", outputFileName);
 	combineChars(outputFileName, argv[4], outputFileName);
@@ -125,8 +128,8 @@ int main(int argc, char* argv[])
 	combineChars(outputFileName, "_", outputFileName);
 	combineChars(outputFileName, argv[12], outputFileName);	
 	combineChars(outputFileName, ".txt", outputFileName);
-
-	combineChars(workingDir, "temp_log_", fullLogFileName);
+	*/	//06-03-05	simplify outputFileName
+	combineChars(fullDataFileName, ".temp_log_", fullLogFileName);
 	combineChars(fullLogFileName, argv[3], fullLogFileName);
 	combineChars(fullLogFileName, "_", fullLogFileName);
 	combineChars(fullLogFileName, argv[4], fullLogFileName);
@@ -240,7 +243,10 @@ int main(int argc, char* argv[])
 
 	//kcluster(25, nrow, ncol, data, mask, weight, 0, 1, 'a', 'e', clusterid, cdata, cmask, &error, &ifound);
 	//printf("help\n");
-	write_cluster_treeview(nrow, ncol, data, sampleName, geneID, annotation, targetClustNum+1, clusterid, outputFileName, 3);
+	
+	//06-03-05 targetClustNum+1 is discarded, the last one is not the one we want.
+	write_cluster_treeview(nrow, ncol, data, sampleName, geneID, annotation, targetClustNum, clusterid, outputFileName, 3);
+
 	/*calcAveComemMatrix(25, nrow, ncol, data, mask, weight, 3, 5, 0.7, aveComemMatrix);
 	printf("help\n");
 	write_double_matrix(nrow, nrow, aveComemMatrix, "c:\\temp_aveComemMatrix.txt");
@@ -660,11 +666,16 @@ void write_data(int nrow, int ncol, double** data, char** sampleName, char** gen
 
 //write cluster result in treeview format
 void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName, char** geneID, char** annotation, int targetClustNum, int clusterid[], char path[], int emptyrows_betwn_cluster)
+/*
+*06-03-05
+*	simplify the output format, by yh
+*/
 {
 	FILE* tempStream;
 	int k, i,j;
 	if( (tempStream  = fopen( path, "w+" )) == NULL )
-      printf( "The file 'data' was not opened\n" );
+		printf( "The file 'data' was not opened\n" );
+	/*
 	fprintf(tempStream, "%d\t%d\n", nrow, ncol);
 
 	fprintf(tempStream, "%s\t%s\t", "geneID", "annotation");
@@ -674,24 +685,29 @@ void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName
 			fprintf(tempStream, "%s\t", sampleName[i]);
 		else fprintf(tempStream, "%s\n", sampleName[i]);
 	}
-
+	*/
 	for(k=0; k<targetClustNum; k++)
 	{
 		for(i=0; i<nrow; i++)
 		{
 			if(clusterid[i]==k)
 			{
-				fprintf(tempStream, "%s\t%s\t", geneID[i], annotation[i]);
+				fprintf(tempStream, "%s\t", geneID[i]);
+				/*
 				for(j=0; j<ncol; j++)
 				{
 					if(j!=ncol-1)
 						fprintf(tempStream, "%f\t", data[i][j]);
 					else fprintf(tempStream, "%f\n", data[i][j]);
 				}
+				*/
 			}
 		}
+		fprintf(tempStream, "\n");
+		/*
 		for(i=0; i<emptyrows_betwn_cluster; i++)
 			fprintf(tempStream, "NONE\n");
+		*/
 	}
 	fclose(tempStream);
 }
