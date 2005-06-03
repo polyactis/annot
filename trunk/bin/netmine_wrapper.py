@@ -26,6 +26,7 @@ Option:
 		for example, if you combine 3rd and 4th. you use -z 0011
 	
 	-u ..., --max_degree=...	maximum degree of freedom for user's T table, 500(default)
+	-k ...,	this argument specifies the selected dataset index like, 37/0,1-3,4,5-36
 	
 	-y ..., --type=...	0(coden, default), 1(copath) (IGNORE)
 	--id=...	input directory, '~/bin/hhu_clustering/data/input' (default)
@@ -89,7 +90,7 @@ class netmine_wrapper:
 		ttablefile='ttableFromMatlabt1p-3.txt', cut_loop_num_list=['2'], min_graph_size_list=['5'], \
 		min_edge_freq_list=['6'], first_density_cutoff_list=['0.4'], second_density_cutoff_list=['0.4'],\
 		max_pre_graph_size_list=['80'], conn_perc_list=['0.5'], match_cut='4.0', intersect2union_cut='0.4',\
-		euclidean_ratio='0.2', selection_code='0110', max_degree='500', type=0, \
+		euclidean_ratio='0.2', selection_code='0110', max_degree='500', dataset_selected=None, type=0, \
 		id=None, od=None, bd=None, mp='sc_54_6661_merge_6', op=None, rank_range=None, \
 		js=0, debug=0):
 		"""
@@ -115,6 +116,8 @@ class netmine_wrapper:
 		self.selection_code = selection_code
 		
 		self.max_degree = max_degree
+		self.dataset_selected = dataset_selected
+		
 		self.type = int(type)
 		self.id = id
 		self.od = od
@@ -187,6 +190,9 @@ class netmine_wrapper:
 		'-e', min_edge_freq, '-d', first_density_cutoff, '-q', second_density_cutoff, \
 		'-s', max_pre_graph_size, '-c', conn_perc, '-h', self.match_cut, '-j', self.intersect2union_cut,\
 		'-w', self.euclidean_ratio, '-z', self.selection_code, '-u', self.max_degree, '-y', self.svnum])
+									if self.dataset_selected:	#not None	06-02-05
+										parameter_list[1].append('-k')
+										parameter_list[1].append(self.dataset_selected)
 
 		return parameter_list
 
@@ -394,7 +400,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "m:n:p:l:t:r:g:e:d:q:s:c:h:j:w:z:u:y:", ["help","run_mode=",\
+		opts, args = getopt.getopt(sys.argv[1:], "m:n:p:l:t:r:g:e:d:q:s:c:h:j:w:z:u:k:y:", ["help","run_mode=",\
 			"genenum=", "svnum=", "sv_length=", "ttablefile=", "cut_loop_num_list=", "min_graph_size_list=",\
 			"min_edge_freq_list=", "first_density_cutoff_list=", "second_density_cutoff_list=", \
 			"max_pre_graph_size_list=", "conn_perc_list=", "match_cut=", "intersect2union_cut=",\
@@ -423,6 +429,8 @@ if __name__ == '__main__':
 	selection_code = '0110'
 	
 	max_degree = '500'
+	dataset_selected = None
+	
 	type = '0'
 	id = None
 	od = None
@@ -475,6 +483,9 @@ if __name__ == '__main__':
 			
 		elif opt in ("-u", "--max_degree"):
 			max_degree = arg
+		elif opt in ("-k"):
+			dataset_selected = arg
+			
 		elif opt in ("-y", "--type"):
 			type = int(arg)
 		elif opt in ("--id"):
@@ -506,7 +517,7 @@ if __name__ == '__main__':
 			ttablefile, cut_loop_num_list, min_graph_size_list, \
 			min_edge_freq_list, first_density_cutoff_list, second_density_cutoff_list,\
 			max_pre_graph_size_list, conn_perc_list, match_cut, intersect2union_cut,\
-			euclidean_ratio, selection_code, max_degree, type,\
+			euclidean_ratio, selection_code, max_degree, dataset_selected, type,\
 			id, od, bd, mp, op, rank_range, js, debug)
 		
 		instance.run()
