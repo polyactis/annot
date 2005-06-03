@@ -8,8 +8,9 @@ Option:
 	-o ..., --output_file=...	haiyan's matrix format
 	-n ..., --no_of_nas=...	minimum number of NAs of one edge, None(default)
 	-t ..., --top_percentage=...	0.1(default)
+	-p, --plain_na	use plain 'NA' instead of random number
 	-b, --debug	just fetch 15000 edges and do a demo
-	-h, --help              show this help
+	-h, --help		show this help
 
 Examples:
 	PreprocessEdgeData.py -i edge_data_go_282 -o edge_data_go_282.1
@@ -19,7 +20,7 @@ Description:
 	
 """
 
-import sys, os, getopt, csv, re
+import sys, os, getopt, csv, re, random
 import MLab
 from Numeric import argsort, take, transpose
 from MA import array
@@ -33,11 +34,13 @@ class PreprocessEdgeData:
 		2. NA <= 7
 		3. transpose the matrix
 	"""
-	def __init__(self, infname=None, outfname=None, no_of_nas=None, top_percentage=0.1, debug=0):
+	def __init__(self, infname=None, outfname=None, no_of_nas=None, \
+		top_percentage=0.1, plain_na=0, debug=0):
 		self.infname = infname
 		self.outfname = outfname
 		self.no_of_nas = no_of_nas
 		self.top_percentage = top_percentage
+		self.plain_na = int(plain_na)
 		self.debug = int(debug)
 		
 		self.list_of_mas = []
@@ -108,9 +111,11 @@ class PreprocessEdgeData:
 		matrix = array(ls_2d)
 		matrix = transpose(matrix)
 		writer = csv.writer(open(outfname, 'w'), delimiter='\t')
+		writer.writerow(matrix.shape)
+		writer.writerow(["column", "column"]+range(len(matrix[0])))
 		for i in range(matrix.shape[0]):
 			ls_with_NA_filled = self.ls_NA_fillin(matrix[i])
-			writer.writerow([i+1]+ls_with_NA_filled)
+			writer.writerow([i, i]+ls_with_NA_filled)
 		
 		sys.stderr.write("Done.\n")
 	
@@ -122,7 +127,10 @@ class PreprocessEdgeData:
 		ls_to_return = []
 		for item in ls:
 			if item == 1.1:
-				ls_to_return.append("NA")
+				if self.plain_na:
+					ls_to_return.append('NA')
+				else:
+					ls_to_return.append(random.uniform(-1,1))
 			else:
 				ls_to_return.append(item)
 		return ls_to_return
@@ -137,9 +145,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "input_file=", "output_file=", "no_of_nas=", "top_percentage=", "debug"]
+	long_options_list = ["help", "input_file=", "output_file=", "no_of_nas=", "top_percentage=", "plain_na", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "i:o:n:t:b", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "i:o:n:t:pb", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -148,6 +156,7 @@ if __name__ == '__main__':
 	output_file = None
 	no_of_nas = None
 	top_percentage = 0.1
+	plain_na = 0
 	debug = 0
 
 	for opt, arg in opts:
@@ -162,11 +171,13 @@ if __name__ == '__main__':
 			no_of_nas = int(arg)
 		elif opt in ("-t", "--top_percentage"):
 			top_percentage = float(arg)
+		elif opt in ("-p", "--plain_na"):
+			plain_na = 1
 		elif opt in ("-b", "--debug"):
 			debug = 1
 
 	if input_file and output_file:
-		instance = PreprocessEdgeData(input_file, output_file, no_of_nas, top_percentage, debug)
+		instance = PreprocessEdgeData(input_file, output_file, no_of_nas, top_percentage, plain_na, debug)
 		instance.run()
 	else:
 		print __doc__
