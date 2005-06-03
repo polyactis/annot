@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include "cluster.h"
+#include "ranlib.h"
 
 const double NA=1E30;
 const int maxStringLength=500;
@@ -724,7 +725,7 @@ int which_minDist(int ncol, double** data, double** cdata, int** mask, int** cma
 void calcAveComemMatrix(int nclusters, int nrow, int ncol, double** data, int** mask, 
 	double weight[], int npass, int resampNum, double subSampPercnt, short** aveComemMatrix)
 {
-	int subSampNum=nrow*subSampPercnt;
+	int subSampNum=int(nrow*subSampPercnt);
 	int i,j,k;
 	double** subData;
 	double** subCdata;
@@ -732,7 +733,7 @@ void calcAveComemMatrix(int nclusters, int nrow, int ncol, double** data, int** 
 	int** subMask;
 	int* subClusterid=(int*)malloc((size_t)subSampNum*sizeof(int)); 
 	int* allClusterid=(int*)malloc((size_t)nrow*sizeof(int)); 
-	int* originalIndex=(int*)malloc((size_t)nrow*sizeof(int)); 
+	long* originalIndex=(long*)malloc((size_t)nrow*sizeof(int)); 
 	double error; int ifound;
 
 	subData = (double**)malloc((size_t)subSampNum*sizeof(double*)); 
@@ -1206,5 +1207,3 @@ void assignChars(char oldChars[], char newChars[])
 	}
 	oldChars[i]='\0';
 }
-
-
