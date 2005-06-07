@@ -6,7 +6,7 @@ Option:
 	R_FILE is the file to store the R code.
 	-i ..., --input_file=...	gspan format
 	-o ..., --output_file=...	haiyan's matrix format
-	-n ..., --no_of_nas=...	minimum number of NAs of one edge, None(default)
+	-n ..., --no_of_nas=...	maximum number of NAs of one edge, None(default)
 	-t ..., --top_percentage=...	0.1(default)
 	-p, --plain_na	use plain 'NA' instead of random number
 	-b, --debug	just fetch 15000 edges and do a demo
@@ -66,7 +66,7 @@ class PreprocessEdgeData:
 					data_ls.append(float(item))
 					mask_ls.append(0)
 			if no_of_nas:
-				if sum(mask_ls)>=no_of_nas:	#too many NAs
+				if sum(mask_ls)>no_of_nas:	#too many NAs
 					continue
 			list_of_mas.append(array(data_ls, mask=mask_ls))
 		del reader
@@ -84,6 +84,7 @@ class PreprocessEdgeData:
 			list_of_stds.append(std)
 		
 		top_number = int(len(list_of_stds)*top_percentage)	#how many we want
+		
 		arg_list  = argsort(list_of_stds)	#sort it, ascending
 		arg_list = arg_list.tolist()	#convert from array to list
 		arg_list.reverse()	#reverse, descending order
@@ -136,6 +137,13 @@ class PreprocessEdgeData:
 		return ls_to_return
 	
 	def run(self):
+		"""
+		06-07-05
+			--data_read_in()
+			--get_top_mas()
+			--transpose_and_output()
+				--ls_NA_fillin()
+		"""
 		self.list_of_mas = self.data_read_in(self.infname, self.no_of_nas)
 		self.list_of_top_mas = self.get_top_mas(self.list_of_mas, self.top_percentage)
 		self.transpose_and_output(self.outfname, self.list_of_top_mas)
