@@ -11,7 +11,7 @@ Option:
 	--me=...	min_no_of_edges,500(default)
 	
 	--tp=..	top_percentage, 0.1(default)
-	--nn=...	no_of_nas, 7(default)
+	--nn=...	no_of_nas maximum(<=), 7(default)
 	
 	--tcn=...	targetClustNum, 2(default)
 	--mk=...	min_k, 4(default)
@@ -67,8 +67,12 @@ def callTightClust(go_no, parameter_list):
 	return tightClust_output_file
 
 class get_edge_data:
+	"""
+	06-07-05
+		no_of_nas is used to control whether the edge should be outputed.
+	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, 
-		table='edge_cor_vector', output_dir=None, min_no_of_edges=500, debug=0):
+		table='edge_cor_vector', output_dir=None, min_no_of_edges=500, debug=0, no_of_nas=7):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -76,6 +80,7 @@ class get_edge_data:
 		self.output_dir = output_dir
 		self.min_no_of_edges = int(min_no_of_edges)
 		self.debug = int(debug)
+		self.no_of_nas = int(no_of_nas)
 		
 		self.gene_no2go_no = {}
 		self.go_no2edge_matrix_data = {}
@@ -96,7 +101,7 @@ class get_edge_data:
 		conn,curs = db_connect(self.hostname, self.dbname,self.schema)
 		
 		self.gene_no2go_no = self.prepare_gene_no2go_no(curs)
-		self.get_function_edge_matrix_data(curs, self.table)
+		self.get_function_edge_matrix_data(curs, self.no_of_nas, self.table)
 		
 		#make a directory first
 		if not os.path.isdir(self.output_dir):
@@ -108,7 +113,7 @@ class get_edge_data:
 				self.go_no_qualified.append(go_no)
 		
 		
-	def get_function_edge_matrix_data(self, curs, edge_table='edge_cor_vector'):
+	def get_function_edge_matrix_data(self, curs, no_of_nas, edge_table='edge_cor_vector'):
 		"""
 		04-15-05
 			
@@ -122,7 +127,7 @@ class get_edge_data:
 		counter = 0
 		while rows:
 			for row in rows:
-				self._get_function_edge_matrix_data(row)
+				self._get_function_edge_matrix_data(row, no_of_nas)
 				counter +=1
 			sys.stderr.write('%s%s'%('\x08'*20, counter))
 			if self.debug:
@@ -133,7 +138,7 @@ class get_edge_data:
 		sys.stderr.write("Done\n")
 
 
-	def _get_function_edge_matrix_data(self, row):
+	def _get_function_edge_matrix_data(self, row, no_of_nas):
 		"""
 		04-11-05
 		"""
@@ -144,7 +149,9 @@ class get_edge_data:
 			if go_no not in self.go_no2edge_matrix_data:
 				self.go_no2edge_matrix_data[go_no] = [[go_no]]	#later expanded in pop_edge_data_of_one_function()
 					#to be packaged into a Numeric array
-			self.go_no2edge_matrix_data[go_no].append([edge_id]+self.return_edge_vector(row[2]))
+			(na_counter, edge_vector) = self.return_edge_vector(row[2])
+			if na_counter<=no_of_nas:
+				self.go_no2edge_matrix_data[go_no].append([edge_id]+edge_vector)
 	
 	def return_common_go_no_of_edge(self, edge):
 		"""
@@ -161,13 +168,15 @@ class get_edge_data:
 			parse the edge_vector_string fetched from database,
 			handle the NA issues, replace them with random numbers for Cheng2000's biclustering
 		"""
+		na_counter = 0
 		edge_vector = []
 		for item in edge_vector_string[1:-1].split(','):
 			if item=='1.1':	#1.1 is 'NA', convention because of haiyan's copath
 				edge_vector.append('NA')	#don't use (-800,800)
+				na_counter += 1
 			else:
 				edge_vector.append(float(item))
-		return edge_vector
+		return (na_counter, edge_vector)
 	
 	def prepare_gene_no2go_no(self, curs):
 		"""
@@ -248,7 +257,7 @@ class MpiTightClust:
 		"""
 		communicator = MPI.world.duplicate()
 		get_edge_data_instance = get_edge_data(self.hostname, self.dbname, self.schema,\
-				self.table, self.output_dir, self.min_no_of_edges, self.debug)
+				self.table, self.output_dir, self.min_no_of_edges, self.debug, self.no_of_nas)
 		
 		if communicator.rank == 0:
 			sys.stderr.write("this is node %s\n"%communicator.rank)
