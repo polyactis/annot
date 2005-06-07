@@ -76,19 +76,22 @@ class PreprocessEdgeData:
 	def get_top_mas(self, list_of_mas, top_percentage):
 		"""
 		05-09-05
+			start
+		06-07-05
+			if top_percentage is less than 200, use 200.
 		"""
 		sys.stderr.write("Getting the top %s std edges..."%top_percentage)
 		list_of_stds = []
 		for ma in list_of_mas:
 			std = MLab.std(ma.compressed())	#disregard the NAs
 			list_of_stds.append(std)
-		
 		top_number = int(len(list_of_stds)*top_percentage)	#how many we want
-		
+		if top_number<200:	#06-07-05	200 is the bottom line.
+			top_number = 200
 		arg_list  = argsort(list_of_stds)	#sort it, ascending
 		arg_list = arg_list.tolist()	#convert from array to list
 		arg_list.reverse()	#reverse, descending order
-		top_arg_list = arg_list[:top_number]	#get the top_number of arg_list
+		top_arg_list = arg_list[:top_number]	#get the top_number of arg_list	#06-07-05 if top_number>len(arg_list), it's ok.
 		if self.debug:
 			print "list_of_stds is %s"%repr(list_of_stds)
 			print "top_number is %s"%top_number
