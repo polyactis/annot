@@ -1,13 +1,13 @@
-CFlags	=
+CFLAGS	=
 
-IncludeDirs	=
+LDFLAGS	= -lm
 
-Libs	= -lm
+CC	= gcc
 
-CCompiler	= gcc
+CXX	= g++
 
 .c.o:
-	$(CCompiler) -c $(IncludeDirs) $(CFlags) $<
+	$(CC) -c $(CFLAGS) $<
 
 TARGET	= tightClust
 
@@ -16,7 +16,7 @@ all:	$(TARGET)
 OBJS	= cluster.o com.o linpack.o ranlib.o tightClust.o
 
 $(TARGET): $(OBJS)
-	$(CCompiler) -o $@ $(OBJS) $(Libs)
+	$(CC) -o $@ $(OBJS) $(LDFLAGS)
 
 clean:
 	-rm -f $(TARGET)
