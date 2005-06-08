@@ -52,7 +52,6 @@ Description:
 
 import sys, os, psycopg, getopt, csv, math
 from sets import Set
-from rpy import r
 from numarray import *
 from codense.common import db_connect
 
