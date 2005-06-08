@@ -1,4 +1,4 @@
-Annot pipeline(05-16-05, yh)
+I. Annot pipeline(05-16-05, yh)
 
 run annot/bin/MpiGraphModeling.py to construct correlation graphs
 shell/SchemaDatasetSetup.py to setup datasets and gph files
@@ -21,3 +21,13 @@ shell/netmine.sh
 	shell/cluster_stat.sh
 	annot/bin/EdgeClusterFromCopathOutput.py
 	shell/cluster_stat.sh
+
+II. Checking copath(netmine/netmind2nd) (06-07-05)
+	graph/clustering.cc, almost = netmine
+	graph/check_netmine2nd.py, check netmine2nd's 2nd-order graph, outputed with option --out2nd.
+
+III. datasets partitioning via tightClust (06-07-05)
+	tightClust/tightClust
+	PreprocessEdgeData.py
+	MpiTightClust.py
+	
