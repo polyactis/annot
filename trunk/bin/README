@@ -37,4 +37,4 @@ IV. datasets partitioning via tightClust (06-07-05)
 	tightClust/tightClust
 	PreprocessEdgeData.py
 	MpiTightClust.py
-	
+	MTCBetterView.py
