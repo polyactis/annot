@@ -10,7 +10,8 @@ void tab_fscanf(FILE* stream, char* format, char s[]);
 void write_data(int nrow, int ncol, double** data, char** sampleName, char** geneID, char** annotation, char path[]);
 void write_double_matrix(int nrow, int ncol, double** data, char path[]);
 void write_int_matrix(int nrow, int ncol, int** data, char path[]);
-void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName, char** geneID, char** annotation, int targetClustNum, int clusterid[], char path[], int emptyrows_betwn_cluster);
+void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName, char** geneID, \
+	char** annotation, int targetClustNum, int clusterid[], char path[], int emptyrows_betwn_cluster, char* dataFile);
 int which_minDist(int ncol, double** data, double** cdata, int** mask, int** cmask, 
 	double weight[], int index1, int nclusters);
 void calcAveComemMatrix(int nclusters, int nrow, int ncol, double** data, int** mask, 
@@ -245,7 +246,7 @@ int main(int argc, char* argv[])
 	//printf("help\n");
 	
 	//06-03-05 targetClustNum+1 is discarded, the last one is not the one we want.
-	write_cluster_treeview(nrow, ncol, data, sampleName, geneID, annotation, targetClustNum, clusterid, outputFileName, 3);
+	write_cluster_treeview(nrow, ncol, data, sampleName, geneID, annotation, targetClustNum, clusterid, outputFileName, 3, dataFile);
 
 	/*calcAveComemMatrix(25, nrow, ncol, data, mask, weight, 3, 5, 0.7, aveComemMatrix);
 	printf("help\n");
@@ -665,7 +666,8 @@ void write_data(int nrow, int ncol, double** data, char** sampleName, char** gen
 }
 
 //write cluster result in treeview format
-void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName, char** geneID, char** annotation, int targetClustNum, int clusterid[], char path[], int emptyrows_betwn_cluster)
+void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName, char** geneID, char** annotation, \
+	int targetClustNum, int clusterid[], char path[], int emptyrows_betwn_cluster, char* dataFile)
 /*
 *06-03-05
 *	simplify the output format, by yh
@@ -688,6 +690,7 @@ void write_cluster_treeview(int nrow, int ncol, double** data, char** sampleName
 	*/
 	for(k=0; k<targetClustNum; k++)
 	{
+		fprintf(tempStream, "%s\t", dataFile);
 		for(i=0; i<nrow; i++)
 		{
 			if(clusterid[i]==k)
