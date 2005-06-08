@@ -22,11 +22,18 @@ shell/netmine.sh
 	annot/bin/EdgeClusterFromCopathOutput.py
 	shell/cluster_stat.sh
 
-II. Checking copath(netmine/netmind2nd) (06-07-05)
+II. Biclustering (05-14-05)
+	MpiBiclustering.py
+	CcFromBiclusteringOutput.py
+	graph/biclustering.cc
+	graph/cc_from_edge_list.cc
+	graph/test_biclustering.py
+
+III. Checking copath(netmine/netmind2nd) (06-07-05)
 	graph/clustering.cc, almost = netmine
 	graph/check_netmine2nd.py, check netmine2nd's 2nd-order graph, outputed with option --out2nd.
 
-III. datasets partitioning via tightClust (06-07-05)
+IV. datasets partitioning via tightClust (06-07-05)
 	tightClust/tightClust
 	PreprocessEdgeData.py
 	MpiTightClust.py
