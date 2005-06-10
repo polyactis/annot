@@ -8,6 +8,9 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-i ..., --infname=...	the input file(outputed by MpiTightClust.py)
 	-o ..., --outfname=...	the output file.
+	-y ..., --type=...	1(default, output reformat), 2(group dataset clusters)
+	-s ..., --similar_score=...	percentage of sharing between two
+		dataset_clusters, 0.8(default)
 	-b, --debug	enable debugging, no debug by default
 	-h, --help              show this help
 
@@ -21,8 +24,9 @@ Description:
 
 import sys, os, psycopg, getopt, csv, re
 from sets import Set
-from codense.common import db_connect
-
+from codense.common import db_connect, index_plus_one
+from graph.cc_from_edge_list import cc_from_edge_list
+from CcFromBiclusteringOutput import CcFromBiclusteringOutput
 
 class MTCBetterView:
 	"""
@@ -30,12 +34,14 @@ class MTCBetterView:
 		a class to beautify the output results of MpiTightClust.py.
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None,\
-		infname=None, outfname=None, debug=0):
+		infname=None, outfname=None, type=1, similar_score=0.8, debug=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.infname = infname
 		self.outfname = outfname
+		self.type = int(type)
+		self.similar_score = float(similar_score)
 		self.debug = int(debug)
 		
 		self.p_go_no = re.compile(r'edge_data_(\d+)\.\d')
@@ -115,26 +121,117 @@ class MTCBetterView:
 		go_name=  rows[0][0]
 		return go_name
 	
+	def id2dataset_cluster_setConstruct(self, infname):
+		"""
+		06-09-05
+			contruct id2dataset_cluster_set
+		"""
+		sys.stderr.write("Constructing id2dataset_cluster_set...")
+		id2dataset_cluster_set = {}
+		reader = csv.reader(open(infname, 'r'), delimiter='\t')
+		id = 0
+		for row in reader:
+			dataset_cluster = row[1:-1]
+			if len(dataset_cluster)==0:	#empty
+				continue
+			dataset_cluster = map(index_plus_one, dataset_cluster)	#plus one here
+			id2dataset_cluster_set[id] = Set(dataset_cluster)
+			id+=1
+		del reader
+		sys.stderr.write("Done.\n")
+		return id2dataset_cluster_set
+	
+	def dataset_clusterGraphConstruct(self, id2dataset_cluster_set, similar_score):
+		"""
+		06-09-05
+		"""
+		sys.stderr.write("Constructing dataset_cluster graph...")
+		edge_list = []
+		no_of_dataset_clusters = len(id2dataset_cluster_set)
+		for i in range(no_of_dataset_clusters):
+			dataset_cluster_set1 = id2dataset_cluster_set[i]
+			edge_list.append([i,i])	#append the self-loop to avoid the singleton to be left out.
+			for j in range(i+1, no_of_dataset_clusters):
+				dataset_cluster_set2 = id2dataset_cluster_set[j]
+				join_set = dataset_cluster_set1 & dataset_cluster_set2
+				ratio1 = len(join_set)/float(len(dataset_cluster_set1))
+				ratio2 = len(join_set)/float(len(dataset_cluster_set2))
+				if ratio1>=similar_score or ratio2>=similar_score:
+					if self.debug:
+						l1 = list(dataset_cluster_set1)
+						l2 = list(dataset_cluster_set2)
+						l1.sort()
+						l2.sort()
+						print "edge valid with similar_score",ratio1,ratio2,i,j
+						print l1
+						print l2
+						#continue_here = raw_input("Continue:(Y/n)?")
+						#if continue_here=='n':
+						#	sys.exit(3)
+					edge_list.append([i,j])
+		sys.stderr.write("Done.\n")
+		return edge_list
+	
+	def returnBigDatasetClust(self, id2dataset_cluster_set, id_set):
+		"""
+		06-09-05
+		"""
+		big_dataset_cluster_set = Set()
+		for id in id_set:
+			big_dataset_cluster_set |= id2dataset_cluster_set[id]
+		return big_dataset_cluster_set
+	
 	def run(self):
 		"""
 		06-08-05
+		
+		06-09-05
+			add type 2: group dataset clusters
 			
 			--db_connect()
 			--headerOutput()
-			--datasetClustOutput()
-				--return_go_name()
+			if self.type==1:
+				--datasetClustOutput()
+					--return_go_name()
+			elif self.type==2:
+				--id2dataset_cluster_setConstruct()
+				--dataset_clusterGraphConstruct()
+				--<cc_edge_list>
+				--<CcFromBiclusteringOutput>
+					--returnBigDatasetClust()
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		outf = csv.writer(open(self.outfname, 'w'), delimiter='\t')
 		no_of_datasets = self.headerOutput(curs, outf)
 		
-		reader = csv.reader(open(self.infname, 'r'), delimiter='\t')
-		for row in reader:
+		if self.type==1:
+			reader = csv.reader(open(self.infname, 'r'), delimiter='\t')
+			for row in reader:
+				if self.debug:
+					print row
+				self.datasetClustOutput(curs, outf, row, no_of_datasets)
+			del reader
+		elif self.type==2:
+			id2dataset_cluster_set = self.id2dataset_cluster_setConstruct(infname)	#06-09-05	mapping between an id and a dataset cluster set
 			if self.debug:
-				print row
-			self.datasetClustOutput(curs, outf, row, no_of_datasets)
-		
-		del reader
+				print "id2dataset_cluster_set is:"
+				print id2dataset_cluster_set
+			edge_list = self.dataset_clusterGraphConstruct(id2dataset_cluster_set, self.similar_score)
+			if self.debug:
+				print "The constructed graph has %s edges"%len(edge_list)
+			cfe_instance= cc_from_edge_list()
+			cfe_instance.run(edge_list)
+			cfbo_instance = CcFromBiclusteringOutput()
+			for cc_edge_list in cfe_instance.cc_list:
+				id_set = cfbo_instance.vertex_set_from_cc_edge_list(cc_edge_list)
+				if self.debug:
+					print cc_edge_list
+					print id_set
+				big_dataset_cluster_set = self.returnBigDatasetClust(id2dataset_cluster_set, id_set)
+				big_dataset_cluster = list(big_dataset_cluster_set)
+				big_dataset_cluster.sort()
+				outf.writerow(big_dataset_cluster)
+				
 		del outf
 
 if __name__ == '__main__':
@@ -143,9 +240,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "infname=", "outfname=", \
-		"debug"]
+		"type=", "similar_score=", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:b", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:y:s:b", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -155,6 +252,8 @@ if __name__ == '__main__':
 	schema = ''
 	infname = None
 	outfname = None
+	type = 1
+	similar_score = 0.8
 	debug = 0
 
 	for opt, arg in opts:
@@ -171,12 +270,16 @@ if __name__ == '__main__':
 			infname = arg
 		elif opt in ("-o", "--outfname"):
 			outfname = arg
+		elif opt in ("-y", "--type"):
+			type = int(arg)
+		elif opt in ("-s", "--similar_score"):
+			similar_score = float(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
 
 	if schema and infname and outfname:
 		instance = MTCBetterView(hostname, dbname, schema, infname, outfname, \
-			debug)
+			type, similar_score, debug)
 		instance.run()
 	else:
 		print __doc__
