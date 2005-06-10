@@ -25,7 +25,7 @@ class CcFromBiclusteringOutput:
 	04-12-05
 		most of it copied from EdgeClusterFromCopathOutput.py
 	"""
-	def __init__(self, infname, outfname):
+	def __init__(self, infname=None, outfname=None):
 		self.infname = infname
 		self.outfname = outfname
 		
