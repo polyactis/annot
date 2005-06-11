@@ -61,7 +61,7 @@ Description:
 """
 
 
-import sys, os, math, getopt, time, csv, Numeric
+import sys, os, math, getopt, time, csv, Numeric, random
 from Scientific import MPI
 from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize
 from sets import Set
@@ -206,14 +206,17 @@ class netmine_wrapper:
 			nothing to do with mpi
 		05-16-05
 			os.system() might fail on some platforms, so use recursive system_call()
+		06-10-05
+			random select a big-memory node from 16 to 35 to run netmine
 		"""
 		sys.stderr.write("Running netmine...")
 		#wl = ['ssh', 'node%s'%node, '%s'%' '.join(netmine_parameter_list)]
 		"""
 		04-08-05 spawnvp gets dead under MPI, use system instead.
 		"""
+		random_node = random.randint(16,35)
 		#return_code = os.spawnvp(os.P_WAIT, netmine_parameter_list[0], netmine_parameter_list)
-		commandline = '%s'%' '.join(netmine_parameter_list)
+		commandline = 'ssh node%s %s'%(random_node, ' '.join(netmine_parameter_list))
 		if self.debug:
 			sys.stderr.write("The commandline of netmine is %s\n"%commandline)
 		exit_code = system_call(commandline)	#05-16-05 use the recursive one.
