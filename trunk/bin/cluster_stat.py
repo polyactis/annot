@@ -12,6 +12,8 @@ Option:
 	-m ..., --limit=...	the maximum number of rows to return, all (default)
 	-p ..., --output=...	specifiy the filename to output the cluster stat results
 	-u ..., --uniformity=...	the percentage of associated-genes over total known genes, 0.5(default)
+	-n ..., --min_node_size=...	the minimum size of a function node, 0(default)
+	-e ..., --max_node_depth=...	the maximum node depth, 15(default)
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
@@ -51,7 +53,8 @@ from sets import Set
 
 class cluster_stat:
 	def __init__(self, hostname, dbname, schema, source_table, target_table, offset, limit, \
-		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0, uniformity=0.5):
+		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0, uniformity=0.5, \
+		min_node_size=0, max_node_depth=15):
 		"""
 		04-18-05
 			add parameter uniformity
@@ -74,9 +77,14 @@ class cluster_stat:
 		self.wu = int(wu)
 		self.needcommit = int(needcommit)
 		self.uniformity = float(uniformity)
+		self.min_node_size = int(min_node_size)	#06-11-05
+		self.max_node_depth = int(max_node_depth)	#06-11-05
+		
 		self.global_go_id_to_no_dict = {}
 		self.global_go_no_to_size_dict = {}
 		self.global_gene_to_go_dict = {}
+		self.go_no2depth = {}	#06-11-05
+		
 		self.no_of_records = 0
 		if self.log:
 			self.logfile = open('/tmp/cluster_stat.log','w')
@@ -85,11 +93,12 @@ class cluster_stat:
 		self.known_genes_dict = {}
 
 	def dstruc_loadin(self):
-		self.curs.execute("select go_id,go_no,array_upper(gene_array,1) from go")
+		self.curs.execute("select go_id,go_no,array_upper(gene_array,1),depth from go")
 		rows = self.curs.fetchall()
 		for row in rows:
 			self.global_go_id_to_no_dict[row[0]] = row[1]
 			self.global_go_no_to_size_dict[row[1]] = row[2]
+			self.go_no2depth[row[1]] = row[3]
 		self.no_of_functions = len(self.global_go_no_to_size_dict)
 		
 		self.curs.execute("select gene_no,go_functions from gene")	
@@ -174,6 +183,10 @@ class cluster_stat:
 		for gene_no in vertex_list_all:
 			self.go_no_dict_adjust(gene_no)
 			for go_no in self._local_go_no_dict:
+				if self.global_go_no_to_size_dict[go_no]<self.min_node_size:	#06-11-05
+					continue
+				if self.go_no2depth[go_no]>self.max_node_depth:	#06-11-05
+					continue
 				if self.wu or (gene_no not in self.global_gene_to_go_dict):
 				# code after 'or' deals with the situation that Jasmine's strategy is applied to whole gene-set(unknown included)
 					x = self._local_go_no_dict[go_no]
@@ -281,9 +294,10 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:u:bcw", \
+		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:u:n:e:bcw", \
 			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", \
-			"offset=", "limit=", "output=", "uniformity=", "bonferroni", "commit", "wu"])
+			"offset=", "limit=", "output=", "uniformity=", "min_node_size=", "max_node_depth=",\
+			"bonferroni", "commit", "wu"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -297,6 +311,8 @@ if __name__ == '__main__':
 	limit = 'all'
 	output = None
 	uniformity = 0.5
+	min_node_size = 0
+	max_node_depth = 15
 	bonferroni = 0
 	commit = 0
 	report = 0
@@ -324,6 +340,10 @@ if __name__ == '__main__':
 			output = arg
 		elif opt in ("-u", "--uniformity"):
 			uniformity = float(arg)
+		elif opt in ("-n", "--min_node_size"):
+			min_node_size = int(arg)
+		elif opt in ("-e", "--max_node_depth"):
+			max_node_depth = int(arg)
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -337,7 +357,7 @@ if __name__ == '__main__':
 
 	if schema:
 		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, \
-			offset, limit, output, bonferroni, report, log, wu, commit, uniformity)
+			offset, limit, output, bonferroni, report, log, wu, commit, uniformity, min_node_size, max_node_depth)
 		instance.dstruc_loadin()
 		instance.run()
 
