@@ -11,8 +11,7 @@ from codense.common import db_connect
 from codense.common import foreach_cb, create_columns, fill_treeview
 from codense.common import get_gene_no2gene_id, get_gene_no2go_no
 from cluster_info import cluster_info
-from visualize.subgraph_visualize import subgraph_visualize
-from rpy import r
+from codense.common import system_call, graphDotOutput
 
 class GuiAnalyzer:
 	"""
@@ -71,15 +70,15 @@ class GuiAnalyzer:
 		self.treeview_cluster_accuracy = xml.get_widget("treeview_cluster_accuracy")
 		self.entry_cluster_accuracy_p_gene_table = xml.get_widget("entry_cluster_accuracy_p_gene_table")
 		self.entry_cluster_accuracy_p_value_cut_off = xml.get_widget("entry_cluster_accuracy_p_value_cut_off")
+		self.comboboxentry_plot_type = xml.get_widget("comboboxentry_plot_type")	#06-14-05	to offer selection of plot type.
+		self.comboboxentry_plot_type.set_active(0)	#06-14-05 set default
 		
 		#borrowed class instances
 		self.cluster_info_instance = cluster_info()
-		self.subgraph_visualize_instance = subgraph_visualize()
 		
 		self.cluster_info_need_init = 1	#flag whether the windows of cluster_info need to be initialized
 		self.curs = None	#used to check in on_button_cluster_info_clicked()
 		self.cluster = None	#used to check in on_button_go_plot_clicked()
-		self.r_fname = '/tmp/GuiAnalyzer.R'
 		self.dataset_liststore_dict = {54:self.dataset_liststore_54,
 			55:self.dataset_liststore_55,
 			73:self.dataset_liststore_73,
@@ -291,6 +290,9 @@ class GuiAnalyzer:
 	def on_button_go_plot_clicked(self, widget):
 		"""
 		04-19-05
+		
+		06-14-05
+			use graphDotOutput() and insert it into the textbuffer
 		"""
 		if self.cluster == None:
 			print "Cluster not loaded in"
@@ -306,13 +308,30 @@ class GuiAnalyzer:
 		if len(pathlist) >0:
 			for i in range(len(pathlist)):
 				go_no = self.liststore_go_association[pathlist[i][0]][0]
-				r_f = open(self.r_fname, 'w')
-				self.subgraph_visualize_instance.subgraph_output(r_f, subgraph, \
+				graphSrcFname = '/tmp/GuiAnalyzer.dot'
+				graphFname = '/tmp/GuiAnalyzer.ps'
+				graphSrcF = open(graphSrcFname, 'w')
+				graphDotOutput(graphSrcF, subgraph, \
 					self.gene_no2gene_id, self.gene_no2go_no, \
 					function=int(go_no), weighted=0)
-				r_f.close()
-				r.source(self.r_fname)
-				raw_input("Pause:\t")
+				graphSrcF.close()
+				#06-14-05 get the plot_type_command from the comboboxentry_plot_type
+				entry = self.comboboxentry_plot_type.child
+				plot_type_command = entry.get_text()
+				commandline = '%s -Tps %s -o %s'%(plot_type_command, graphSrcFname, graphFname)
+				
+				system_call(commandline)
+				
+				textbuffer = self.textview_subgraph.get_buffer()
+				im = Image.open(graphFname)
+				ar = fromimage(im)
+				pixbuf = gtk.gdk.pixbuf_new_from_array(ar, gtk.gdk.COLORSPACE_RGB, 8)
+				startiter = textbuffer.get_start_iter()
+				textbuffer.insert_pixbuf(startiter, pixbuf)
+				#cleanup the temporary files and others
+				del im
+				del ar
+	
 	"""
 	cluster_accuracy part
 	"""
