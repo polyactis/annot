@@ -46,6 +46,18 @@ class MTCBetterView:
 		
 		self.p_go_no = re.compile(r'edge_data_(\d+)\.\d')
 	
+	def return_dataset_no2id_desc(self, curs):
+		"""
+		06-12-05
+		"""
+		dataset_no2id_desc = {}
+		curs.execute("select d.*,dd.description from dataset_no2id d, graph.dataset_desc dd\
+			where d.dataset_id=dd.dataset_id  order by dataset_no")
+		rows = curs.fetchall()
+		for row in rows:
+			dataset_no2id_desc[row[0]] = list(row[1:])
+		return dataset_no2id_desc
+	
 	def headerOutput(self, curs, outf):
 		"""
 		06-08-05
@@ -110,7 +122,36 @@ class MTCBetterView:
 			if continue_here=='n':
 				sys.exit(3)
 		outf.writerow(output_list)
+	
+	def datasetClustOutput2(self, curs, outf, row, dataset_no2id_desc):
+		"""
+		06-12-05
+		"""
+		dataset_cluster = row[:-1]	#the last one is blank
+		if len(dataset_cluster)==1:	#no dataset_no, only the function category
+			return
+		has_go_no = self.p_go_no.search(dataset_cluster[0])
+		if has_go_no:
+			go_no = has_go_no.groups()[0]
+		else:
+			sys.stderr.write("%s doesn't have go_no embeded. Abort.\n"%dataset_cluster[0])
+			sys.exit(2)
+		go_name = self.return_go_name(curs, go_no)
+		outf.writerow(['%s(function category)'%go_name, '%s(function number)'%go_no])
 		
+		dataset_no_list = list(map(index_plus_one, dataset_cluster[1:]))
+		self._datasetClustOutput(outf, dataset_no_list, dataset_no2id_desc)
+	
+	def _datasetClustOutput(self, outf, dataset_no_list, dataset_no2id_desc):
+		"""
+		06-12-05
+		"""
+		dataset_no_list.sort()
+		for i in range(len(dataset_no_list)):
+			dataset_no = dataset_no_list[i]
+			outf.writerow([dataset_no]+dataset_no2id_desc[dataset_no])
+		outf.writerow([])	#one blank line
+	
 	def return_go_name(self, curs, go_no, go_table='go'):
 		"""
 		06-08-05
@@ -202,14 +243,14 @@ class MTCBetterView:
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		outf = csv.writer(open(self.outfname, 'w'), delimiter='\t')
-		no_of_datasets = self.headerOutput(curs, outf)
-		
+		#no_of_datasets = self.headerOutput(curs, outf)
+		dataset_no2id_desc = self.return_dataset_no2id_desc(curs)
 		if self.type==1:
 			reader = csv.reader(open(self.infname, 'r'), delimiter='\t')
 			for row in reader:
 				if self.debug:
 					print row
-				self.datasetClustOutput(curs, outf, row, no_of_datasets)
+				self.datasetClustOutput2(curs, outf, row, dataset_no2id_desc)
 			del reader
 		elif self.type==2:
 			id2dataset_cluster_set = self.id2dataset_cluster_setConstruct(infname)	#06-09-05	mapping between an id and a dataset cluster set
@@ -230,7 +271,7 @@ class MTCBetterView:
 				big_dataset_cluster_set = self.returnBigDatasetClust(id2dataset_cluster_set, id_set)
 				big_dataset_cluster = list(big_dataset_cluster_set)
 				big_dataset_cluster.sort()
-				outf.writerow(big_dataset_cluster)
+				self._datasetClustOutput(outf, big_dataset_cluster, dataset_no2id_desc)
 				
 		del outf
 
