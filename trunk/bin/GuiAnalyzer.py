@@ -318,6 +318,8 @@ class GuiAnalyzer:
 				#06-14-05 get the plot_type_command from the comboboxentry_plot_type
 				entry = self.comboboxentry_plot_type.child
 				plot_type_command = entry.get_text()
+				if plot_type_command=='neato' or plot_type_command=='twopi':
+					plot_type_command += ' -Goverlap=false' 	#06-14-05	-Goverlap=false passed to neato or twopi
 				commandline = '%s -Tps %s -o %s'%(plot_type_command, graphSrcFname, graphFname)
 				
 				system_call(commandline)
