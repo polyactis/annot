@@ -579,3 +579,33 @@ def mpi_schedule_jobs(communicator, job_list, node_function, node_parameter_list
 			received_data, source, tag = communicator.receiveString(0, None)	#get data from node 0
 	
 	return node_returned_value_list
+
+def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot', weighted=1):
+	'''
+	06-14-05
+		output graph in graphviz dot language.(similar to subgraph_output() of subgraph_visualize.py)
+	'''
+	sys.stderr.write("Outputing graph...")
+	output_f.write('graph G  {\n')
+	output_f.write('\tnode [shape=ellipse, color=black];\n')
+	vertex_set = graph.node_list()
+	vertex_labels = []
+	for vertex in vertex_set:
+		label = label_dict[vertex]
+		shape = 'ellipse'
+		color = 'black'
+		if vertex in gene_no2go_no:
+			if function in gene_no2go_no[vertex]:
+				color = functioncolor
+		if vertex==centralnode:
+			shape = 'box'
+			color = 'yellow'
+		output_f.write('\t%s [label="%s", shape=%s, color=%s];\n'%(vertex, label, shape, color))
+		
+	for edge_id,edge_tuple in graph.edges.iteritems():
+		if weighted:
+			output_f.write('\t%s -- %s [label="%s"];\n'%(edge_tuple[0], edge_tuple[1], edge_tuple[2]))
+		else:
+			output_f.write('\t%s -- %s ;\n'%(edge_tuple[0], edge_tuple[1]))
+	output_f.write('}\n')
+	sys.stderr.write("Done\n")
