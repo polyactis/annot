@@ -87,10 +87,10 @@ class cluster_info:
 		"""
 		sys.stderr.write("Getting the basic information of cluster no.%s..."%mcl_id)
 		unit = cluster_dstructure()
-		curs.execute("select m.mcl_id, m.vertex_set, m.connectivity, m.connectivity_original,\
+		curs.execute("select m.mcl_id, m.vertex_set, m.connectivity, 0,\
 			m.recurrence_array, s.edge_set, s.connectivity from %s m, %s s where m.splat_id=s.splat_id and \
 			m.mcl_id=%s"\
-			%(mcl_table, splat_table, mcl_id))
+			%(mcl_table, splat_table, mcl_id))	#06-20-05	connectivity_original faked to be 0
 		rows = curs.fetchall()
 		if len(rows)>0:
 			for row in rows:
@@ -243,10 +243,10 @@ class cluster_info:
 		
 		no_of_total_genes = get_no_of_total_genes(curs)
 		sys.stderr.write("Getting the basic information for all clusters...\n")
-		curs.execute("DECLARE crs%s CURSOR FOR select m.mcl_id, m.vertex_set, m.connectivity, m.connectivity_original,\
+		curs.execute("DECLARE crs%s CURSOR FOR select m.mcl_id, m.vertex_set, m.connectivity, 0,\
 			m.recurrence_array, s.edge_set, s.connectivity, m.cooccurrent_cluster_id from %s m, %s s where \
 			m.splat_id=s.splat_id"\
-			%(crs_no, mcl_table, splat_table))
+			%(crs_no, mcl_table, splat_table))	#06-20-05	connectivity_original faked to be 0
 		curs.execute("fetch 5000 from crs%s"%crs_no)
 		rows = curs.fetchall()
 		while rows:
