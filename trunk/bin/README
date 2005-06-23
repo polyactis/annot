@@ -2,6 +2,7 @@ I. Annot pipeline(05-16-05, yh)
 
 run annot/bin/MpiGraphModeling.py to construct correlation graphs
 shell/SchemaDatasetSetup.py to setup datasets and gph files
+database schema sql/graph.sql loadin on zhoudb
 shell/SchemaPreSetup.sh to setup database gene, go tables
 	annot/gene_table.py
 	annot/find_unknown_genes.py
