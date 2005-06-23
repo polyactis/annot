@@ -9,6 +9,8 @@ Option:
 	-c ..., --cor_cut_off=...	correlation cutoff, 0.6(default)
 		if p_value_cut_off=0, this cut_off is used instead.
 	-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).
+	-t ..., --top_percentage=...	0.01(default).
+		if p_value_cut_off=0 and cor_cut_off=0, top_percentage is used to select edges.
 	-b, --debug	debug version.
 	-l, --leave_one_out	leave_one_out.
 	-h, --help	Display the usage infomation.
@@ -36,7 +38,7 @@ class MpiGraphModeling:
 		the mpi version of graph_modeling.cc
 	"""
 	def __init__(self, input_dir=None, output_dir=None, p_value_cut_off='0.01', cor_cut_off='0.6', \
-		max_degree='10000', leave_one_out=0, debug=0):
+		max_degree='10000', top_percentage="0.01", leave_one_out=0, debug=0):
 		"""
 		05-13-05
 			parameters to be passed to graph_modeling must be in string form.
@@ -46,6 +48,7 @@ class MpiGraphModeling:
 		self.p_value_cut_off = p_value_cut_off
 		self.cor_cut_off = cor_cut_off
 		self.max_degree = max_degree
+		self.top_percentage = top_percentage
 		self.leave_one_out = int(leave_one_out)
 		self.debug = int(debug)
 		
@@ -132,7 +135,7 @@ class MpiGraphModeling:
 		
 		homedir = os.path.expanduser('~')
 		bin_path = os.path.join(homedir,'script/annot/bin/graph/graph_modeling')
-		parameters = '-p %s -c %s -d %s'%(self.p_value_cut_off, self.cor_cut_off, self.max_degree)
+		parameters = '-p %s -c %s -d %s -t %s'%(self.p_value_cut_off, self.cor_cut_off, self.max_degree, self.top_percentage)
 		if self.leave_one_out:
 			parameters += ' -l'
 		
@@ -144,9 +147,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "input_dir=", "output_dir=", "p_value_cut_off=", "cor_cut_off=", "max_degree=",\
-		"leave_one_out", "debug"]
+		"top_percentage=", "leave_one_out", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hi:o:p:c:d:lb", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hi:o:p:c:d:t:lb", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -156,6 +159,7 @@ if __name__ == '__main__':
 	p_value_cut_off = "0.01"
 	cor_cut_off = "0.6"
 	max_degree = "10000"
+	top_percentage = "0.01"
 	leave_one_out = 0
 	debug = 0
 	for opt, arg in opts:
@@ -168,15 +172,20 @@ if __name__ == '__main__':
 			output_dir = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = arg
+		elif opt in ("-c", "--cor_cut_off"):
+			cor_cut_off = arg
 		elif opt in ("-d", "--max_degree"):
 			max_degree = arg
+		elif opt in ("-t", "--top_percentage"):
+			top_percentage = arg
 		elif opt in ("-l", "--leave_one_out"):
 			leave_one_out = 1
 		elif opt in ("-b", "--debug"):
 			debug = 1
 
 	if input_dir and output_dir:
-		instance = MpiGraphModeling(input_dir, output_dir, p_value_cut_off, cor_cut_off, max_degree, leave_one_out, debug)
+		instance = MpiGraphModeling(input_dir, output_dir, p_value_cut_off, cor_cut_off, max_degree, \
+			top_percentage, leave_one_out, debug)
 		instance.run()
 	else:
 		print __doc__
