@@ -161,11 +161,17 @@ graph_construct::graph_construct(char* outf_name, vector<int> edge_vector)
 	no_of_01 = 0;
 }
 
-graph_construct::graph_construct(char* inf_name, char* outf_name, char* g_name)
+graph_construct::graph_construct(char* inf_name, char* outf_name, char* g_name, double p_value_cut_off_given, \
+	double cor_cut_off_given, float top_percentage_given, int max_degree_given, bool leave_one_out_given)
 {
 	in.open(inf_name);
 	out.open(outf_name);
 	graph_name = g_name;
+	p_value_cut_off = p_value_cut_off_given;
+	cor_cut_off = cor_cut_off_given;
+	top_percentage = top_percentage_given;
+	max_degree = max_degree_given;
+	leave_one_out = leave_one_out_given;
 	//ios::app | ios::out);
 	no_of_01 = 0;
 	//histogram = gsl_histogram_alloc (50);
@@ -179,7 +185,7 @@ graph_construct::~graph_construct()
 	//gsl_histogram_free (histogram);
 }
 
-void graph_construct::input()
+int graph_construct::input(float top_percentage)
 {	
 	#if defined(DEBUG)
 		std::cerr<<"Read in the data...";
@@ -192,9 +198,9 @@ void graph_construct::input()
 	no_of_genes = gene_array.size();
 	no_of_cols = gene_array[0].size();
 	#if defined(DEBUG)
-		std::cerr<<"Done."<<endl;
+		std::cerr<<no_of_genes<<" genes."<<endl;
 	#endif
-
+	return int(no_of_genes*no_of_genes*top_percentage);
 }
 
 vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_off, double cor_cut_off_given, int max_degree)
@@ -238,12 +244,12 @@ vector<float> graph_construct::cor_cut_off_array_construct(double p_value_cut_of
 
 void graph_construct::gene_label2index_setup(vector<string> label_vector)
 {
-	typedef pair <const char*, int> string_int_Pair;
+	//typedef pair <std::string, int> string_int_Pair;
 	no_of_genes = label_vector.size();
 	for(int i=0; i<label_vector.size();i++)
 	{
-		gene_label2index.insert(string_int_Pair(label_vector[i].c_str(), i));
-		//gene_label2index[label_vector[i].c_str()] = i;
+		//gene_label2index.insert(string_int_Pair(label_vector[i], i));
+		gene_label2index[label_vector[i]] = i;
 		cout<<label_vector[i]<<'\t'<<gene_label2index.size()<<endl;
 	}
 }
@@ -332,17 +338,20 @@ void graph_construct::split(string line)
 	}
 }
 
-void graph_construct::edge_construct(bool leave_one_out)
+void graph_construct::edge_construct(bool leave_one_out, int top_number)
 {
 	/*04-30-05
 	*	flag leave_one_out to control leave_one_out or not
 	*05-12-05
 	*	use ind_min_cor(), as min_cor() is outdated. And ind_min_cor() is modified to be closest to graph.cc.
+	*06-22-05
+	*	top_number is used to filter edges,
 	*/
 	#if defined(DEBUG)
 		std::cerr<<"Constructing edges...";
 	#endif
 	edge edge_data;
+	edge_string_cor top_element;
 	out<<"t\t#\t"<<graph_name<<endl;
 	for (int i=0; i<no_of_genes; i++)
 	{
@@ -352,11 +361,34 @@ void graph_construct::edge_construct(bool leave_one_out)
 				edge_data = ind_min_cor(gene_array[i], gene_array[j]);
 			else
 				edge_data = cor(gene_array[i], gene_array[j], -1);	//leave_one_out position=-1 means no leave_one_out
-			if((edge_data.degree+2)>=JK_CUT_OFF && edge_data.value >= cor_cut_off_array[edge_data.degree-1] && edge_data.value<=1.0)
+			if ((edge_data.degree+2)>=JK_CUT_OFF && edge_data.value<=1.0)	//enough valid pairs and value is under 1.0
 			{
-				no_of_01++;
-				out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<edge_data.value<<endl;
-			}
+				if (top_number<=0)	//06-22-05	top_number<=0 means no top selection
+				{
+					if(edge_data.value >= cor_cut_off_array[edge_data.degree-1])
+					{
+						no_of_01++;
+						out<<"e\t"<<gene_labels_vector[i]<<'\t'<<gene_labels_vector[j]<<'\t'<<edge_data.value<<endl;
+					}
+				}
+				else	//06-22-05	if top_number not zero, we do top selection
+				{
+					if (edge_pq.size()<top_number)
+					{
+						no_of_01++;	//this counter is nothing
+						edge_pq.push(boost::make_tuple(gene_labels_vector[i], gene_labels_vector[j], edge_data.value));
+					}
+					else
+					{
+						top_element = edge_pq.top();
+						if (edge_data.value>top_element.get<2>())
+						{
+							edge_pq.pop();	//throw away the smallest
+							edge_pq.push(boost::make_tuple(gene_labels_vector[i], gene_labels_vector[j], edge_data.value));
+						}
+					}
+				}
+		}
 		}
 	}
 	#if defined(DEBUG)
@@ -490,9 +522,39 @@ void graph_construct::output()
 		std::cerr<<no_of_01<<std::endl;
 	#endif
 	//gsl_histogram_fprintf (stdout, histogram, "%g", "%g");
+	
+	//06-22-05	output the edge_pq
+	#if defined(DEBUG)
+		std::cerr<<"Outputing edge_pq with "<<edge_pq.size()<<" edges ...";
+	#endif
+	edge_string_cor top_element;
+	while(!edge_pq.empty())	//don't use edge_pq.size() as it decreases everytime.
+	{
+		top_element = edge_pq.top();
+		out<<"e\t"<<top_element.get<0>()<<'\t'<<top_element.get<1>()<<'\t'<<top_element.get<2>()<<endl;
+		edge_pq.pop();	//throw away the first element
+	}
+	#if defined(DEBUG)
+		std::cerr<<"Done."<<std::endl;
+	#endif
 
 }
 
+void graph_construct::run()
+{
+	cor_cut_off_vector = cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
+	int top_number = input(top_percentage);
+	int top_number_to_be_passed = 0;
+	if (p_value_cut_off==0 && cor_cut_off==0)
+	{
+		#if defined(DEBUG)
+			std::cerr<<"Top number is "<<top_number<<std::endl;
+		#endif
+		top_number_to_be_passed = top_number;
+	}
+	edge_construct(leave_one_out, top_number_to_be_passed);	//0 means no top_number selection, non 0 means top_number selection
+	output();
+}
 
 const char* program_name;
 
@@ -506,6 +568,8 @@ void print_usage(FILE* stream,int exit_code)
 		"\t-p .., --p_value_cut_off=...	p_value significance cutoff,0.01(default)\n"\
 		"\t-c ..., --cor_cut_off=...	correlation cutoff, 0.6(default)\n"\
 		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n"\
+		"\t-t ..., --top_percentage=...	0.01(default).\n"\
+		"\t\t if p_value_cut_off=0 and cor_cut_off=0, top_percentage is used to select edges.\n"\
 		"\t-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).\n"\
 		"\t-l, --leave_one_out	leave_one_out.\n"\
 		"\tFor long option, = or ' '(blank) is same.\n");
@@ -516,13 +580,14 @@ void print_usage(FILE* stream,int exit_code)
 int main(int argc, char* argv[])
 {
 	int next_option;
-	const char* const short_options="ho:n:p:c:d:l";
+	const char* const short_options="ho:n:p:c:t:d:l";
 	const struct option long_options[]={
 	  {"help",0,NULL,'h'},
 	  {"output",1,NULL,'o'},
 	  {"name",1,NULL,'n'},
 	  {"p_value_cut_off", 1, NULL, 'p'},
 	  {"cor_cut_off", 1, NULL, 'c'},
+	  {"top_percentage", 1, NULL, 't'},
 	  {"max_degree", 1, NULL, 'd'},
 	  {"leave_one_out", 0, NULL, 'l'},
 	  {NULL,0,NULL,0}
@@ -533,6 +598,7 @@ int main(int argc, char* argv[])
 	program_name=argv[0];
 	double p_value_cut_off = 0.01;
 	double cor_cut_off = 0.6;
+	float top_percentage = 0.01;
 	int max_degree = 10000;
 	bool leave_one_out=false;
 
@@ -555,6 +621,9 @@ int main(int argc, char* argv[])
 			break;
 		case 'c':
 			cor_cut_off = atof(optarg);
+			break;
+		case 't':
+			top_percentage = atof(optarg);
 			break;
 		case 'd':
 			max_degree = atoi(optarg);
@@ -580,11 +649,9 @@ int main(int argc, char* argv[])
 	if (optind < argc)
 	{
 		
-		graph_construct instance(argv[optind], output_filename, name);
-		cor_cut_off_vector = instance.cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
-		instance.input();
-		instance.edge_construct(leave_one_out);
-		instance.output();
+		graph_construct instance(argv[optind], output_filename, name, p_value_cut_off, cor_cut_off, top_percentage, \
+			max_degree, leave_one_out);
+		instance.run();
 		/*
 		//testing
 		vector<int> i_vector;
