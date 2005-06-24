@@ -31,7 +31,6 @@ Description:
 import sys, os, psycopg, getopt, csv
 from graphlib import Graph
 from sets import Set
-from rpy import r
 from Numeric import array, Float, take, zeros, Int
 		
 class clustering_test:
@@ -39,13 +38,6 @@ class clustering_test:
 	02-24-05
 		make several module functions more independent, easy to be called by
 		outside modules
-	run	--dstruc_loadin
-		--[type==1]
-		--reformat	--get_weight
-		
-		--[type==2]
-		--draw_graph
-		--visualize_clusters		--draw_graph
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, mcl_table=None,\
 			gene_table=None, input_file=None, cluster_file=None, output_file=None, label=1, plot_type="dot",\
@@ -203,6 +195,17 @@ class clustering_test:
 		r_f.close()	
 
 	def run(self):
+		"""
+		06-23-05
+			only import rpy when in type 2 because import rpy doesn't work in qsubbed jobs
+		run	--dstruc_loadin
+		--[type==1]
+		--reformat	--get_weight
+		
+		--[type==2]
+		--draw_graph
+		--visualize_clusters		--draw_graph
+		"""
 		self.dstruc_loadin()
 		if self.type == 1:
 			if self.output_file:
@@ -211,6 +214,7 @@ class clustering_test:
 				sys.stderr.write("Please the output file.\n")
 				sys.exit(2)
 		elif self.type == 2:
+			from rpy import r
 			if self.r_fname:
 				if self.cluster_file:
 					self.visualize_clusters(self.cluster_file, self.input_graph, self.label_dict[self.label],\
