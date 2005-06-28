@@ -7,26 +7,23 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-f ..., --netmine_fname=...	used to construct table names
 	-t ..., --table=...	splat_table
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
-	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
-	-n ..., --gene_p_table=...	the table to store p_gene_id:p_value_cut_off, which are real predictions
-	-p ..., --p_value_cut_off=...	p_value_cut_off. 0 means using the linear model from lm_table
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
-	-x ..., --recurrence_gap_size=...	2(default)
-	-y ..., --connectivity_gap_size=...	2(default)
+	-w ..., --which_column=...	5(default, recurrence), which column used to group data(see below)
 	-r, --report	report the progress(a number)
-	-c, --commit	commit the database transaction, records down the go_no2accuracy.
-	-a ..., --accuracy_cut_off=...	the accuracy_cut_off to be based for p_value adjusting, 0(default)
-		NOTICE: 0 means using p_value_cut_off method
 	-b, --debug	enable debugging, no debug by default
 	-h, --help              show this help
 
 Examples:
 
-
 Description:
+	Columns 5-tuple:
+	gene_no, go_no, is_correct, is_correct_ratio, p_value
+	recurrence, connectivity, cluster_size, unknown, p_gene_id
+	mcl_id
 
 """
 
@@ -69,49 +66,33 @@ class p_gene_factor:
 	"""
 	03-30-05
 		study the effect of different factors on prediction accuracy.
+	06-28-05
+		remove lots of deprecated parameters
 	"""
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
-		table=None, mcl_table=None, p_value_cut_off=0.01, report=0, \
-		judger_type=0, needcommit=0, gene_table='p_gene', lm_table=None, \
-		stat_table_fname=None, debug=0, accuracy_cut_off=0, gene_p_table=None,\
-		recurrence_gap_size=2, connectivity_gap_size=2):
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, mcl_table=None, \
+		report=0, judger_type=0, gene_table='p_gene', stat_table_fname=None, which_column=5, debug=0):
 		"""
 		03-08-05
 			p_value_cut_off=0.01, otherwise float(None) doesn't work.
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
-		self.schema = schema		
+		self.schema = schema
 		self.table = table
 		self.mcl_table = mcl_table
-		self.p_value_cut_off = float(p_value_cut_off)
 		self.report = int(report)
 		self.judger_type = int(judger_type)
-		self.needcommit = int(needcommit)
 		self.gene_table = gene_table
-		self.lm_table = lm_table
 		self.stat_table_fname = stat_table_fname
-		#debugging flag
+		self.which_column = int(which_column)
 		self.debug = int(debug)
-		self.accuracy_cut_off = float(accuracy_cut_off)
-		self.gene_p_table = gene_p_table
-		#the gap between two recurrences
-		self.recurrence_gap_size = int(recurrence_gap_size)
-		self.connectivity_gap_size = int(connectivity_gap_size)
-		
-		
 	
 	def init(self):
 		#an is_correct dictionary used in database fetch
 		self.is_correct_dict = {0: 'is_correct',
 			1: 'is_correct_L1',
 			2: 'is_correct_lca'}
-		
-		#more gap sizes
-		self.p_value_gap_size = 10
-		self.cluster_size_gap_size = 5
-		self.unknown_gap_size = 2
-		
+
 		#a counter
 		self.no_of_records = 0
 		
@@ -152,9 +133,7 @@ class p_gene_factor:
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		
-		sys.stderr.write("Done\n")		
-	
-	
+		sys.stderr.write("Done\n")	
 	
 	def _p_gene_analysis(self, row):
 		"""
@@ -193,9 +172,9 @@ class p_gene_factor:
 		data_row = [gene_no, go_no, is_correct, is_correct_ratio, p_value, recurrence, \
 			connectivity, cluster_size, unknown, p_gene_id, mcl_id]
 		self.prediction_data.append(data_row)
-		if self.debug:
-			print data_row
-			raw_input("pause:")
+		#if self.debug:
+		#	print data_row
+		#	raw_input("pause:")
 
 
 	def group_data(self, data_list_2d, key_column=0, no_of_groups=6, group_size=None, cluster_column=-1):
@@ -205,6 +184,7 @@ class p_gene_factor:
 			group the data based on the key_column, but each key has similar amount of clusters
 			from cluster_column. idea is similar to equal.count().
 		"""
+		sys.stderr.write("Grouping data...")
 		data_array = array(data_list_2d)
 		cluster_list = list(data_array[:,cluster_column])
 		cluster_set = Set(cluster_list)
@@ -213,6 +193,7 @@ class p_gene_factor:
 		else:
 			unit_length = len(cluster_set)/no_of_groups
 		
+		#06-28-05 construct a key 2 set of cluster_id(mcl_id)'s
 		key2cluster_set = {}
 		for i in range(len(data_array)):
 			key = data_array[i,key_column]
@@ -220,12 +201,20 @@ class p_gene_factor:
 			if key not in key2cluster_set:
 				key2cluster_set[key] = Set()
 			key2cluster_set[key].add(cluster_id)
+		if self.debug:
+			print key2cluster_set
+			raw_input("pause:")
 		
+		#06-28-05 convert key2cluster_set to a 2d list. and sort it based on key
 		key_cluster_2d_list = []
 		for key,cluster_set in key2cluster_set.iteritems():
 			key_cluster_2d_list.append([key,cluster_set])
 		key_cluster_2d_list.sort()
+		if self.debug:
+			print key_cluster_2d_list
+			raw_input("pause:")
 		
+		#06-28-05	construct the boundaries for bin's
 		bin_boundaries = [key_cluster_2d_list[0][0]]	#first key is already pushed in
 		bin_set = Set()
 		for key,cluster_set in key_cluster_2d_list:
@@ -236,7 +225,11 @@ class p_gene_factor:
 				#restart
 				bin_boundaries.append(key)
 				bin_set = cluster_set
+		if self.debug:
+			print "The bin_boundaries is ", bin_boundaries
+			raw_input("pause:")
 		
+		#06-28-05	construct the final data structure to return
 		key2data_array = {}
 		for entry in data_list_2d:
 			key = entry[key_column]
@@ -251,10 +244,20 @@ class p_gene_factor:
 			if bin_key not in key2data_array:
 				key2data_array[bin_key] = []
 			key2data_array[bin_key].append(entry)
-		
+		if self.debug:
+			print "key2data_array is ",key2data_array
+			raw_input("pause:")
+		sys.stderr.write("Done.\n")
 		return key2data_array
 	
 	def prediction_space_output(self, outf, prediction_space2attr):
+		"""
+		06-28-05
+			gene_no, go_no, is_correct, is_correct_ratio, p_value
+			recurrence, connectivity, cluster_size, unknown, p_gene_id
+			mcl_id
+		"""
+		sys.stderr.write("Outputting...")
 		writer = csv.writer(outf, delimiter='\t')
 		header_row = ['gene_no','go_no','is_correct', 'is_correct_ratio', 'p_value', 'recurrence', \
 			'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no']
@@ -269,11 +272,19 @@ class p_gene_factor:
 			row.append(len(Set(unit_array[:,-2])))
 			row.append(len(Set(unit_array[:,-1])))	#no of clusters
 			writer.writerow(row)
+		sys.stderr.write("Done.\n")
 		del writer
 
 	def run(self):
 		"""
 		03-30-05
+		
+		--db_connect()
+		--get_go_no2depth()
+		--data_fetch()
+		--group_data()
+		if self.stat_table_fname:
+			--prediction_space_output()
 		"""
 		self.init()
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
@@ -281,7 +292,7 @@ class p_gene_factor:
 		self.go_no2depth = get_go_no2depth(curs)
 		
 		self.data_fetch(curs, self.table, self.mcl_table, self.gene_table)
-		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=5, no_of_groups=40)	#4 is p_value, 6 is connectivity,
+		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=self.which_column, no_of_groups=40)
 		for key, unit in local_prediction_space2attr.iteritems():
 			self.prediction_space2attr[(key,)] = unit
 			"""
@@ -289,21 +300,18 @@ class p_gene_factor:
 			for key2, unit2 in local_prediction_space2attr_2.iteritems():
 				self.prediction_space2attr[(key,key2)] = unit2
 			"""
-		#open a file
-		if self.stat_table_fname:
-			stat_table_f = open(self.stat_table_fname, 'w')
-			self.prediction_space_output(stat_table_f, self.prediction_space2attr)
+		stat_table_f = open(self.stat_table_fname, 'w')
+		self.prediction_space_output(stat_table_f, self.prediction_space2attr)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", "p_value_cut_off=",\
-		"judger_type=", "report", "commit", "gene_table=", "lm_table=", "debug", "accuracy_cut_off=",\
-		"gene_p_table=",  "recurrence_gap_size=", "connectivity_gap_size="]
+	long_options_list = ["help", "hostname=", "dbname=", "schema=", "netmine_fname=", "table=", "mcl_table=", \
+		"judger_type=", "report", "gene_table=", "which_column=", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:j:rcg:l:ba:n:x:y:", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:m:j:rg:w:b", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -311,20 +319,15 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	netmine_fname = ''
 	table = 'cluster_stat'
 	mcl_table = 'mcl_result'
-	p_value_cut_off = 0.001
 	judger_type = 0
 	report = 0
-	commit = 0
 	gene_table = 'p_gene'
-	lm_table = None
 	debug = 0
-	accuracy_cut_off = 0
+	which_column = 5
 	stat_table_fname = None
-	gene_p_table = None
-	recurrence_gap_size = 2
-	connectivity_gap_size = 2
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -335,40 +338,34 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-f", "--netmine_fname"):
+			netmine_fname = arg
 		elif opt in ("-t", "--table"):
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
-		elif opt in ("-p", "--p_value_cut_off"):
-			p_value_cut_off = float(arg)
 		elif opt in ("-j", "--judger_type"):
 			judger_type = int(arg)
 		elif opt in ("-r", "--report"):
 			report = 1
-		elif opt in ("-c", "--commit"):
-			commit = 1
 		elif opt in ("-g", "--gene_table"):
 			gene_table = arg
-		elif opt in ("-l", "--lm_table"):
-			lm_table = arg
 		elif opt in ("-b", "--debug"):
 			debug = 1
-		elif opt in ("-a", "--accuracy_cut_off="):
-			accuracy_cut_off = float(arg)
-		elif opt in ("-n", "--gene_p_table="):
-			gene_p_table = arg
-		elif opt in ("-x", "--recurrence_gap_size"):
-			recurrence_gap_size = int(arg)
-		elif opt in ("-y", "--connectivity_gap_size"):
-			connectivity_gap_size = int(arg)
+		elif opt in ("-w", "--which_column"):
+			which_column = int(arg)
 	
 	if len(args) == 1:
 		stat_table_fname = args[0]
-			
-	if schema and stat_table_fname:
-		instance = p_gene_factor(hostname, dbname, schema, table, mcl_table, p_value_cut_off,\
-			report, judger_type, commit, gene_table, lm_table, stat_table_fname, debug, \
-			accuracy_cut_off, gene_p_table, recurrence_gap_size, connectivity_gap_size)
+	
+	if netmine_fname:
+		table = 'splat_%s'%netmine_fname
+		mcl_table = 'mcl_%s'%netmine_fname
+		gene_table = 'p_gene_%s_e5'%netmine_fname
+	
+	if schema and table and mcl_table and gene_table and stat_table_fname:
+		instance = p_gene_factor(hostname, dbname, schema, table, mcl_table,\
+			report, judger_type, gene_table, stat_table_fname, which_column, debug)
 		instance.run()
 	else:
 		print __doc__
