@@ -8,22 +8,32 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-f ..., --netmine_fname=...	used to construct table names
+		if netmine_fname is given, no need to given following three tables
 	-t ..., --table=...	splat_table
 	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
+	
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
 	-w ..., --which_column=...	5(default, recurrence), which column used to group data(see below)
-	-r, --report	report the progress(a number)
+	-s ..., --group_size=...	10(default), the number of clusters for each group
+	-r, --report	report the progress(a number) and output mcl_id and p_gene_id
 	-b, --debug	enable debugging, no debug by default
 	-h, --help              show this help
 
 Examples:
-
+	p_gene_factor.py -k mm_oxi_stress_7t1 -f fmos_7t1g1e2d40q20s200c50z0001c6
+		-w 4 /tmp/stat_table_4_5
+	
+	p_gene_factor.py -k mm_oxi_stress_7t1 -f fmos_7t1g1e2d40q20s200c50z0001c6
+		-w 4,6 -s 20,5 /tmp/stat_table_w46_s205
+	
 Description:
 	Columns 5-tuple:
 	gene_no, go_no, is_correct, is_correct_ratio, p_value
 	recurrence, connectivity, cluster_size, unknown, p_gene_id
 	mcl_id
+	
+	NOTE: p-value is -log(p-value).
 
 """
 
@@ -68,9 +78,12 @@ class p_gene_factor:
 		study the effect of different factors on prediction accuracy.
 	06-28-05
 		remove lots of deprecated parameters
+	06-30-05
+		which_column and group_size are strings to be split into lists.
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, mcl_table=None, \
-		report=0, judger_type=0, gene_table='p_gene', stat_table_fname=None, which_column=5, debug=0):
+		report=0, judger_type=0, gene_table='p_gene', stat_table_fname=None, which_column='5', \
+		group_size='10', debug=0):
 		"""
 		03-08-05
 			p_value_cut_off=0.01, otherwise float(None) doesn't work.
@@ -84,7 +97,10 @@ class p_gene_factor:
 		self.judger_type = int(judger_type)
 		self.gene_table = gene_table
 		self.stat_table_fname = stat_table_fname
-		self.which_column = int(which_column)
+		self.which_column_list = which_column.split(',')
+		self.which_column_list = map(int, self.which_column_list) 
+		self.group_size_list = group_size.split(',')
+		self.group_size_list = map(int, self.group_size_list)
 		self.debug = int(debug)
 	
 	def init(self):
@@ -256,12 +272,20 @@ class p_gene_factor:
 			gene_no, go_no, is_correct, is_correct_ratio, p_value
 			recurrence, connectivity, cluster_size, unknown, p_gene_id
 			mcl_id
+		06-30-05
+			if self.report, output the p_gene_id and mcl_id set.
+			
+			global structures used:
+				which_column_list and group_size_list
 		"""
 		sys.stderr.write("Outputting...")
 		writer = csv.writer(outf, delimiter='\t')
 		header_row = ['gene_no','go_no','is_correct', 'is_correct_ratio', 'p_value', 'recurrence', \
 			'connectivity', 'cluster_size', 'unknown', 'acc1', 'acc2', 'no', 'mcl_no']
-		writer.writerow([header_row[8],header_row[4], 'acc1', 'acc2', 'no', 'mcl_no'])
+		if len(self.which_column_list)>1 and len(self.group_size_list)>1:
+			writer.writerow(['parameter1', 'parameter2', 'acc1', 'acc2', 'no', 'mcl_no'])
+		else:
+			writer.writerow(['parameter', 'acc1', 'acc2', 'no', 'mcl_no'])
 		for (prediction_space,unit) in prediction_space2attr.iteritems():
 			unit_array = array(unit)
 
@@ -269,8 +293,12 @@ class p_gene_factor:
 			row.append(get_average(unit_array,2))	#average is_correct
 			row.append(get_average(unit_array, 3))	#average is_correct_ratio
 			#row.append(len(unit_array))	#no of predictions
-			row.append(len(Set(unit_array[:,-2])))
-			row.append(len(Set(unit_array[:,-1])))	#no of clusters
+			if self.report:
+				row.append(repr(Set(unit_array[:,-2])))
+				row.append(repr(Set(unit_array[:,-1])))
+			else:
+				row.append(len(Set(unit_array[:,-2])))
+				row.append(len(Set(unit_array[:,-1])))	#no of clusters
 			writer.writerow(row)
 		sys.stderr.write("Done.\n")
 		del writer
@@ -279,6 +307,10 @@ class p_gene_factor:
 		"""
 		03-30-05
 		
+		06-30-05
+			more complex data grouping via which_column_list and group_size_list
+			if both lists are of length 2, 2-level grouping.
+			
 		--db_connect()
 		--get_go_no2depth()
 		--data_fetch()
@@ -292,14 +324,14 @@ class p_gene_factor:
 		self.go_no2depth = get_go_no2depth(curs)
 		
 		self.data_fetch(curs, self.table, self.mcl_table, self.gene_table)
-		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=self.which_column, no_of_groups=40)
+		local_prediction_space2attr = self.group_data(self.prediction_data,key_column=self.which_column_list[0], group_size=self.group_size_list[0])
 		for key, unit in local_prediction_space2attr.iteritems():
-			self.prediction_space2attr[(key,)] = unit
-			"""
-			local_prediction_space2attr_2 = self.group_data(unit, key_column=5, no_of_groups=5)	#5 is recurrence 7 is cluster_size, 8 is unknown
-			for key2, unit2 in local_prediction_space2attr_2.iteritems():
-				self.prediction_space2attr[(key,key2)] = unit2
-			"""
+			if len(self.which_column_list)>1 and len(self.group_size_list)>1:
+				local_prediction_space2attr_2 = self.group_data(unit, key_column=self.which_column_list[1], group_size=self.group_size_list[1])
+				for key2, unit2 in local_prediction_space2attr_2.iteritems():
+					self.prediction_space2attr[(key,key2)] = unit2
+			else:
+				self.prediction_space2attr[(key,)] = unit
 		stat_table_f = open(self.stat_table_fname, 'w')
 		self.prediction_space_output(stat_table_f, self.prediction_space2attr)
 
@@ -309,9 +341,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "netmine_fname=", "table=", "mcl_table=", \
-		"judger_type=", "report", "gene_table=", "which_column=", "debug"]
+		"judger_type=", "report", "gene_table=", "which_column=", "group_size=", "debug"]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:m:j:rg:w:b", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:m:j:rg:w:s:b", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -326,7 +358,8 @@ if __name__ == '__main__':
 	report = 0
 	gene_table = 'p_gene'
 	debug = 0
-	which_column = 5
+	which_column = '5'
+	group_size = '10'
 	stat_table_fname = None
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -353,8 +386,10 @@ if __name__ == '__main__':
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-w", "--which_column"):
-			which_column = int(arg)
-	
+			which_column = arg
+		elif opt in ("-s", "--group_size"):
+			group_size = arg
+		
 	if len(args) == 1:
 		stat_table_fname = args[0]
 	
@@ -365,7 +400,8 @@ if __name__ == '__main__':
 	
 	if schema and table and mcl_table and gene_table and stat_table_fname:
 		instance = p_gene_factor(hostname, dbname, schema, table, mcl_table,\
-			report, judger_type, gene_table, stat_table_fname, which_column, debug)
+			report, judger_type, gene_table, stat_table_fname, which_column, \
+			group_size, debug)
 		instance.run()
 	else:
 		print __doc__
