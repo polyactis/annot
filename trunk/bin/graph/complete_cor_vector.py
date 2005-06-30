@@ -1,4 +1,4 @@
-#!/usr/bin/env mpipython.lam
+#!/usr/bin/env mpipython
 """
 Usage: complete_cor_vector.py  -i INPUT_FILE -o OUTPUT_FILE [OPTION] DATADIR
 
@@ -12,7 +12,8 @@ Option:
 	-o ..., --output_file=...	the edge correlation vector file, for CODENSE and COPATH
 	-s ..., --significance_file=...	the edge significance flag vector file.
 	-b ..., --label=...	use gene 1(index, default) or 2(no) or 3(id) to label
-	-f ..., --dir_files=...	the directory to store the temporary files, /tmp/yh(default)(IGNORE)
+	-g ..., --gph_dir=...	the directory where the graph files are stored
+		if p_value_cut_off and cor_cut_off are both 0, get the corCut from gph_dir
 	-p ..., --p_value_cut_off=...	the p_value_cut_off for an edge to be significant, 0.01(default)
 	-c ..., --cor_cut_off=...	the cor_cut_off for an edge to be significant, 0.6(default)
 		priority gives p_value_cut_off, cor_cut_off is used only when p_value_cut_off=0
@@ -27,6 +28,10 @@ Examples:
 	
 	#output cor_vector from database
 	complete_cor_vector.py -k sc_54 -i sc_merge_gspan -o /tmp/cor_vector
+	
+	#read the corCut from top 1% gph files.
+	complete_cor_vector.py -i sc_merge_gspan -o /tmp/cor_vector -g gph_result/sc
+		-p 0 -c 0 -s /tmp/edge_significance_vector ~/datasets/sc_54
 
 Description:
 	given a summary graph, get all the edges, find the correlations in all
@@ -64,12 +69,14 @@ class complete_cor_vector:
 	
 	'''
 	def __init__(self, data_dir, hostname, dbname, schema, table, input_file, output_file, \
-		significance_file, label, dir_files=None, p_value_cut_off=0.01, cor_cut_off=0.6, \
+		significance_file, label, gph_dir=None, p_value_cut_off=0.01, cor_cut_off=0.6, \
 		report=0, debug=0):
 		"""
 		05-14-05
 			add debug flag.
 			dir_files is useless.
+		06-30-05
+			dir_files renamed to be gph_dir
 		"""
 		self.dir = data_dir
 		self.schema = schema
@@ -78,7 +85,7 @@ class complete_cor_vector:
 		self.output_file = output_file
 		self.significance_file = significance_file
 		self.label = int(label)
-		self.dir_files = dir_files
+		self.gph_dir = gph_dir
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.cor_cut_off = float(cor_cut_off)
 		self.debug = int(debug)
@@ -234,7 +241,11 @@ class complete_cor_vector:
 			new_files_list[no-1] = f
 		return new_files_list
 	
-	def cor_calculate(self, output_file, significance_file, gene_index2expr_array):
+	def cor_calculate(self, output_file, significance_file, gene_index2expr_array, corCut_list, file_index):
+		"""
+		06-30-05
+			add corCut_list and file_index, used to overwrite the internal cutoff of graph_modeling
+		"""
 		of = open(output_file, 'w')
 		sf = open(significance_file, 'w')
 		#start from 0, one step by 2
@@ -244,7 +255,10 @@ class complete_cor_vector:
 			edge_data = graph_modeling.ind_min_cor(gene_index2expr_array[gene_index1], gene_index2expr_array[gene_index2])
 			#get the integer part of the float*1000
 			of.write("%s\n"%(int(math.modf(edge_data.value*1000)[1]) ) )
-			sf.write("%s\n"%(edge_data.significance))
+			if corCut_list:	#06-30-05	if corCut_list, overwrite the significance flag
+				sf.write("%s\n"%int(edge_data.value>=corCut_list[file_index]))
+			else:
+				sf.write("%s\n"%(edge_data.significance))
 		sf.close()
 		of.close()
 	
@@ -293,7 +307,7 @@ class complete_cor_vector:
 			dataset_fname = "%s_%s"%(final_fname, i)
 			job_word_list.append(dataset_fname)
 			dataset_fname_list.append(dataset_fname)
-		job_word_list.append('>')
+		job_word_list.append('>')	#this is different from '>>', the final_fname is truncated first.
 		job_word_list.append(final_fname)
 		exit_code = os.system(' '.join(job_word_list))	#recursive until success
 		while exit_code:
@@ -304,7 +318,7 @@ class complete_cor_vector:
 			os.remove(dataset_fname)
 		sys.stderr.write("Done.\n")
 	
-	def node_fire(self, dir, files, file_index, cor_fname, sig_fname):
+	def node_fire(self, dir, files, file_index, cor_fname, sig_fname, corCut_list):
 		"""
 		05-14-05
 			mpi unit
@@ -313,13 +327,16 @@ class complete_cor_vector:
 			--cor_calculate()
 		05-16-05
 			suffix each unit file with index+1
+		
+		06-30-05
+			add corCut_list and file_index, passed to cor_calculate()
 		"""
 		f = files[file_index]
 		f_path = os.path.join(dir, f)	#the path to the dataset file
 		gene_index2expr_array = self.gene_index2expr_array_setup(f_path)
 		cor_tmp_file = "%s_%s"%(cor_fname, file_index+1)	#index+1
 		sig_tmp_file = "%s_%s"%(sig_fname, file_index+1)
-		self.cor_calculate(cor_tmp_file, sig_tmp_file, gene_index2expr_array)
+		self.cor_calculate(cor_tmp_file, sig_tmp_file, gene_index2expr_array, corCut_list, file_index)
 		
 	def mpi_synchronize(self, communicator):
 		"""
@@ -330,7 +347,34 @@ class complete_cor_vector:
 		sys.stderr.flush()
 		communicator.barrier()
 	
-	def cor_vector_from_files(self, communicator, dir, cor_fname, sig_fname, p_value_cut_off, cor_cut_off):
+	def get_corCut_list(self, gph_dir):
+		"""
+		06-30-05
+			get the top 1% corCut from the files in gph_dir
+			
+			--get_corCut_from_gph_file
+		"""
+		files = os.listdir(gph_dir)
+		corCut_list = [0]*len(files)
+		for file in files:
+			no = int(self.p_no.search(file).group())
+			f_path = os.path.join(gph_dir, file)	#the path to the dataset file
+			corCut = self.get_corCut_from_gph_file(f_path)
+			corCut_list[no-1] = corCut
+		return corCut_list
+	
+	def get_corCut_from_gph_file(self, gph_file):
+		"""
+		06-30-05
+			the first edge in gph_file is the lowest correlation due to the nature of priority_queue
+		"""
+		reader = csv.reader(open(gph_file, 'r'), delimiter='\t')
+		reader.next()	#skip the first line containing gph name
+		row = reader.next()	#one line is 'e       Mm.153061       Mm.3295 0.361159'
+		del reader
+		return float(row[3])
+	
+	def cor_vector_from_files(self, communicator, dir, gph_dir, cor_fname, sig_fname, p_value_cut_off, cor_cut_off):
 		"""
 		05-14-05
 			modify to be mpi form, feed mode(in MpiBiclustering.py and MpiGraphModeling.py)
@@ -338,12 +382,15 @@ class complete_cor_vector:
 		05-16-05
 			output the edge tuple into 0th file.
 			
+		06-30-05	if both 0, get the corCut from the top 1% graph files	
+		
 			--files_sort
 			if node_rank==0:
 				--edge_tuple_list_output()
 				--edge_tuple_list_output()
 			else:
 				--graph_modeling.cor_cut_off_vector_construct()
+				--get_corCut_list()
 				
 			if node_rank==0:
 				(send signal to other nodes)
@@ -361,6 +408,9 @@ class complete_cor_vector:
 		file_index_list = range(len(files))
 		node_rank = communicator.rank
 		
+		if p_value_cut_off ==0 and cor_cut_off == 0 and gph_dir==None:
+			sys.stderr.write("p_value_cut_off and cor_cut_off both are 0, but no gph_dir. Aborted.\n")
+			sys.exit(3)
 		if node_rank == 0:
 			#output the name first
 			self.edge_tuple_list_output("%s_0"%cor_fname)	#05-16-05 output the edge tuple into 0th file.
@@ -368,6 +418,10 @@ class complete_cor_vector:
 		else:
 			#set the cor_cut_off_vector, internal structure of graph_modeling
 			graph_modeling.cor_cut_off_vector_construct(p_value_cut_off, cor_cut_off)
+			if p_value_cut_off ==0 and cor_cut_off == 0:	#06-30-05	if both 0, get the corCut from the top 1% graph files
+				corCut_list = self.get_corCut_list(gph_dir)
+			else:
+				corCut_list = []
 		
 		self.mpi_synchronize(communicator)
 		
@@ -416,7 +470,7 @@ class complete_cor_vector:
 				else:
 					input_file_index = int(received_data)	#convert it to integer
 					sys.stderr.write("node %s working on %s...\n"%(node_rank, received_data))
-					self.node_fire(dir, files, input_file_index, cor_fname, sig_fname)
+					self.node_fire(dir, files, input_file_index, cor_fname, sig_fname, corCut_list)
 					sys.stderr.write("node %s work on %s finished.\n"%(node_rank, received_data))
 					communicator.send("finished", 0, node_rank)
 					
@@ -432,12 +486,15 @@ class complete_cor_vector:
 	def run(self):
 		"""
 		05-14-05
-		if node_rank==0:
-			--dstruc_loadin()
+		06-30-05
+			add gph_dir
+		
+		--dstruc_loadin()
 		if self.schema:
 			--cor_vector_from_db
 			or
 			--cor_vector_from_files
+
 		"""
 		communicator = MPI.world.duplicate()
 		
@@ -451,7 +508,7 @@ class complete_cor_vector:
 			if self.significance_file==None:
 				sys.stderr.write("Error: where's the significance file?\n")
 				sys.exit(2)
-			self.cor_vector_from_files(communicator, self.dir, self.output_file, \
+			self.cor_vector_from_files(communicator, self.dir, self.gph_dir, self.output_file, \
 				self.significance_file, self.p_value_cut_off, self.cor_cut_off)
 
 	
@@ -461,9 +518,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:s:b:f:p:c:ru", ["help",  "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:i:o:s:b:g:p:c:ru", ["help",  "hostname=", \
 			"dbname=", "schema=", "table=", "input_file=", "output_file=", "significance_file=", \
-			"label=", "dir_files=", "p_value_cut_off=", "cor_cut_off=", "report", "debug"])
+			"label=", "gph_dir=", "p_value_cut_off=", "cor_cut_off=", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -476,7 +533,7 @@ if __name__ == '__main__':
 	output_file = None
 	significance_file = None
 	label = 1
-	dir_files = '/tmp/yh'
+	gph_dir = None
 	p_value_cut_off = 0.01
 	cor_cut_off = 0.6
 	report = 0
@@ -501,8 +558,8 @@ if __name__ == '__main__':
 			significance_file = arg
 		elif opt in ("-b", "--label"):
 			label = int(arg)
-		elif opt in ("-f", "--dir_files"):
-			dir_files = arg
+		elif opt in ("-g", "--gph_dir"):
+			gph_dir = arg
 		elif opt in ("-p", "--p_value_cut_off"):
 			p_value_cut_off = float(arg)
 		elif opt in ("-c", "--cor_cut_off"):
@@ -518,7 +575,7 @@ if __name__ == '__main__':
 		data_dir = None
 	if input_file and output_file:
 		instance = complete_cor_vector(data_dir, hostname, dbname, schema, table, \
-			input_file, output_file, significance_file, label, dir_files, p_value_cut_off, \
+			input_file, output_file, significance_file, label, gph_dir, p_value_cut_off, \
 			cor_cut_off, report, debug)
 		instance.run()
 	else:
