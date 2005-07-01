@@ -20,6 +20,12 @@ shell/netmine.sh
 	calculate #edges, #genes, #no_of_columns
 	annot/bin/netmine_wrapper.py
 	shell/cluster_stat.sh
+		 annot/bin/codense/codense2db.py
+		 annot/bin/cluster_stat.py
+		 annot/bin/gene_stat.py
+		 annot/bin/p_gene_analysis.py
+		 annot/bin/gene_p_map_redundancy.py
+		 annot/bin/connectivity_original.py
 	annot/bin/EdgeClusterFromCopathOutput.py
 	shell/cluster_stat.sh
 
