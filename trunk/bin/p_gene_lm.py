@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Usage: p_gene_lm.py -k SCHEMA -t TABLE [OPTIONS]
+Usage: p_gene_lm.py -k SCHEMA -t TABLE -s SPLAT_TABLE [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
@@ -11,6 +11,8 @@ Option:
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-a ..., --accuracy_cut_off=...	0.5(default)
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
+	-b ..., --bit_string=...	the bit_string control which parameter to be counted into regression
+		p_value, recurrence, connectivity, cluster_size;	1111(default)
 	-m ..., --min_data_points=...	the minimum data points to do linear-model fitting, 5(default) (IGNORE)
 	-v ..., --valid_space=...	the min number of known_predictions in one prediction space, 20(default) (IGNORE)
 	-x ..., --recurrence_gap_size=...	2(default) (IGNORE)
@@ -30,9 +32,9 @@ Description:
 	linear model fitting of the p_value_cut_off ~ recurrence+connectivity
 	
 	Output contains the p_value_cut_off and other information for each go-no
-	as well as the linear_model fitting results.
+	as well as the linear_model fitting results. Output is dumped on sys.stdout.
 	
-	Output is dumped on sys.stdout.
+	bit_string can also be less than 4 digits. The leftout digit is regarded as 0.
 """
 
 import sys, os, psycopg, getopt, csv, math
@@ -61,13 +63,18 @@ class p_gene_lm:
 	04-05-05
 		use connectivity in the corresponding splat_table to do logistic regression(previously use
 		my definition which is in the p_gene table copied from mcl_table)
+	06-30-05
+		add corresponding p-values, parameter cluster_size,
+		add bit_string
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, table=None, splat_table=None,\
-		lm_table=None, accuracy_cut_off=0, judger_type=0, min_data_points=5, \
+		lm_table=None, accuracy_cut_off=0, judger_type=0, bit_string='1111', min_data_points=5, \
 		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
 		03-08-05
-		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
+			add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
+		06-30-05
+			add bit_string
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -77,6 +84,7 @@ class p_gene_lm:
 		self.lm_table = lm_table
 		self.accuracy_cut_off = float(accuracy_cut_off)
 		self.judger_type = int(judger_type)
+		self.bit_string = bit_string
 		self.min_data_points = int(min_data_points)
 		self.needcommit = int(needcommit)
 		self.report = int(report)		
@@ -174,7 +182,7 @@ class p_gene_lm:
 		self.go_no2prediction_space[go_no].append(unit)
 	
 
-	def lm_fit(self, lm_instance, go_no2prediction_space, curs=None, lm_table=None):
+	def lm_fit(self, lm_instance, go_no2prediction_space, bit_string, curs=None, lm_table=None):
 		"""
 		02-28-05
 			linear model fitting here
@@ -189,11 +197,24 @@ class p_gene_lm:
 			Use glm of R to do logistic regression
 		06-30-05
 			add cluster_size
+			add bit_string to control which parameter should be enabled.
 		"""
 		sys.stderr.write("Linear Model Fitting...")
 		go_no2lm_results = {}
 		
+		#06-30-05	setup the formula_list based on bit_string
+		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size']
+		formula_list = []
+		for i in range(len(bit_string)):
+			if bit_string[i] == '1':
+				formula_list.append(coeff_name_list[i])
+		
 		for (go_no,data) in go_no2prediction_space.iteritems():
+			
+			coeff_list = [0]*5	#intercept, p_value, recurrence, connectivity, cluster_size
+			coeff_p_value_list = [1]*5
+			index = 0	#06-30-05	the pointer for summary_stat
+			
 			if len(data)<=50:
 				#two few data
 				continue
@@ -209,12 +230,13 @@ class p_gene_lm:
 			set_default_mode(NO_CONVERSION) #04-07-05
 			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
 				"cluster_size":data[:,3], "is_correct":data[:,-1]})	#06-30-05	-1 denotes is_correct
-			lm_result = r.glm(r("is_correct~p_value+recurrence+connectivity+cluster_size"), data=data_frame, family=r("binomial"))
+			lm_result = r.glm(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, family=r("binomial"))	#06-30-05 use formula_list
 			set_default_mode(BASIC_CONVERSION) #04-07-05
 			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
 			summary_stat = r.summary(lm_result)
 			print "everything about coefficients from function", go_no, "is"
 			print summary_stat['coefficients']	#p-values of coefficients
+			"""
 			#04-07-05 convert to python dictionary form
 			lm_result = lm_result.as_py()
 			coeff_list = [lm_result["coefficients"]["(Intercept)"], lm_result["coefficients"]["p_value"], \
@@ -225,8 +247,18 @@ class p_gene_lm:
 				summary_stat['coefficients'][4][-1], 1]
 				#the last entry is score_cut_off, replaced later in get_score_cut_off()
 				#06-30-05	add corresponding p-values
-			#fill it in the data structure to be returned
-			go_no2lm_results[go_no] = coeff_list
+			"""
+			#06-30-05	0 in summary_stat['coefficients'] is intercept
+			coeff_list[0] = summary_stat['coefficients'][0][0]	#0 is the coefficient
+			coeff_p_value_list[0] = summary_stat['coefficients'][0][-1]	#-1 is the corresponding p-value
+			#06-30-05	fill in other efficients based on bit_string, NOTE i+1
+			for i in range(len(bit_string)):
+				if bit_string[i] == '1':
+					index+=1
+					coeff_list[i+1] = summary_stat['coefficients'][index][0]	#0 is the coefficient
+					coeff_p_value_list[i+1] = summary_stat['coefficients'][index][-1]	#-1 is the corresponding p-value
+			
+			go_no2lm_results[go_no] = coeff_list + coeff_p_value_list + [1]	#the last entry is score_cut_off, replaced later in get_score_cut_off()
 		sys.stderr.write("done.\n")
 		return go_no2lm_results
 	
@@ -394,7 +426,7 @@ class p_gene_lm:
 				sys.exit(127)
 			
 		self.data_fetch(curs, self.table)
-		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space)
+		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space, self.bit_string)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
 		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
@@ -407,9 +439,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:j:m:v:x:y:cru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:j:b:m:v:x:y:cru", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "splat_table=", "lm_table=", "accuracy_cut_off=", \
-			"judger_type=", "min_data_points=", "valid_space=", "commit", "report", "debug", \
+			"judger_type=", "bit_string=", "min_data_points=", "valid_space=", "commit", "report", "debug", \
 			"recurrence_gap_size=", "connectivity_gap_size="])
 	except:
 		print __doc__
@@ -423,6 +455,7 @@ if __name__ == '__main__':
 	lm_table = None
 	accuracy_cut_off = 0.5
 	judger_type = 0
+	bit_string = '1111'
 	min_data_points = 5
 	valid_space = 20
 	recurrence_gap_size = 2
@@ -450,6 +483,8 @@ if __name__ == '__main__':
 			accuracy_cut_off = float(arg)
 		elif opt in ("-j", "--judger_type"):
 			judger_type = int(arg)
+		elif opt in ("-b", "--bit_string"):
+			bit_string = arg
 		elif opt in ("-m", "--min_data_points"):
 			min_data_points = int(arg)
 		elif opt in ("-v", "--valid_space"):
@@ -466,7 +501,7 @@ if __name__ == '__main__':
 			connectivity_gap_size = int(arg)
 	if schema and table and splat_table:
 		instance = p_gene_lm(hostname, dbname, schema, table, splat_table, lm_table, \
-			accuracy_cut_off, judger_type, min_data_points, commit, report, debug, \
+			accuracy_cut_off, judger_type, bit_string, min_data_points, commit, report, debug, \
 			valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
