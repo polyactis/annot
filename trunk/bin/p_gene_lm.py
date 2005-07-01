@@ -21,8 +21,9 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -j 1 -r >/tmp/p_gene_lm.out
-	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -l p_gene_repos_2_e5_lm -j 1 -r -c >/tmp/p_gene_lm.out
+	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -s splat_table  -j 1 -r >/tmp/p_gene_lm.out
+	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -s splat_repost
+		-l p_gene_repos_2_e5_lm -j 1 -r -c >/tmp/p_gene_lm.out
 	
 Description:
 	02-28-05
@@ -105,12 +106,15 @@ class p_gene_lm:
 		"""
 		02-28-05
 			borrowed from p_gene_analysis.py
+		06-30-05
+			fetch cluster_size_cut_off
 			
 			--prediction_space_setup()
 		"""
 		sys.stderr.write("Setting Up prediction_space...\n")
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off from %s p, %s s where p.mcl_id=s.splat_id"\
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off from %s p, %s s where \
+			p.mcl_id=s.splat_id"\
 			%(self.is_correct_dict[self.judger_type], table, self.splat_table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
@@ -131,6 +135,8 @@ class p_gene_lm:
 		"""
 		02-28-05
 			borrowed from _p_gene_analysis() of p_gene_analysis.py
+		06-30-05
+			add cluster_size
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -140,6 +146,7 @@ class p_gene_lm:
 		recurrence = row[5]
 		connectivity = row[6]
 		depth_cut_off = row[7]
+		cluster_size = row[8]
 		
 		#take the floor of the recurrence
 		#recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
@@ -163,7 +170,7 @@ class p_gene_lm:
 			p_value = -math.log(1e-8)
 		else:
 			p_value = -math.log(p_value)
-		unit = [p_value, recurrence, connectivity, is_correct]
+		unit = [p_value, recurrence, connectivity, cluster_size, is_correct]
 		self.go_no2prediction_space[go_no].append(unit)
 	
 
@@ -180,6 +187,8 @@ class p_gene_lm:
 			--submit
 		03-27-05
 			Use glm of R to do logistic regression
+		06-30-05
+			add cluster_size
 		"""
 		sys.stderr.write("Linear Model Fitting...")
 		go_no2lm_results = {}
@@ -198,18 +207,24 @@ class p_gene_lm:
 			print significance_dict['coefficients']
 			"""
 			set_default_mode(NO_CONVERSION) #04-07-05
-			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], "is_correct":data[:,3]})
-			lm_result = r.glm(r("is_correct~p_value+recurrence+connectivity"), data=data_frame, family=r("binomial"))
+			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
+				"cluster_size":data[:,3], "is_correct":data[:,-1]})	#06-30-05	-1 denotes is_correct
+			lm_result = r.glm(r("is_correct~p_value+recurrence+connectivity+cluster_size"), data=data_frame, family=r("binomial"))
 			set_default_mode(BASIC_CONVERSION) #04-07-05
 			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
 			summary_stat = r.summary(lm_result)
+			print "everything about coefficients from function", go_no, "is"
 			print summary_stat['coefficients']	#p-values of coefficients
 			#04-07-05 convert to python dictionary form
 			lm_result = lm_result.as_py()
 			coeff_list = [lm_result["coefficients"]["(Intercept)"], lm_result["coefficients"]["p_value"], \
-				lm_result["coefficients"]["recurrence"], lm_result["coefficients"]["connectivity"], 1]
-						#the last entry is score_cut_off, replaced later in get_score_cut_off()
-																		
+				lm_result["coefficients"]["recurrence"], lm_result["coefficients"]["connectivity"], \
+				lm_result["coefficients"]["cluster_size"], \
+				summary_stat['coefficients'][0][-1], summary_stat['coefficients'][1][-1],\
+				summary_stat['coefficients'][2][-1], summary_stat['coefficients'][3][-1],\
+				summary_stat['coefficients'][4][-1], 1]
+				#the last entry is score_cut_off, replaced later in get_score_cut_off()
+				#06-30-05	add corresponding p-values
 			#fill it in the data structure to be returned
 			go_no2lm_results[go_no] = coeff_list
 		sys.stderr.write("done.\n")
@@ -219,10 +234,12 @@ class p_gene_lm:
 		"""
 		02-28-05
 			output the go_no2lm_results
+		06-30-05
+			change the header of the output.
 		"""
 		sys.stderr.write("Outputting Linear Model parameters...")
 		writer = csv.writer(outf, delimiter='\t')
-		writer.writerow(['go_no', 'intercept', 'coeff1', 'coeff2', 'coeff3', 'score_cut_off'])
+		writer.writerow(['go_no', 'intercept', 'coefficients and p-values', 'score_cut_off'])
 		for (go_no, coeff_list) in go_no2lm_results.iteritems():
 			writer.writerow([go_no]+coeff_list)
 		del writer
@@ -237,6 +254,8 @@ class p_gene_lm:
 			After model fitting, every prediction has a score computed from the model.
 			Based on the accuracy_cut_off, this function computes the corresponding
 			score_cut_off.
+		06-30-05
+			add cluster_size
 			
 			--return_score_cut_off()
 		"""
@@ -249,9 +268,9 @@ class p_gene_lm:
 			coeff_list = go_no2lm_results[go_no]
 			for entry in data:
 				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity
-				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2]
+				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3]
 				#score, is_correct
-				score_list.append([score, entry[3]])
+				score_list.append([score, entry[-1]])	#06-30-05	-1 denotes is_correct
 			score_cut_off = self.return_score_cut_off(score_list, accuracy_cut_off, go_no)
 			if score_cut_off:
 				#found the cutting point, append the score cutoff to the coeff_list
@@ -304,6 +323,8 @@ class p_gene_lm:
 		"""
 		03-27-05
 			coeff_list has changed, intercept+3 coefficients+score_cut_off
+		06-30-05
+			add  fields for p-values, cluster_size(coeff4)
 		"""
 		sys.stderr.write("Creating Linear Model table...")
 		try:
@@ -313,9 +334,16 @@ class p_gene_lm:
 				coeff1	float,\
 				coeff2	float,\
 				coeff3	float,\
+				coeff4	float,\
+				intercept_p_value	float,\
+				coeff1_p_value	float,\
+				coeff2_p_value	float,\
+				coeff3_p_value	float,\
+				coeff4_p_value	float,\
 				score_cut_off	float)"%lm_table)
 		except:
 			sys.stderr.write("Error occurred when creating table %s\n"%lm_table)	
+			sys.exit(3)
 		sys.stderr.write("done.\n")
 
 	def submit(self, curs, lm_table, go_no2lm_results):
@@ -324,29 +352,33 @@ class p_gene_lm:
 			submit the linear model parameters to the database
 		03-27-05
 			coeff_list has changed, intercept+3 coefficients+score_cut_off
+		06-30-05
+			add corresponding p-values and coeff4(cluster_size)
 		"""
 		sys.stderr.write("Submitting Linear model parameters...")
-		try:
-			for (go_no, coeff_list) in go_no2lm_results.iteritems():
-				curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, score_cut_off)\
-					values (%d, %s, %s, %s, %s, %s)"%\
-					(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4]) )
-		except:
-			sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
-			sys.exit(1)
+		for (go_no, coeff_list) in go_no2lm_results.iteritems():
+			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4,\
+				intercept_p_value, coeff1_p_value, coeff2_p_value, coeff3_p_value, coeff4_p_value,\
+				score_cut_off) values (%d, %s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,  %s)"%\
+				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4],\
+				coeff_list[5], coeff_list[6], coeff_list[7], coeff_list[8], coeff_list[9], coeff_list[-1]) )
 		sys.stderr.write("done.\n")
 
 	def run(self):
 		"""
 		02-24-05
-			--init
-			--db_connect
-			--data_fetch
-			--lm_fit
-			--get_score_cut_off
-				--return_score_cut_off
-			--lm_results_output
-			--submit
+		
+			--init()
+			--db_connect()
+			--lm_table_create()
+			--data_fetch()
+				--prediction_space_setup()
+			--lm_fit()
+			--lm_results_output()
+			--get_score_cut_off()
+				--return_score_cut_off()
+			--lm_results_output()
+			--submit()
 		
 		"""
 		#some additional initialization
@@ -432,7 +464,7 @@ if __name__ == '__main__':
 			recurrence_gap_size = int(arg)
 		elif opt in ("-y", "--connectivity_gap_size"):
 			connectivity_gap_size = int(arg)
-	if schema and table:
+	if schema and table and splat_table:
 		instance = p_gene_lm(hostname, dbname, schema, table, splat_table, lm_table, \
 			accuracy_cut_off, judger_type, min_data_points, commit, report, debug, \
 			valid_space, recurrence_gap_size, connectivity_gap_size)
