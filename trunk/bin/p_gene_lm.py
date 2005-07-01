@@ -10,9 +10,11 @@ Option:
 	-s ..., --splat_table=...	the corresponding splat_table
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-a ..., --accuracy_cut_off=...	0.5(default)
+	-p ..., --percentage=...	0.3(default) if accuracy_cut_off=0, use percentage to select score_cut_off
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
 	-b ..., --bit_string=...	the bit_string control which parameter to be counted into regression
 		p_value, recurrence, connectivity, cluster_size;	1111(default)
+		
 	-m ..., --min_data_points=...	the minimum data points to do linear-model fitting, 5(default) (IGNORE)
 	-v ..., --valid_space=...	the min number of known_predictions in one prediction space, 20(default) (IGNORE)
 	-x ..., --recurrence_gap_size=...	2(default) (IGNORE)
@@ -68,13 +70,14 @@ class p_gene_lm:
 		add bit_string
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, table=None, splat_table=None,\
-		lm_table=None, accuracy_cut_off=0, judger_type=0, bit_string='1111', min_data_points=5, \
+		lm_table=None, accuracy_cut_off=0, percentage=0.3, judger_type=0, bit_string='1111', min_data_points=5, \
 		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
 		03-08-05
 			add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 		06-30-05
 			add bit_string
+			add percentage
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -83,6 +86,7 @@ class p_gene_lm:
 		self.splat_table = splat_table
 		self.lm_table = lm_table
 		self.accuracy_cut_off = float(accuracy_cut_off)
+		self.percentage = float(percentage)
 		self.judger_type = int(judger_type)
 		self.bit_string = bit_string
 		self.min_data_points = int(min_data_points)
@@ -234,8 +238,9 @@ class p_gene_lm:
 			set_default_mode(BASIC_CONVERSION) #04-07-05
 			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
 			summary_stat = r.summary(lm_result)
-			print "everything about coefficients from function", go_no, "is"
-			print summary_stat['coefficients']	#p-values of coefficients
+			if self.debug:
+				print "everything about coefficients from function", go_no, "is"
+				print summary_stat['coefficients']	#p-values of coefficients
 			"""
 			#04-07-05 convert to python dictionary form
 			lm_result = lm_result.as_py()
@@ -277,7 +282,7 @@ class p_gene_lm:
 		del writer
 		sys.stderr.write("done.\n")
 	
-	def get_score_cut_off(self, go_no2prediction_space, go_no2lm_results, accuracy_cut_off):
+	def get_score_cut_off(self, go_no2prediction_space, go_no2lm_results, accuracy_cut_off, percentage):
 		"""
 		03-27-05
 			input: go_no2prediction_space, go_no2lm_results
@@ -288,6 +293,7 @@ class p_gene_lm:
 			score_cut_off.
 		06-30-05
 			add cluster_size
+			add percentage
 			
 			--return_score_cut_off()
 		"""
@@ -303,7 +309,10 @@ class p_gene_lm:
 				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3]
 				#score, is_correct
 				score_list.append([score, entry[-1]])	#06-30-05	-1 denotes is_correct
-			score_cut_off = self.return_score_cut_off(score_list, accuracy_cut_off, go_no)
+			if accuracy_cut_off==0:
+				score_cut_off = self.return_score_cut_off_by_percentage(score_list, percentage, go_no)
+			else:
+				score_cut_off = self.return_score_cut_off(score_list, accuracy_cut_off, go_no)
 			if score_cut_off:
 				#found the cutting point, append the score cutoff to the coeff_list
 				go_no2lm_results[go_no][-1] = score_cut_off
@@ -351,6 +360,27 @@ class p_gene_lm:
 		sys.stderr.write("Done.\n")
 		return score_cut_off
 	
+	def return_score_cut_off_by_percentage(self, score_list, percentage, go_no):
+		"""
+		06-30-05
+		"""
+		sys.stderr.write("\tReturning score_cut_off for go %s based on percentage %s...\n"%(go_no, percentage))
+		#default no score_cut_off
+		score_cut_off = None
+		score_list.sort()
+		score_list.reverse()	#####different from return_score_cut_off. descending order
+		cut_off_index = int(len(score_list)*percentage)
+		if cut_off_index!=0:
+			cut_off_index -= 1	#index starts from 0, not like counting
+		score_cut_off = score_list[cut_off_index][0]
+		#convert to a 2d array, they have the same indices
+		score_array = array(score_list)
+		correct_array = score_array[:,1][:cut_off_index]
+		accuracy = sum(correct_array)/float(len(correct_array))
+		sys.stderr.write("\tThe rough accuracy for percentage %s is %s.\n"%(percentage, accuracy))
+		sys.stderr.write("Done.\n")
+		return score_cut_off
+		
 	def lm_table_create(self, curs, lm_table):
 		"""
 		03-27-05
@@ -428,7 +458,7 @@ class p_gene_lm:
 		self.data_fetch(curs, self.table)
 		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space, self.bit_string)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
-		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off)
+		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off, self.percentage)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
 		if self.needcommit:
 			self.submit(curs, self.lm_table, go_no2lm_results)
@@ -439,8 +469,8 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:j:b:m:v:x:y:cru", ["help", "hostname=", \
-			"dbname=", "schema=", "table=", "splat_table=", "lm_table=", "accuracy_cut_off=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:p:j:b:m:v:x:y:cru", ["help", "hostname=", \
+			"dbname=", "schema=", "table=", "splat_table=", "lm_table=", "accuracy_cut_off=", "percentage=",\
 			"judger_type=", "bit_string=", "min_data_points=", "valid_space=", "commit", "report", "debug", \
 			"recurrence_gap_size=", "connectivity_gap_size="])
 	except:
@@ -454,6 +484,7 @@ if __name__ == '__main__':
 	splat_table = None
 	lm_table = None
 	accuracy_cut_off = 0.5
+	percentage = 0.3
 	judger_type = 0
 	bit_string = '1111'
 	min_data_points = 5
@@ -481,6 +512,8 @@ if __name__ == '__main__':
 			lm_table = arg
 		elif opt in ("-a", "--accuracy_cut_off"):
 			accuracy_cut_off = float(arg)
+		elif opt in ("-p", "--percentage"):
+			percentage = float(arg)
 		elif opt in ("-j", "--judger_type"):
 			judger_type = int(arg)
 		elif opt in ("-b", "--bit_string"):
@@ -501,8 +534,8 @@ if __name__ == '__main__':
 			connectivity_gap_size = int(arg)
 	if schema and table and splat_table:
 		instance = p_gene_lm(hostname, dbname, schema, table, splat_table, lm_table, \
-			accuracy_cut_off, judger_type, bit_string, min_data_points, commit, report, debug, \
-			valid_space, recurrence_gap_size, connectivity_gap_size)
+			accuracy_cut_off, percentage, judger_type, bit_string, min_data_points, \
+			commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
