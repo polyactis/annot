@@ -47,6 +47,7 @@ void python_call(char* outf_name, vector<int> edge_vector, vector<string> expr_a
  * */
 edge ind_min_cor(vf v1, vf v2);
 edge ind_cor(vf v1, vf v2, int position);
+void set_jk_cut_off(int jk_cut_off);	//07-03-05
 void cor_cut_off_vector_construct(double p_value_cut_off, double cor_cut_off_given);
 
 edge euc_dist(vf v1, vf v2);

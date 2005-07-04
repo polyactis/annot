@@ -7,8 +7,8 @@
 
 #include "graph_modeling.h"
 
-const int GENE_CUT_OFF = 8;
-const int JK_CUT_OFF = 7;
+int GENE_CUT_OFF = 8;
+int JK_CUT_OFF = 7;
 const float COR_CUT_OFF = 0.6;
 
 vector<float> cor_cut_off_vector;
@@ -42,6 +42,14 @@ edge ind_min_cor(vf v1, vf v2)
 		edge_data_to_return.significance = 1;
 	}
 	return edge_data_to_return;
+}
+
+void set_jk_cut_off(int jk_cut_off)
+/*
+*07-03-05 set the JK_CUT_OFF, mostly 7 is enough. But haiyan uses 6.
+*/
+{
+	JK_CUT_OFF=jk_cut_off;
 }
 
 edge ind_cor(vf v1, vf v2, int position)
