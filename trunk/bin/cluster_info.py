@@ -163,16 +163,15 @@ class cluster_info:
 			output: (cor_2d_list, sig_2d_list)
 			
 			--one_dim2two_dim()
+		07-03-05
+			codense2db's get_combined_cor_vector() returns 2d vectors, so not necessary for one_dim2two_dim()
 		"""
 		sys.stderr.write("Getting cor_vector and sig_vector ...")
 		no_of_edges = len(edge_set)
 		(combined_cor_vector, combined_sig_vector) = self.codense2db_instance.get_combined_cor_vector(curs, edge_set, edge_table=edge_table)
-		
-		cor_2d_list = self.one_dim2two_dim(combined_cor_vector, no_of_edges)
-		sig_2d_list = self.one_dim2two_dim(combined_sig_vector, no_of_edges)
 
 		sys.stderr.write("Done.\n")
-		return (cor_2d_list, sig_2d_list)
+		return (combined_cor_vector, combined_sig_vector)
 	
 	def one_dim2two_dim(self, list_1d, x_dimension):
 		list_2d = []
