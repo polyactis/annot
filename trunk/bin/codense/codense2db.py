@@ -15,6 +15,7 @@ Option:
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
+	-b, --debug	debug version.
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
 	-h, --help	show this help
@@ -34,6 +35,8 @@ Description:
 
 import sys, os, psycopg, getopt, csv, numarray, re
 from common import *
+sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	graph is visible in upper directory
+from graph import graph_modeling
 
 class cluster_dstructure:
 	def __init__(self):
@@ -60,16 +63,11 @@ class cluster_dstructure:
 		
 class codense2db:
 	'''
-	run()
-		--init
-		--get_haiyan_no2gene_no
-		--create_tables
-		--parser_dict[parser_type]
-		--db_submit
+
 	'''
-	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, table=None,\
-			mcl_table=None, mapping_file=None, cor_cut_off=0,\
-			parser_type=1, min_cluster_size=5, needcommit=0, report=0):
+	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, \
+			table=None, mcl_table=None, mapping_file=None, cor_cut_off=0,\
+			parser_type=1, min_cluster_size=5, debug=0, needcommit=0, report=0):
 		"""
 		02-25-05
 			modify the interface of the class and 2 member functions(get_combined_cor_vector, parse_recurrence)
@@ -85,10 +83,10 @@ class codense2db:
 		self.cor_cut_off = float(cor_cut_off)
 		self.parser_type = int(parser_type)
 		self.min_cluster_size = int(min_cluster_size)
+		self.debug = int(debug)
 		self.needcommit = int(needcommit)
 		self.report = int(report)
 	
-		self.debug = 0
 		self.parser_dict = {1:self.copath_parser,
 			2: self.codense_parser}
 		
@@ -99,7 +97,7 @@ class codense2db:
 	def copath_parser(self, row, argument=None, argument2=None):
 		"""
 		03-03-05
-			get recurrence_array by passing the combined_sig_vetor
+			get recurrence_array by passing the combined_sig_vector
 			get a fair recurrence_array(see 'redefine recurrence and connectivity' in log_05)
 			
 			the connectivity of the summary subgraph is passed to splat_connectivity
@@ -137,22 +135,23 @@ class codense2db:
 			edge.sort()
 			cluster.edge_set.append(edge)
 		cluster.no_of_edges = len(cluster.edge_set)
-		(combined_cor_vector, combined_sig_vetor) = self.get_combined_cor_vector(curs, cluster.edge_set)
-		cluster.connectivity = self.parse_connectivity(combined_sig_vetor, cluster.no_of_edges, len(cluster.vertex_set))
-		
-		cluster.recurrence_array = self.parse_recurrence(combined_sig_vetor, cluster.no_of_edges, self.cor_cut_off)
+		(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
+		cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
+		cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
 		self.cluster_no+=1
 		return cluster
 	
 	def get_combined_cor_vector(self, curs, edge_set, edge_table='edge_cor_vector'):
 		"""
 		03-03-05
-			return (combined_cor_vector, combined_sig_vetor)
+			return (combined_cor_vector, combined_sig_vector)
 		04-06-05
 			make edge_table to be an explicit parameter
+		07-03-05
+			better edition of get_combined_cor_vector(), 2d list rather than 1d list.
 		"""
 		combined_cor_vector = []
-		combined_sig_vetor = []
+		combined_sig_vector = []
 		for edge in edge_set:
 			edge_string = '{' + repr(edge)[1:-1] + '}'
 			curs.execute("select cor_vector, sig_vector from %s where edge_name='%s'"%(edge_table,edge_string))
@@ -162,22 +161,23 @@ class codense2db:
 				sys.exit(1)
 			cor_vector = rows[0][0][1:-1].split(',')
 			cor_vector = map(float, cor_vector)
-			combined_cor_vector += cor_vector
+			combined_cor_vector.append(cor_vector)
 			
 			sig_vector = rows[0][1][1:-1].split(',')
 			sig_vector = map(int, sig_vector)
-			combined_sig_vetor += sig_vector			
-		return (combined_cor_vector, combined_sig_vetor)
-
+			combined_sig_vector.append(sig_vector)
+		return (combined_cor_vector, combined_sig_vector)
+	
 	def parse_recurrence(self, combined_vector, no_of_edges, cor_cut_off=0):
 		"""
 		03-03-05
-			replace the combined_vector with combined_sig_vetor
+			replace the combined_vector with combined_sig_vector
 			get a fair recurrence_array(see 'redefine recurrence and connectivity' in log_05)
+		07-03-05
+			combined_vector is already a 2d list.
 		"""
 		cor_array = numarray.array(combined_vector)
-		y_dimension = len(cor_array)/no_of_edges
-		cor_array = numarray.reshape(cor_array, (no_of_edges, y_dimension))
+		x_dimension, y_dimension = cor_array.shape	#07-03-05	cor_array is 2d array
 		recurrence_array = []
 		for i in range(y_dimension):
 			#regard the correlations >= self.cor_cut_off to be 1, others 0
@@ -196,11 +196,14 @@ class codense2db:
 	def parse_connectivity(self, combined_vector, no_of_edges, no_of_nodes):
 		"""
 		03-03-05
-			parsing the combined_sig_vetor and return connectivity
+			parsing the combined_sig_vector and return connectivity
+		07-03-05
+			combined_vector is already a 2d list.
 		"""
 		sig_array = numarray.array(combined_vector)
-		y_dimension = len(sig_array)/no_of_edges
-		sig_array = numarray.reshape(sig_array, (no_of_edges, y_dimension))
+		x_dimension, y_dimension = sig_array.shape	#07-03-05	sig_array is 2d array
+		#y_dimension = len(sig_array)/no_of_edges
+		#sig_array = numarray.reshape(sig_array, (no_of_edges, y_dimension))
 		connectivity_list = []
 		for i in range(y_dimension):
 			no_of_edges_in_one_dataset = sum(sig_array[:,i])
@@ -212,7 +215,32 @@ class codense2db:
 			print connectivity_list
 		return sum(connectivity_list)/y_dimension
 		
-	
+	def parse_2nd_connectivity(self, combined_vector, no_of_edges, no_of_nodes):
+		"""
+		07-03-05
+			get the 2nd-order connectivity, temporarily use 0.8 as cutoff
+		"""
+		no_of_sig_2nd_edges = 0
+		for i in range(no_of_edges):
+			for j in range(i+1, no_of_edges):
+				edge_data = graph_modeling.ind_min_cor(combined_vector[i], combined_vector[j])
+				no_of_sig_2nd_edges += edge_data.significance	#either 1 or 0
+				if self.debug:
+					sys.stderr.write("edge_cor_vectors:\n")
+					sys.stderr.write("%s is %s.\n"%(i, repr(combined_vector[i])))
+					sys.stderr.write("%s is %s.\n"%(j, repr(combined_vector[j])))
+					sys.stderr.write("cor: %s\t significance: %s\n"%(edge_data.value, edge_data.significance))
+		if no_of_edges<=1:
+			connectivity = 0
+		else:
+			connectivity = no_of_sig_2nd_edges*2.0/(no_of_edges*(no_of_edges-1))
+		if self.debug:
+			sys.stderr.write("2nd-order connectivity is %s.\n"%connectivity)
+			is_continue = raw_input("Continue?(Y/n)")
+			if is_continue=='n':
+				sys.exit(2)
+		return connectivity
+			
 	def codense_parser(self, row, argument=None, argument2=None):
 		"""
 		03-04-05
@@ -297,8 +325,21 @@ class codense2db:
 			mapping_dict all changed to haiyan_no2gene_no
 		04-12-05
 			use min_cluster_size to cut off some small clusters
+		07-03-05
+			construct graph_modeling's cor_cut_off vector first
+		
+			--db_connect()
+			--get_haiyan_no2gene_no()
+			--get_gene_id2gene_no()
+			--create_tables()
+			--graph_modeling.cor_cut_off_vector_construct()
+			--parser_dict[parser_type]() (codense_parser(), copath_parser() )
+				--get_combined_cor_vector
+				--parse_recurrence
+				--parse_connectivity
+			--db_submit()
 		"""
-
+		
 		inf = csv.reader(open(self.infname, 'r'), delimiter='\t')
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
 		
@@ -312,6 +353,10 @@ class codense2db:
 			2:haiyan_no2gene_no}
 		self.create_tables(curs, self.table, self.mcl_table)
 		no = 0
+		
+		graph_modeling.cor_cut_off_vector_construct(0, 0.8)	#07-03-05 compute the cor cutoff vector for graph_modeling, use 0.8 as cutoff
+			#graph_modeling.ind_min_cor() requires the cor_cut_off vector to be constructed ahead.
+		graph_modeling.set_jk_cut_off(6)	#07-03-05 haiyan's cutoff is 6, different from my default value, 7.
 		for row in inf:
 			cluster = self.parser_dict[self.parser_type](row, mapping_dict[self.parser_type], curs)
 			if len(cluster.vertex_set)<self.min_cluster_size:
@@ -333,9 +378,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:cr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:bcr", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
-			"parser_type=", "min_cluster_size=", "commit", "report"])
+			"parser_type=", "min_cluster_size=", "debug", "commit", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -349,6 +394,7 @@ if __name__ == '__main__':
 	cor_cut_off = 0
 	parser_type = 1
 	min_cluster_size = 5
+	debug = 0
 	commit = 0
 	report = 0
 	for opt, arg in opts:
@@ -373,13 +419,15 @@ if __name__ == '__main__':
 			parser_type = int(arg)
 		elif opt in ("-s", "--min_cluster_size"):
 			min_cluster_size = int(arg)
+		elif opt in ("-b", "--debug"):
+			debug = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and len(args)==1:
 		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, \
-			cor_cut_off, parser_type, min_cluster_size, commit, report)
+			cor_cut_off, parser_type, min_cluster_size, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
