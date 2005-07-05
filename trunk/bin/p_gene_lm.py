@@ -6,19 +6,17 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
+	-f ..., --netmine_fname=...	used to construct table names
+		if netmine_fname is given, no need to given following four tables
 	-t ..., --table=...	the p_gene table
 	-s ..., --splat_table=...	the corresponding splat_table
+	-m ..., --mcl_table=...	the corresponding mcl_table
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-a ..., --accuracy_cut_off=...	0.5(default)
 	-p ..., --percentage=...	0.3(default) if accuracy_cut_off=0, use percentage to select score_cut_off
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
 	-b ..., --bit_string=...	the bit_string control which parameter to be counted into regression
-		p_value, recurrence, connectivity, cluster_size;	1111(default)
-		
-	-m ..., --min_data_points=...	the minimum data points to do linear-model fitting, 5(default) (IGNORE)
-	-v ..., --valid_space=...	the min number of known_predictions in one prediction space, 20(default) (IGNORE)
-	-x ..., --recurrence_gap_size=...	2(default) (IGNORE)
-	-y ..., --connectivity_gap_size=...	2(default) (IGNORE)
+		p_value, recurrence, connectivity, cluster_size;	11111(default)
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
 	-u, --debug debug flag
@@ -28,10 +26,11 @@ Examples:
 	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -s splat_table  -j 1 -r >/tmp/p_gene_lm.out
 	p_gene_lm.py -k sc_54 -t p_gene_repos_2_e5 -s splat_repost
 		-l p_gene_repos_2_e5_lm -j 1 -r -c >/tmp/p_gene_lm.out
+	p_gene_lm.py -k mm_oxi_stress_7t1 -f fmos_7t1g1e3d40q20s200c50z0001c8 -j 2 >/tmp/p_gene_lm.out
 	
 Description:
-	02-28-05
-	linear model fitting of the p_value_cut_off ~ recurrence+connectivity
+	linear model:
+		is_correct ~ p_value + recurrence + connectivity + cluster_size + connectivity_2nd
 	
 	Output contains the p_value_cut_off and other information for each go-no
 	as well as the linear_model fitting results. Output is dumped on sys.stdout.
@@ -41,7 +40,6 @@ Description:
 
 import sys, os, psycopg, getopt, csv, math
 from p_gene_analysis import prediction_space_attr
-from module_cc.linear_model import linear_model
 from codense.common import *
 from numarray import *
 from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
@@ -69,8 +67,8 @@ class p_gene_lm:
 		add corresponding p-values, parameter cluster_size,
 		add bit_string
 	"""
-	def __init__(self, hostname=None, dbname=None, schema=None, table=None, splat_table=None,\
-		lm_table=None, accuracy_cut_off=0, percentage=0.3, judger_type=0, bit_string='1111', min_data_points=5, \
+	def __init__(self, hostname=None, dbname=None, schema=None, netmine_fname=None, table=None, splat_table=None,\
+		mcl_table=None, lm_table=None, accuracy_cut_off=0, percentage=0.3, judger_type=0, bit_string='11111', min_data_points=5, \
 		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
 		03-08-05
@@ -82,8 +80,11 @@ class p_gene_lm:
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
+		self.netmine_fname = netmine_fname
 		self.table = table
 		self.splat_table = splat_table
+		self.mcl_table = mcl_table
+		
 		self.lm_table = lm_table
 		self.accuracy_cut_off = float(accuracy_cut_off)
 		self.percentage = float(percentage)
@@ -120,14 +121,16 @@ class p_gene_lm:
 			borrowed from p_gene_analysis.py
 		06-30-05
 			fetch cluster_size_cut_off
+		07-04-05
+			fetch m.connectivity(2nd-order density)
 			
 			--prediction_space_setup()
 		"""
 		sys.stderr.write("Setting Up prediction_space...\n")
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off from %s p, %s s where \
-			p.mcl_id=s.splat_id"\
-			%(self.is_correct_dict[self.judger_type], table, self.splat_table))
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off,m.connectivity from %s p, %s s, %s m where \
+			p.mcl_id=s.splat_id and p.mcl_id=m.mcl_id"\
+			%(self.is_correct_dict[self.judger_type], table, self.splat_table, self.mcl_table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -149,6 +152,8 @@ class p_gene_lm:
 			borrowed from _p_gene_analysis() of p_gene_analysis.py
 		06-30-05
 			add cluster_size
+		07-04-05
+			add connectivity_2nd
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -159,6 +164,7 @@ class p_gene_lm:
 		connectivity = row[6]
 		depth_cut_off = row[7]
 		cluster_size = row[8]
+		connectivity_2nd = row[9]
 		
 		#take the floor of the recurrence
 		#recurrence = int(math.floor(recurrence/self.recurrence_gap_size)*self.recurrence_gap_size)
@@ -182,7 +188,7 @@ class p_gene_lm:
 			p_value = -math.log(1e-8)
 		else:
 			p_value = -math.log(p_value)
-		unit = [p_value, recurrence, connectivity, cluster_size, is_correct]
+		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, is_correct]
 		self.go_no2prediction_space[go_no].append(unit)
 	
 
@@ -194,20 +200,22 @@ class p_gene_lm:
 		03-08-05
 			grouping and accumulating before do linear model fitting, see log of 2005, 
 			section 'linear model overfitting' for detail.
-		
-			--data_prepare
-			--submit
 		03-27-05
 			Use glm of R to do logistic regression
 		06-30-05
 			add cluster_size
 			add bit_string to control which parameter should be enabled.
+		07-04-05
+			add connectivity_2nd
+	
+			--data_prepare
+			--submit
 		"""
 		sys.stderr.write("Linear Model Fitting...")
 		go_no2lm_results = {}
 		
 		#06-30-05	setup the formula_list based on bit_string
-		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size']
+		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'connectivity_2nd']
 		formula_list = []
 		for i in range(len(bit_string)):
 			if bit_string[i] == '1':
@@ -215,8 +223,8 @@ class p_gene_lm:
 		
 		for (go_no,data) in go_no2prediction_space.iteritems():
 			
-			coeff_list = [0]*5	#intercept, p_value, recurrence, connectivity, cluster_size
-			coeff_p_value_list = [1]*5
+			coeff_list = [0]*6	#intercept, p_value, recurrence, connectivity, cluster_size
+			coeff_p_value_list = [1]*6
 			index = 0	#06-30-05	the pointer for summary_stat
 			
 			if len(data)<=50:
@@ -233,7 +241,7 @@ class p_gene_lm:
 			"""
 			set_default_mode(NO_CONVERSION) #04-07-05
 			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
-				"cluster_size":data[:,3], "is_correct":data[:,-1]})	#06-30-05	-1 denotes is_correct
+				"cluster_size":data[:,3], "connectivity_2nd":data[:,4], "is_correct":data[:,-1]})	#06-30-05	-1 denotes is_correct
 			lm_result = r.glm(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, family=r("binomial"))	#06-30-05 use formula_list
 			set_default_mode(BASIC_CONVERSION) #04-07-05
 			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
@@ -294,7 +302,9 @@ class p_gene_lm:
 		06-30-05
 			add cluster_size
 			add percentage
-			
+		07-04-05
+			add connectivity_2nd
+		
 			--return_score_cut_off()
 		"""
 		sys.stderr.write("Getting score cutoff for accuracy_cut_off %s...\n"%(accuracy_cut_off))
@@ -305,8 +315,8 @@ class p_gene_lm:
 			score_list = []
 			coeff_list = go_no2lm_results[go_no]
 			for entry in data:
-				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity
-				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3]
+				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity + coeff4*cluster_size + coeff5*connectivity_2nd
+				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3] + coeff_list[5]*entry[4]
 				#score, is_correct
 				score_list.append([score, entry[-1]])	#06-30-05	-1 denotes is_correct
 			if accuracy_cut_off==0:
@@ -387,6 +397,8 @@ class p_gene_lm:
 			coeff_list has changed, intercept+3 coefficients+score_cut_off
 		06-30-05
 			add  fields for p-values, cluster_size(coeff4)
+		07-04-05
+			add connectivity_2nd and its p-value
 		"""
 		sys.stderr.write("Creating Linear Model table...")
 		try:
@@ -397,14 +409,16 @@ class p_gene_lm:
 				coeff2	float,\
 				coeff3	float,\
 				coeff4	float,\
+				coeff5	float,\
 				intercept_p_value	float,\
 				coeff1_p_value	float,\
 				coeff2_p_value	float,\
 				coeff3_p_value	float,\
 				coeff4_p_value	float,\
+				coeff5_p_value	float,\
 				score_cut_off	float)"%lm_table)
 		except:
-			sys.stderr.write("Error occurred when creating table %s\n"%lm_table)	
+			sys.stderr.write("Error occurred when creating table %s\n"%lm_table)
 			sys.exit(3)
 		sys.stderr.write("done.\n")
 
@@ -416,14 +430,16 @@ class p_gene_lm:
 			coeff_list has changed, intercept+3 coefficients+score_cut_off
 		06-30-05
 			add corresponding p-values and coeff4(cluster_size)
+		07-04-05
+			add connectivity_2nd
 		"""
 		sys.stderr.write("Submitting Linear model parameters...")
 		for (go_no, coeff_list) in go_no2lm_results.iteritems():
-			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4,\
-				intercept_p_value, coeff1_p_value, coeff2_p_value, coeff3_p_value, coeff4_p_value,\
+			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4, coeff5, \
+				intercept_p_value, coeff1_p_value, coeff2_p_value, coeff3_p_value, coeff4_p_value, coeff5_p_value, \
 				score_cut_off) values (%d, %s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,  %s)"%\
-				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4],\
-				coeff_list[5], coeff_list[6], coeff_list[7], coeff_list[8], coeff_list[9], coeff_list[-1]) )
+				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4], coeff_list[5],\
+				coeff_list[6], coeff_list[7], coeff_list[8], coeff_list[9], coeff_list[10], coeff_list[11], coeff_list[-1]) )
 		sys.stderr.write("done.\n")
 
 	def run(self):
@@ -469,10 +485,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:s:l:a:p:j:b:m:v:x:y:cru", ["help", "hostname=", \
-			"dbname=", "schema=", "table=", "splat_table=", "lm_table=", "accuracy_cut_off=", "percentage=",\
-			"judger_type=", "bit_string=", "min_data_points=", "valid_space=", "commit", "report", "debug", \
-			"recurrence_gap_size=", "connectivity_gap_size="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:cru", ["help", "hostname=", \
+			"dbname=", "schema=", "netmine_fname=", "table=", "splat_table=", "mcl_table=",  "lm_table=", \
+			"accuracy_cut_off=", "percentage=", "judger_type=", "bit_string=", "commit", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -480,20 +495,24 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	netmine_fname = None
 	table = None
 	splat_table = None
+	mcl_table = None
 	lm_table = None
 	accuracy_cut_off = 0.5
 	percentage = 0.3
 	judger_type = 0
-	bit_string = '1111'
+	bit_string = '11111'
+	commit = 0
+	report = 0
+	debug = 0
+	
 	min_data_points = 5
 	valid_space = 20
 	recurrence_gap_size = 2
 	connectivity_gap_size = 2
-	commit = 0
-	report = 0
-	debug = 0
+
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -504,10 +523,14 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-f", "--netmine_fname"):
+			netmine_fname = arg
 		elif opt in ("-t", "--table"):
 			table = arg
 		elif opt in ("-s", "--splat_table"):
 			splat_table = arg
+		elif opt in ("-m", "--mcl_table"):
+			mcl_table = arg
 		elif opt in ("-l", "--lm_table"):
 			lm_table = arg
 		elif opt in ("-a", "--accuracy_cut_off"):
@@ -518,23 +541,22 @@ if __name__ == '__main__':
 			judger_type = int(arg)
 		elif opt in ("-b", "--bit_string"):
 			bit_string = arg
-		elif opt in ("-m", "--min_data_points"):
-			min_data_points = int(arg)
-		elif opt in ("-v", "--valid_space"):
-			valid_space = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
 		elif opt in ("-u", "--debug"):
 			debug = 1
-		elif opt in ("-x", "--recurrence_gap_size"):
-			recurrence_gap_size = int(arg)
-		elif opt in ("-y", "--connectivity_gap_size"):
-			connectivity_gap_size = int(arg)
-	if schema and table and splat_table:
-		instance = p_gene_lm(hostname, dbname, schema, table, splat_table, lm_table, \
-			accuracy_cut_off, percentage, judger_type, bit_string, min_data_points, \
+
+	if netmine_fname:
+		table = 'p_gene_%s_e5'%netmine_fname
+		splat_table = 'splat_%s'%netmine_fname
+		mcl_table = 'mcl_%s'%netmine_fname
+		lm_table = 'lm_%s_e5'%netmine_fname
+		
+	if schema and table and splat_table and mcl_table:
+		instance = p_gene_lm(hostname, dbname, schema, netmine_fname, table, splat_table, \
+			mcl_table, lm_table, accuracy_cut_off, percentage, judger_type, bit_string, min_data_points, \
 			commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
