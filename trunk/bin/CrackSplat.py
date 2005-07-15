@@ -231,11 +231,12 @@ class crack_by_splat:
 			only reads edges(starting with 'e').
 			
 			So my function only outputs edges.
+		07-03-05
+			combined_sig_vector becomes a 2d-list. due to interface changes in codense2db.py
 		"""
 		no_of_edges = len(edge_set)
 		sig_array = numarray.array(combined_sig_vector)
-		no_of_datasets = len(sig_array)/no_of_edges
-		sig_array = numarray.reshape(sig_array, (no_of_edges, no_of_datasets))
+		no_of_edges, no_of_datasets = sig_array.shape	#07-03-05 see doc above
 		
 		#open and write #no_of_datasets files
 		for i in range(no_of_datasets):
