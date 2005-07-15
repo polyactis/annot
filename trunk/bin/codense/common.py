@@ -287,6 +287,53 @@ def get_go_id2go_no(curs, schema=None, table='go'):
 	sys.stderr.write("Done\n")
 	return go_id2go_no
 
+"""
+07-06-05
+"""
+def get_gene_no2id(curs, table='gene_id_to_no', organism='Mus musculus'):
+	"""
+	07-06-05
+		return gene_no2id
+	"""
+	sys.stderr.write("Getting gene_no2id...")
+	gene_no2id = {}
+	curs.execute("select gene_no, gene_id from graph.%s where organism='%s'"%(table, organism))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_no2id[row[0]] = row[1]
+	sys.stderr.write("Done\n")
+	return gene_no2id
+	
+
+def get_go_id2name(curs, table='term'):
+	"""
+	07-06-05
+		return go_id2name
+	"""
+	sys.stderr.write("Getting go_id2name...")
+	go_id2name = {}
+	curs.execute("select acc, name from go.%s where term_type='biological_process'"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_id2name[row[0]] = row[1]
+	sys.stderr.write("Done\n")
+	return go_id2name
+
+
+def get_go_id2term_id(curs, table='term'):
+	"""
+	07-06-05
+		return go_id2name
+	"""
+	sys.stderr.write("Getting go_id2name...")
+	go_id2term_id = {}
+	curs.execute("select acc, id from go.%s where term_type='biological_process'"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_id2term_id[row[0]] = row[1]
+	sys.stderr.write("Done\n")
+	return go_id2term_id
+
 def get_prediction_pair2lca_list(curs, schema=None, p_gene_table=None):
 	"""
 	03-15-05
