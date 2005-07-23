@@ -16,7 +16,8 @@ Option:
 	-p ..., --percentage=...	0.3(default) if accuracy_cut_off=0, use percentage to select score_cut_off
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
 	-b ..., --bit_string=...	the bit_string control which parameter to be counted into regression
-		p_value, recurrence, connectivity, cluster_size;	11111(default)
+		p_value, recurrence, connectivity, cluster_size, connectivity_2nd;	11111(default)
+	-o, --logistic	logistic regression
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
 	-u, --debug debug flag
@@ -42,6 +43,7 @@ import sys, os, psycopg, getopt, csv, math
 from p_gene_analysis import prediction_space_attr
 from codense.common import *
 from numarray import *
+from Numeric import average
 from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
 
 class p_gene_lm:
@@ -69,13 +71,15 @@ class p_gene_lm:
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, netmine_fname=None, table=None, splat_table=None,\
 		mcl_table=None, lm_table=None, accuracy_cut_off=0, percentage=0.3, judger_type=0, bit_string='11111', min_data_points=5, \
-		needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
+		logistic=0, needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
 		03-08-05
 			add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 		06-30-05
 			add bit_string
 			add percentage
+		07-06-05
+			add logistic
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -91,6 +95,7 @@ class p_gene_lm:
 		self.judger_type = int(judger_type)
 		self.bit_string = bit_string
 		self.min_data_points = int(min_data_points)
+		self.logistic = int(logistic)
 		self.needcommit = int(needcommit)
 		self.report = int(report)		
 		self.debug = int(debug)
@@ -100,6 +105,7 @@ class p_gene_lm:
 		self.connectivity_gap_size = int(connectivity_gap_size)
 		
 		self.go_no2prediction_space = {}
+		self.mcl_id2prediction_space = {}
 		#an is_correct dictionary used in database fetch
 		self.is_correct_dict = {0: 'is_correct',
 			1: 'is_correct_L1',
@@ -154,6 +160,8 @@ class p_gene_lm:
 			add cluster_size
 		07-04-05
 			add connectivity_2nd
+		07-05-05
+			prediction_space goes to mcl_id2prediction_space
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -179,9 +187,6 @@ class p_gene_lm:
 			Don't distinguish go_no.
 			Assign go_no = -1.
 		"""
-		go_no = -1
-		if go_no not in self.go_no2prediction_space:
-			self.go_no2prediction_space[go_no] = []
 		#convert p_value to -log(p_value)
 		if p_value == 0:
 			self.no_of_zero_p_values += 1
@@ -189,8 +194,36 @@ class p_gene_lm:
 		else:
 			p_value = -math.log(p_value)
 		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, is_correct]
-		self.go_no2prediction_space[go_no].append(unit)
-	
+		if mcl_id not in self.mcl_id2prediction_space:
+			self.mcl_id2prediction_space[mcl_id] = []
+		self.mcl_id2prediction_space[mcl_id].append(unit)
+		#go_no = -1
+		#if go_no not in self.go_no2prediction_space:
+		#	self.go_no2prediction_space[go_no] = []
+		#self.go_no2prediction_space[go_no].append(unit)
+
+	def mcl_id2prediction_spaceTogo_no2prediction_space(self, mcl_id2prediction_space):
+		"""
+		07-05-05
+			transform mcl_id2prediction_space to go_no2prediction_space, each mcl_id's prediction_space
+			is averaged
+		"""
+		sys.stderr.write("Transforming mcl_id2prediction_space...")
+		go_no2prediction_space = {}
+		go_no = -1
+		go_no2prediction_space[go_no] = []
+		for (mcl_id, data) in mcl_id2prediction_space.iteritems():
+			data = array(data)
+			unit = [average(data[:,0]), average(data[:,1]), average(data[:,2]), average(data[:,3]), average(data[:,4]), average(data[:,-1])]
+			if self.debug:
+				print data
+				print "averaged",unit
+				is_continue = raw_input("Continue?Y/n")
+				if is_continue =='n':
+					sys.exit(2)
+			go_no2prediction_space[go_no].append(unit)
+		sys.stderr.write("%s data points to do fitting. Done.\n"%len(go_no2prediction_space[go_no]))
+		return go_no2prediction_space
 
 	def lm_fit(self, lm_instance, go_no2prediction_space, bit_string, curs=None, lm_table=None):
 		"""
@@ -207,7 +240,9 @@ class p_gene_lm:
 			add bit_string to control which parameter should be enabled.
 		07-04-05
 			add connectivity_2nd
-	
+		07-06-05
+			add logistic
+			
 			--data_prepare
 			--submit
 		"""
@@ -242,7 +277,10 @@ class p_gene_lm:
 			set_default_mode(NO_CONVERSION) #04-07-05
 			data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
 				"cluster_size":data[:,3], "connectivity_2nd":data[:,4], "is_correct":data[:,-1]})	#06-30-05	-1 denotes is_correct
-			lm_result = r.glm(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, family=r("binomial"))	#06-30-05 use formula_list
+			if self.logistic:
+				lm_result = r.glm(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, family=r("binomial"))
+			else:
+				lm_result = r.glm(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame)	#06-30-05 use formula_list
 			set_default_mode(BASIC_CONVERSION) #04-07-05
 			#04-07-05 r.summary() requires lm_result in NO_CONVERSION state
 			summary_stat = r.summary(lm_result)
@@ -446,11 +484,15 @@ class p_gene_lm:
 		"""
 		02-24-05
 		
+		07-05-05
+			add mcl_id2prediction_spaceTogo_no2prediction_space
+			
 			--init()
 			--db_connect()
 			--lm_table_create()
 			--data_fetch()
 				--prediction_space_setup()
+			--mcl_id2prediction_spaceTogo_no2prediction_space()
 			--lm_fit()
 			--lm_results_output()
 			--get_score_cut_off()
@@ -472,6 +514,7 @@ class p_gene_lm:
 				sys.exit(127)
 			
 		self.data_fetch(curs, self.table)
+		self.go_no2prediction_space = self.mcl_id2prediction_spaceTogo_no2prediction_space(self.mcl_id2prediction_space)
 		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space, self.bit_string)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
 		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off, self.percentage)
@@ -485,9 +528,9 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:cru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:ocru", ["help", "hostname=", \
 			"dbname=", "schema=", "netmine_fname=", "table=", "splat_table=", "mcl_table=",  "lm_table=", \
-			"accuracy_cut_off=", "percentage=", "judger_type=", "bit_string=", "commit", "report", "debug"])
+			"accuracy_cut_off=", "percentage=", "judger_type=", "bit_string=", "logistic", "commit", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -504,6 +547,7 @@ if __name__ == '__main__':
 	percentage = 0.3
 	judger_type = 0
 	bit_string = '11111'
+	logistic = 0
 	commit = 0
 	report = 0
 	debug = 0
@@ -541,6 +585,8 @@ if __name__ == '__main__':
 			judger_type = int(arg)
 		elif opt in ("-b", "--bit_string"):
 			bit_string = arg
+		elif opt in ("-o", "--logistic"):
+			logistic = 1
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
@@ -557,7 +603,7 @@ if __name__ == '__main__':
 	if schema and table and splat_table and mcl_table:
 		instance = p_gene_lm(hostname, dbname, schema, netmine_fname, table, splat_table, \
 			mcl_table, lm_table, accuracy_cut_off, percentage, judger_type, bit_string, min_data_points, \
-			commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
+			logistic, commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
