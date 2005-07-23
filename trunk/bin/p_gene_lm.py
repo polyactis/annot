@@ -475,7 +475,7 @@ class p_gene_lm:
 		for (go_no, coeff_list) in go_no2lm_results.iteritems():
 			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4, coeff5, \
 				intercept_p_value, coeff1_p_value, coeff2_p_value, coeff3_p_value, coeff4_p_value, coeff5_p_value, \
-				score_cut_off) values (%d, %s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,  %s)"%\
+				score_cut_off) values (%d, %s,%s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,%s,  %s)"%\
 				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4], coeff_list[5],\
 				coeff_list[6], coeff_list[7], coeff_list[8], coeff_list[9], coeff_list[10], coeff_list[11], coeff_list[-1]) )
 		sys.stderr.write("done.\n")
