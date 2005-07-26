@@ -162,6 +162,8 @@ class p_gene_lm:
 			add connectivity_2nd
 		07-05-05
 			prediction_space goes to mcl_id2prediction_space
+		07-25-05
+			prediction_space goes back to go_no2prediction_space
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -194,13 +196,13 @@ class p_gene_lm:
 		else:
 			p_value = -math.log(p_value)
 		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, is_correct]
-		if mcl_id not in self.mcl_id2prediction_space:
-			self.mcl_id2prediction_space[mcl_id] = []
-		self.mcl_id2prediction_space[mcl_id].append(unit)
-		#go_no = -1
-		#if go_no not in self.go_no2prediction_space:
-		#	self.go_no2prediction_space[go_no] = []
-		#self.go_no2prediction_space[go_no].append(unit)
+		#if mcl_id not in self.mcl_id2prediction_space:
+		#	self.mcl_id2prediction_space[mcl_id] = []
+		#self.mcl_id2prediction_space[mcl_id].append(unit)
+		go_no = -1
+		if go_no not in self.go_no2prediction_space:
+			self.go_no2prediction_space[go_no] = []
+		self.go_no2prediction_space[go_no].append(unit)
 
 	def mcl_id2prediction_spaceTogo_no2prediction_space(self, mcl_id2prediction_space):
 		"""
@@ -402,6 +404,7 @@ class p_gene_lm:
 				accuracy = sum(correct_array)/float(len(correct_array))
 				if self.debug:
 					print "%s\t%s\t%s\t%s"%(score,repr(correct_array), len(correct_array), accuracy)
+					raw_input("Continue:(Y/n)?")
 				if accuracy >= accuracy_cut_off:
 					score_cut_off = score
 					break
@@ -492,7 +495,6 @@ class p_gene_lm:
 			--lm_table_create()
 			--data_fetch()
 				--prediction_space_setup()
-			--mcl_id2prediction_spaceTogo_no2prediction_space()
 			--lm_fit()
 			--lm_results_output()
 			--get_score_cut_off()
@@ -514,7 +516,7 @@ class p_gene_lm:
 				sys.exit(127)
 			
 		self.data_fetch(curs, self.table)
-		self.go_no2prediction_space = self.mcl_id2prediction_spaceTogo_no2prediction_space(self.mcl_id2prediction_space)
+		#self.go_no2prediction_space = self.mcl_id2prediction_spaceTogo_no2prediction_space(self.mcl_id2prediction_space)	#07-25-05 discard this step
 		go_no2lm_results = self.lm_fit(self.lm_instance, self.go_no2prediction_space, self.bit_string)
 		self.lm_results_output(sys.stdout, go_no2lm_results)
 		go_no2lm_results = self.get_score_cut_off(self.go_no2prediction_space, go_no2lm_results, self.accuracy_cut_off, self.percentage)
