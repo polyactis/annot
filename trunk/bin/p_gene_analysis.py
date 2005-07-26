@@ -7,8 +7,8 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	cluster_stat(default)
-	-m ..., --mcl_table=...	mcl_result(default), mcl_result table corresponding to above table.
+	-t ..., --table=...	splat_result(default), get the connectivity
+	-m ..., --mcl_table=...	mcl_result(default), (IGNORE)
 	-g ..., --gene_table=...	table to store the stat results, p_gene(default), needed if commit
 	-l ,,,, --lm_table=...	the lm_table to store the linear_model results, needed if needcommit
 	-n ..., --gene_p_table=...	the table to store p_gene_id:p_value_cut_off, which are real predictions
@@ -25,18 +25,18 @@ Option:
 
 Examples:
 	#Use the p_value_cut_off
-		p_gene_analysis.py -k sc_54 -g p_gene_e5 -p 0.001 stat_table
-		p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table -n gene_p
+	p_gene_analysis.py -k sc_54 -g p_gene_e5 -p 0.001 stat_table
+	p_gene_analysis.py -k sc_54 -p 0.01 -c -j 2  -g p_gene_cluster_stat2 stat_table -n gene_p
 	
 	
 	#Don't use p_value_cut_off, get the linear model from table lm_p_gene_repos_2_e5_v40
-		p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5
-			-l lm_p_gene_repos_2_e5_v40 stat_table
+	p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5 -t splat_repos_2_e5
+		-l lm_p_gene_repos_2_e5_v40 stat_table
 	
 	#Don't use p_value_cut_off, get the linear model from table lm_p_gene_repos_2_e5_v40
 	#commit the changes to table gene_p_repos_2_e5.
-		p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5 -c -n gene_p_repos_2_e5
-			-l lm_p_gene_repos_2_e5_v40 stat_table
+	p_gene_analysis.py -k sc_54 -p 0 -j 1 -g p_gene_repos_2_e5 -c -n gene_p_repos_2_e5
+		-t splat_repos_2_e5 -l lm_p_gene_repos_2_e5_v40 stat_table
 
 Description:
 	02-28-05
@@ -233,7 +233,7 @@ class p_gene_analysis:
 		
 
 
-	def data_fetch(self, curs, gene_table):
+	def data_fetch(self, curs, gene_table, table):
 		"""
 		02-21-05
 			--_p_gene_analysis()
@@ -241,9 +241,10 @@ class p_gene_analysis:
 			add cluster_size_cut_off in fetch
 		"""
 		sys.stderr.write("Setting up prediction_space and prediction_pair...\n")
-		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, mcl_id, %s, avg_p_value, \
-			recurrence_cut_off,connectivity_cut_off, depth_cut_off,p_gene_id, cluster_size_cut_off from %s"\
-			%(self.is_correct_dict[self.judger_type], gene_table))
+		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.p_gene_id, p.cluster_size_cut_off \
+			from %s p, %s s where p.mcl_id=s.splat_id"\
+			%(self.is_correct_dict[self.judger_type], gene_table, table))
 		
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -689,11 +690,14 @@ class p_gene_analysis:
 			if self.lm_table:
 				self.go_no2lm_results, lm_results_2d_list = self.get_go_no2lm_results(curs, self.lm_table)
 				self.general_lm_results = self.get_general_lm_results(lm_results_2d_list)
+				if self.debug:
+					print "go_no2lm_results: ",self.go_no2lm_results
+					print "general_lm_results: ",self.general_lm_results
 			else:
 				sys.stderr.write("p_value_cut_off==0, need the lm_table to get the linear model\n")
 				sys.exit(127)
 		
-		self.data_fetch(curs, self.gene_table)
+		self.data_fetch(curs, self.gene_table, self.table)
 		if self.stat_table_fname:
 			self.overview_stats(self.stat_table_f)
 			self.go_no_accuracy(self.prediction_pair2attr, self.stat_table_f, curs)
@@ -728,7 +732,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
-	table = 'cluster_stat'
+	table = 'splat_result'
 	mcl_table = 'mcl_result'
 	p_value_cut_off = None
 	judger_type = 0
