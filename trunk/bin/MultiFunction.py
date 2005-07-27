@@ -12,7 +12,7 @@ Option:
 	-p ..., --prefix=...	the output filename prefix, MultiFunction(default)
 	
 	-r, --report	report flag
-	-b, --debug debug flag
+	-u, --debug debug flag
 	-h, --help              show this help
 
 Examples:
@@ -24,7 +24,7 @@ Description:
 
 import sys, os, psycopg, getopt, csv, math
 from sets import Set
-from codense.common import db_connect, get_gene_no2id, get_go_id2name, get_go_term_id2depth, get_go_id2term_id
+from codense.common import db_connect, get_gene_no2id, get_go_id2name, get_go_term_id2depth, get_go_id2term_id, dict_map
 
 def gene_no2go_id_set_from_gene_p_table(input_fname, hostname='zhoudb', dbname='graphdb', schema='sc_new_38'):
 	"""
@@ -70,6 +70,10 @@ class MultiFunction:
 		self.prefix = prefix
 		self.report = int(report)
 		self.debug = int(debug)
+		
+		self.distance_table = 'go.node_dist'
+		self.go_id2distance = {}
+		self.depth_cut_off = 5
 	
 	def fetch_predicted_function(self, schema_list, netmine_fname_list):
 		"""
@@ -88,7 +92,7 @@ class MultiFunction:
 		sys.stderr.write("Done.\n")
 		return (gene_no2go_id_set_list, go_id_set_list)
 	
-	def output(self, gene_no2go_id_set_list, go_id_set_list, support, prefix, gene_no2id, go_id2name, schema_list):
+	def output(self, curs, gene_no2go_id_set_list, go_id_set_list, support, prefix, gene_no2id, go_id2name, schema_list):
 		"""
 		07-06-05
 		"""
@@ -100,7 +104,7 @@ class MultiFunction:
 		for i in range(len(gene_no2go_id_set_list)):
 			total_gene_no_set |= Set(gene_no2go_id_set_list[i].keys())
 			total_go_id_set |= go_id_set_list[i]
-		
+		print "the total number of genes is ",len(total_gene_no_set)
 		gene_ofname = '%s.gene'%prefix
 		function_ofname = '%s.function'%prefix
 		gene_writer = csv.writer(open(gene_ofname,'w'), delimiter='\t')
@@ -111,20 +115,28 @@ class MultiFunction:
 		from gene_p_map_redundancy import gene_p_map_redundancy
 		node_distance_class = gene_p_map_redundancy()
 		
+		go_id2term_id = get_go_id2term_id(curs)
+		go_term_id2depth = get_go_term_id2depth(curs)
+		
 		#output the gene-oriented information
 		for gene_no in total_gene_no_set:
 			freq = 0
+			p_go_id_set_list = []
 			for i in range(len(gene_no2go_id_set_list)):
 				if gene_no in gene_no2go_id_set_list[i]:
+					p_go_id_set_list.append(gene_no2go_id_set_list[i][gene_no])
 					freq += 1
 			if freq == support:
-				row = [gene_no2id[gene_no]]
-				for i in range(len(gene_no2go_id_set_list)):
-					if gene_no in gene_no2go_id_set_list[i]:
-						row.append(';'.join(gene_no2go_id_set_list[i][gene_no]))
-					else:
-						row.append('')
-				gene_writer.writerow(row)
+				if self.p_go_id_set_list_distinct(curs, p_go_id_set_list, node_distance_class, go_term_id2depth, go_id2term_id):
+					row = [gene_no2id[gene_no]]
+					for i in range(len(gene_no2go_id_set_list)):
+						if gene_no in gene_no2go_id_set_list[i]:
+							go_id_set = gene_no2go_id_set_list[i][gene_no]
+							go_name_list = dict_map(go_id2name, go_id_set)
+							row.append(';'.join(go_name_list))
+						else:
+							row.append('')
+					gene_writer.writerow(row)
 		
 		#output the function_oriented information
 		for go_id in total_go_id_set:
@@ -144,22 +156,58 @@ class MultiFunction:
 		
 		sys.stderr.write("Done.\n")
 	
+	def p_go_id_set_list_distinct(self, curs, p_go_id_set_list, node_distance_class, go_term_id2depth, go_id2term_id):
+		"""
+		07-08-05
+			if the depth of common ancestor is above depth_cut_off(5), it's good
+		"""
+		return_code = 0
+		for i in range(len(p_go_id_set_list)):
+			for j in range(i+1, len(p_go_id_set_list)):
+				for go_id1 in p_go_id_set_list[i]:
+					for go_id2 in p_go_id_set_list[j]:
+						if go_id1 == go_id2:
+							continue
+						elif go_id1<go_id2:
+							key = (go_id1, go_id2)
+						elif go_id1 > go_id2:
+							key = (go_id2, go_id1)
+						if key not in self.go_id2distance:
+							node_distance_class.get_distance(curs, go_id1, go_id2, self.distance_table, \
+								self.go_id2distance, go_id2term_id)
+						for ancestor in self.go_id2distance[key][3]:
+							depth = go_term_id2depth[ancestor]
+							if depth < self.depth_cut_off:
+								return_code = 1
+								break
+		if len(p_go_id_set_list)==1:
+			return_code = 1
+		return return_code
+	
 	def run(self):
 		"""
 		07-07-05
+		
+			--db_connect()
+			--get_gene_no2id()
+			--get_go_id2name()
+			--fetch_predicted_function()
+				--gene_no2go_id_set_from_gene_p_table()
+			--output()
+				--p_go_id_set_list_distinct()
 		"""
 		conn, curs  = db_connect(hostname, dbname)
 		gene_no2id = get_gene_no2id(curs)
 		go_id2name =get_go_id2name(curs)
 		gene_no2go_id_set_list, go_id_set_list = self.fetch_predicted_function(self.schema_list,self.netmine_fname_list)
-		self.output(gene_no2go_id_set_list,go_id_set_list, support, prefix, gene_no2id, go_id2name, self.schema_list)
+		self.output(curs, gene_no2go_id_set_list,go_id_set_list, support, prefix, gene_no2id, go_id2name, self.schema_list)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:ocru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:s:p:ru", ["help", "hostname=", \
 			"dbname=", "schema=", "netmine_fname=","support=", "prefix=", \
 			"report", "debug"])
 	except:
