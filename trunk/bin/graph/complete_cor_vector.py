@@ -245,6 +245,8 @@ class complete_cor_vector:
 		"""
 		06-30-05
 			add corCut_list and file_index, used to overwrite the internal cutoff of graph_modeling
+		08-01-05
+			fix an important bug, if corCut_list is present, first rule out edge_data.value ==1.1
 		"""
 		of = open(output_file, 'w')
 		sf = open(significance_file, 'w')
@@ -256,7 +258,7 @@ class complete_cor_vector:
 			#get the integer part of the float*1000
 			of.write("%s\n"%(int(math.modf(edge_data.value*1000)[1]) ) )
 			if corCut_list:	#06-30-05	if corCut_list, overwrite the significance flag
-				sf.write("%s\n"%int(edge_data.value>=corCut_list[file_index]))
+				sf.write("%s\n"%int(edge_data.value<=1.0 and edge_data.value>=corCut_list[file_index]))	#08-01-05, here's the bug
 			else:
 				sf.write("%s\n"%(edge_data.significance))
 		sf.close()
