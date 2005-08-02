@@ -34,7 +34,7 @@ def gene_no2go_id_set_from_gene_p_table(input_fname, hostname='zhoudb', dbname='
 	from sets import Set
 	gene_no2go_id_set = {}
 	p_gene_table = "p_gene_%s_e5"%input_fname
-	gene_p_table = "gene_p_%s_e5_p01"%input_fname
+	gene_p_table = "gene_p_%s_e5_a60"%input_fname
 	from codense.common import db_connect
 	import psycopg
 	conn, curs = db_connect(hostname, dbname, schema)
