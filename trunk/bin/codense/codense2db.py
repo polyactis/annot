@@ -15,7 +15,7 @@ Option:
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
-	-l ..., --delimiter=...	the delimiter for the DATAFILE, \t (default), fim_parser's delimiter is ' '
+	-l ..., --delimiter=...	the delimiter for the DATAFILE, \t (default)
 	-b, --debug	debug version.
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
@@ -283,49 +283,45 @@ class codense2db:
 			In the inputfile for the fim_closed, each graph is a transaction.
 			Output is something like: 903287 1137261 1362282 599351 172751 (5)
 				903287... is edge id; 5 means these edges co-occur in 5 graphs.
+		08-07-05
+			modify to accomodate the 2nd fim running type, edge is a transaction
+			Output format (vertex_set (tab) ge_set):	[110749, 218977]        [[110749, 218977]]
 		"""
 		
 		cluster_list = []
-		cf_instance = cc_from_edge_list()
 		curs = argument2
 		cluster = cluster_dstructure()
-		if len(row) == 1:	#the first line is only one entry, which is the number of clusters in total
+
+		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
+		cluster.cluster_id = self.cluster_no
+		self.cluster_no += 1
+		#initialize two sets
+		cluster.vertex_set = row[0][1:-1].split(',')
+		cluster.vertex_set = map(int, cluster.vertex_set)
+		if len(cluster.vertex_set)<self.min_cluster_size:	#pre-stop
 			return cluster_list
-		edge_id_list = row[:-1]
-		edge_id_list = map(int, edge_id_list)
+		cluster.vertex_set.sort()
+
+		cluster.edge_set = row[1][2:-2].split('], [')
+		for i in range(len(cluster.edge_set)):
+			cluster.edge_set[i] = cluster.edge_set[i].split(',')
+			cluster.edge_set[i] = map(int, cluster.edge_set[i])
+			cluster.edge_set[i].sort()
+		cluster.edge_set.sort()
 		
-		edge_list = self.get_edge_list_given_edge_id_list(curs, edge_id_list)
-		cf_instance.run(edge_list)
-		cc_list = cf_instance.cc_list
+		cluster.no_of_edges = len(cluster.edge_set)
+		no_of_nodes = len(cluster.vertex_set)
+		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+		(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
+		cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
+		cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
 		if self.debug:
-			print "edge_list: ",edge_list
-			print "cc_list: ", cc_list
-		for cc_edge_list in cc_list:
-			cluster = cluster_dstructure()
-			cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
-			cluster.cluster_id = self.cluster_no
-			self.cluster_no += 1
-			#initialize two sets
-			cluster.vertex_set = self.vertex_set_from_cc_edge_list(cc_edge_list)
-			cluster.vertex_set.sort()
-			
-			cc_edge_list = map(list, cc_edge_list)	#change the tuple type to list
-			for i in range(len(cc_edge_list)):
-				cc_edge_list[i].sort()	#sort it
-				
-			cluster.edge_set = cc_edge_list
-			cluster.no_of_edges = len(cluster.edge_set)
-			no_of_nodes = len(cluster.vertex_set)
-			cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
-			(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
-			cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
-			cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
-			if self.debug:
-				print "cluster vertex_set: %s", cluster.vertex_set
-				print "cluster edge_set: %s", cluster.edge_set
-				print "cluster splat_connectivity: %s", cluster.splat_connectivity
-				print "cluster recurrence_array: %s", cluster.recurrence_array
-			cluster_list.append(cluster)
+			print "cluster vertex_set: ", cluster.vertex_set
+			print "cluster edge_set: ", cluster.edge_set
+			print "cluster splat_connectivity: ", cluster.splat_connectivity
+			print "cluster recurrence_array: ", cluster.recurrence_array
+			raw_input("Continue?(Y/n)")
+		cluster_list.append(cluster)
 			
 		self.cooccurrent_cluster_id += 1
 		return cluster_list
@@ -333,6 +329,9 @@ class codense2db:
 	def get_edge_list_given_edge_id_list(self, curs, edge_id_list, edge_table='edge_cor_vector'):
 		"""
 		08-03-05
+		
+		08-07-05
+			defunct (fim_parser() doesn't use it anymore)
 		"""
 		edge_list = []
 		for edge_id in edge_id_list:
