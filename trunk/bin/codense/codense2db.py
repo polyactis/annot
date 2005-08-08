@@ -13,8 +13,9 @@ Option:
 		(02-19-05)if not given, regard the input graph uses gene_no instead of haiyan's index
 	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
-	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense)
+	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
+	-l ..., --delimiter=...	the delimiter for the DATAFILE, \t (default), fim_parser's delimiter is ' '
 	-b, --debug	debug version.
 	-c, --commit	commit this database transaction
 	-r, --report	report the progress(a number)
@@ -37,11 +38,12 @@ import sys, os, psycopg, getopt, csv, numarray, re
 from common import *
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	graph is visible in upper directory
 from graph import graph_modeling
+from graph.cc_from_edge_list import cc_from_edge_list
 
 class cluster_dstructure:
 	def __init__(self):
 		self.cluster_id = None
-		self.vertex_set = None
+		self.vertex_set = []
 		#string form is for database submission, USELESS
 		self.vertex_set_string = None
 		self.edge_set = None
@@ -67,7 +69,7 @@ class codense2db:
 	'''
 	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, \
 			table=None, mcl_table=None, mapping_file=None, cor_cut_off=0,\
-			parser_type=1, min_cluster_size=5, debug=0, needcommit=0, report=0):
+			parser_type=1, min_cluster_size=5, delimiter='\t', debug=0, needcommit=0, report=0):
 		"""
 		02-25-05
 			modify the interface of the class and 2 member functions(get_combined_cor_vector, parse_recurrence)
@@ -83,15 +85,18 @@ class codense2db:
 		self.cor_cut_off = float(cor_cut_off)
 		self.parser_type = int(parser_type)
 		self.min_cluster_size = int(min_cluster_size)
+		self.delimiter = delimiter
 		self.debug = int(debug)
 		self.needcommit = int(needcommit)
 		self.report = int(report)
 	
 		self.parser_dict = {1:self.copath_parser,
-			2: self.codense_parser}
+			2: self.codense_parser,
+			3: self.fim_parser}
 		
 		self.cluster_no = 0
-		#used to find the cooccurrent_cluster_id, like '6.6.9', cooccurrent_cluster_id is '6.6'
+		self.cooccurrent_cluster_id = 0
+		#used to find the cooccurrent_cluster_id, like '6.6.9', cooccurrent_cluster_id is '6.6'(copath_parser)
 		self.p_cooccurrent_cluster_id = re.compile(r'\d+\.\d+')
 	
 	def copath_parser(self, row, argument=None, argument2=None):
@@ -107,6 +112,8 @@ class codense2db:
 			--parse_connectivity
 		04-11-05
 			process the cooccurrent_cluster_id from haiyan's new output format.
+		08-03-05
+			return a list
 		"""
 		haiyan_no2gene_no = argument
 		curs = argument2
@@ -139,7 +146,7 @@ class codense2db:
 		cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
 		cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
 		self.cluster_no+=1
-		return cluster
+		return [cluster]
 	
 	def get_combined_cor_vector(self, curs, edge_set, edge_table='edge_cor_vector'):
 		"""
@@ -248,6 +255,8 @@ class codense2db:
 		03-18-05
 			previous codense results were processed by haiyan's
 			program. Modify to parse real codense results.
+		08-03-05
+			return list
 		"""
 		gene_id2gene_no = argument
 		cluster = cluster_dstructure()
@@ -266,8 +275,88 @@ class codense2db:
 		cluster.edge_set = [[1,1]]	#dummy edge
 		cluster.recurrence_array = [1]	#dummy recurrence
 		
-		return cluster
+		return [cluster]
 	
+	def fim_parser(self, row, argument=None, argument2=None):
+		"""
+		08-03-05
+			In the inputfile for the fim_closed, each graph is a transaction.
+			Output is something like: 903287 1137261 1362282 599351 172751 (5)
+				903287... is edge id; 5 means these edges co-occur in 5 graphs.
+		"""
+		
+		cluster_list = []
+		cf_instance = cc_from_edge_list()
+		curs = argument2
+		cluster = cluster_dstructure()
+		if len(row) == 1:	#the first line is only one entry, which is the number of clusters in total
+			return cluster_list
+		edge_id_list = row[:-1]
+		edge_id_list = map(int, edge_id_list)
+		
+		edge_list = self.get_edge_list_given_edge_id_list(curs, edge_id_list)
+		cf_instance.run(edge_list)
+		cc_list = cf_instance.cc_list
+		if self.debug:
+			print "edge_list: ",edge_list
+			print "cc_list: ", cc_list
+		for cc_edge_list in cc_list:
+			cluster = cluster_dstructure()
+			cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
+			cluster.cluster_id = self.cluster_no
+			self.cluster_no += 1
+			#initialize two sets
+			cluster.vertex_set = self.vertex_set_from_cc_edge_list(cc_edge_list)
+			cluster.vertex_set.sort()
+			
+			cc_edge_list = map(list, cc_edge_list)	#change the tuple type to list
+			for i in range(len(cc_edge_list)):
+				cc_edge_list[i].sort()	#sort it
+				
+			cluster.edge_set = cc_edge_list
+			cluster.no_of_edges = len(cluster.edge_set)
+			no_of_nodes = len(cluster.vertex_set)
+			cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+			(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
+			cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
+			cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
+			if self.debug:
+				print "cluster vertex_set: %s", cluster.vertex_set
+				print "cluster edge_set: %s", cluster.edge_set
+				print "cluster splat_connectivity: %s", cluster.splat_connectivity
+				print "cluster recurrence_array: %s", cluster.recurrence_array
+			cluster_list.append(cluster)
+			
+		self.cooccurrent_cluster_id += 1
+		return cluster_list
+	
+	def get_edge_list_given_edge_id_list(self, curs, edge_id_list, edge_table='edge_cor_vector'):
+		"""
+		08-03-05
+		"""
+		edge_list = []
+		for edge_id in edge_id_list:
+			curs.execute("select edge_name from %s where edge_id=%s"%(edge_table,edge_id))
+			rows = curs.fetchall()
+			if len(rows) == 0:
+				sys.stderr.write('%s not found in %s\n'%(edge_id, edge_table))
+				sys.exit(1)
+			edge = rows[0][0][1:-1].split(',')
+			edge = map(int, edge)
+			edge_list.append(edge)
+		return edge_list
+	
+	def vertex_set_from_cc_edge_list(self, cc_edge_list):
+		"""
+		08-03-05
+			copied fro CcFromBiclusteringOutput.py
+		"""
+		vertex_set = Set()
+		for edge in cc_edge_list:
+			vertex_set.add(edge[0])
+			vertex_set.add(edge[1])
+		return list(vertex_set)
+		
 	def create_tables(self, curs, table, mcl_table):
 		"""
 		04-11-05
@@ -340,7 +429,7 @@ class codense2db:
 			--db_submit()
 		"""
 		
-		inf = csv.reader(open(self.infname, 'r'), delimiter='\t')
+		inf = csv.reader(open(self.infname, 'r'), delimiter=self.delimiter)
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
 		
 		#setup the haiyan_no2gene_no
@@ -350,7 +439,8 @@ class codense2db:
 			haiyan_no2gene_no = {}	#a blank dictionary, 
 		gene_id2gene_no = get_gene_id2gene_no(curs)
 		mapping_dict = {1:haiyan_no2gene_no,
-			2:haiyan_no2gene_no}
+			2:haiyan_no2gene_no,
+			3:None}
 		self.create_tables(curs, self.table, self.mcl_table)
 		no = 0
 		
@@ -358,14 +448,15 @@ class codense2db:
 			#graph_modeling.ind_min_cor() requires the cor_cut_off vector to be constructed ahead.
 		graph_modeling.set_jk_cut_off(6)	#07-03-05 haiyan's cutoff is 6, different from my default value, 7.
 		for row in inf:
-			cluster = self.parser_dict[self.parser_type](row, mapping_dict[self.parser_type], curs)
-			if len(cluster.vertex_set)<self.min_cluster_size:
-				#too small, ignore
-				continue
-			self.db_submit(curs, cluster, self.table, self.mcl_table)
-			no+=1
-			if self.report and no%1000==0:
-				sys.stderr.write('%s%d'%('\x08'*20, no))
+			cluster_list = self.parser_dict[self.parser_type](row, mapping_dict[self.parser_type], curs)
+			for cluster in cluster_list:
+				if len(cluster.vertex_set)<self.min_cluster_size:
+					#too small, ignore
+					continue
+				self.db_submit(curs, cluster, self.table, self.mcl_table)
+				no+=1
+				if self.report and no%1000==0:
+					sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.report:
 			sys.stderr.write('%s%d'%('\x08'*20, no))
 		if self.needcommit:
@@ -378,9 +469,9 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:bcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:l:bcr", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
-			"parser_type=", "min_cluster_size=", "debug", "commit", "report"])
+			"parser_type=", "min_cluster_size=", "delimiter=", "debug", "commit", "report"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -394,6 +485,7 @@ if __name__ == '__main__':
 	cor_cut_off = 0
 	parser_type = 1
 	min_cluster_size = 5
+	delimiter = '\t'
 	debug = 0
 	commit = 0
 	report = 0
@@ -419,6 +511,8 @@ if __name__ == '__main__':
 			parser_type = int(arg)
 		elif opt in ("-s", "--min_cluster_size"):
 			min_cluster_size = int(arg)
+		elif opt in ("-l", "--delimiter"):
+			delimiter = arg
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-c", "--commit"):
@@ -427,7 +521,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and len(args)==1:
 		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, \
-			cor_cut_off, parser_type, min_cluster_size, debug, commit, report)
+			cor_cut_off, parser_type, min_cluster_size, delimiter, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
