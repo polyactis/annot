@@ -175,7 +175,7 @@ class codense2db:
 			combined_sig_vector.append(sig_vector)
 		return (combined_cor_vector, combined_sig_vector)
 	
-	def parse_recurrence(self, combined_vector, no_of_edges, cor_cut_off=0):
+	def parse_recurrence(self, combined_vector, no_of_edges=0, cor_cut_off=0):
 		"""
 		03-03-05
 			replace the combined_vector with combined_sig_vector
@@ -286,6 +286,9 @@ class codense2db:
 		08-07-05
 			modify to accomodate the 2nd fim running type, edge is a transaction
 			Output format (vertex_set (tab) ge_set):	[110749, 218977]        [[110749, 218977]]
+		08-08-05
+			One procedure to speed up.
+			connectivity = splat_connectivity
 		"""
 		
 		cluster_list = []
@@ -312,9 +315,12 @@ class codense2db:
 		cluster.no_of_edges = len(cluster.edge_set)
 		no_of_nodes = len(cluster.vertex_set)
 		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+		
 		(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
-		cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
+		#cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
+		cluster.connectivity = cluster.splat_connectivity
 		cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
+		
 		if self.debug:
 			print "cluster vertex_set: ", cluster.vertex_set
 			print "cluster edge_set: ", cluster.edge_set
@@ -406,7 +412,17 @@ class codense2db:
 			self.conn.rollback()
 			sys.exit(1)
 		"""
-
+		
+	def get_no_of_datasets(self, curs, edge_table='edge_cor_vector'):
+		"""
+		08-08-05
+			defunct
+		"""
+		curs.execute("select array_upper(sig_vector,1) from %s limit 1"%(edge_table))
+		rows = curs.fetchall()
+		no_of_datasets = int(rows[0][0])
+		return no_of_datasets
+		
 	def run(self):
 		"""
 		03-18-05
@@ -415,7 +431,7 @@ class codense2db:
 			use min_cluster_size to cut off some small clusters
 		07-03-05
 			construct graph_modeling's cor_cut_off vector first
-		
+			
 			--db_connect()
 			--get_haiyan_no2gene_no()
 			--get_gene_id2gene_no()
