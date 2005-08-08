@@ -84,7 +84,9 @@ class GuiAnalyzer:
 			73:self.dataset_liststore_73,
 			74:self.dataset_liststore_74,
 			79:self.dataset_liststore_79,
-			80:self.dataset_liststore_80}
+			80:self.dataset_liststore_80,
+			100:self.dataset_liststore_100,
+			101:self.dataset_liststore_101}
 		
 		
 	def dataset_liststore_54(self):
@@ -173,9 +175,41 @@ class GuiAnalyzer:
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str,str, str,str,str,str,str,\
 			str,str,str,str,str, str,str,str,str,str,\
-			str,str,str,str,str, str,str,str,str,str)	#88 entries
+			str,str,str,str,str, str,str,str,str,str)	#80 entries
 	
-	
+	def dataset_liststore_100(self):
+		"""
+		08-04-05
+		"""
+		return gtk.ListStore(\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str)	#100 entries
+
+	def dataset_liststore_101(self):
+		"""
+		08-04-05
+		"""
+		return gtk.ListStore(\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str,str,str,str,str, str,str,str,str,str,\
+			str)	#101 entries
+
 	"""
 	window_center
 	"""
