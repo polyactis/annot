@@ -202,7 +202,8 @@ class MpiFromDatasetSignatureToPattern:
 							new_row.append(i+1)
 					writer.writerow(new_row)
 				counter +=1
-			sys.stderr.write('%s%s'%('\x08'*20, counter))
+			if self.report:
+				sys.stderr.write('%s%s'%('\x08'*20, counter))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		sys.stderr.write("Done\n")
