@@ -34,11 +34,21 @@ from netmine_wrapper import netmine_wrapper
 from codense.codense2db import codense2db
 from sets import Set
 
+edge2occurrence_vector = {}	#08-09-05	global structure to store the occurrence vectors of edges appearing in the patterns
+
 def patternFormation(offset, parameter_list):
 	"""
 	08-07-05
 		datasetSignatureFname is outputed by fim_closed
 		intermediateFile is outputed by outputEdgeData()
+	08-08-05
+		store the occurrence_vector in edge2occurrence_vector
+		
+		--encodeOccurrence()
+		--encodeOccurrenceBv()
+		--outputCcFromEdgeList()
+			--get_combined_vector()
+			--codense2db_instance.parse_recurrence()
 	"""
 	offset = int(offset)
 	datasetSignatureFname, intermediateFile, outputfile, offset_list, no_cc, debug = parameter_list
@@ -78,7 +88,7 @@ def patternFormation(offset, parameter_list):
 		counter += 1
 		edge = map(int, row[:2])
 		occurrence_vector = map(int, row[2:])
-		occurrenceBinaryForm = encodeOccurrence(occurrence_vector)
+		occurrenceBinaryForm = encodeOccurrenceBv(occurrence_vector)
 		signatureToBeDeleted = []
 		for signature in signature2pattern:
 			if (occurrenceBinaryForm&signature)==signature:
@@ -86,10 +96,16 @@ def patternFormation(offset, parameter_list):
 				if debug:
 					sys.stderr.write("the occurrence_vector of edge %s is %s\n"%(repr(edge), repr(occurrence_vector)))
 					sys.stderr.write("occurrence_vector's binary form is %s, signature is %s\n"%(occurrenceBinaryForm, signature))
-				if len(signature2pattern[signature]) == signature2pattern[signature][0]+1:
+				if len(signature2pattern[signature]) == signature2pattern[signature][0]+1:	#the 1st entry is not edge
 					signatureToBeDeleted.append(signature)
 					if debug:
 						sys.stderr.write("signature %s to be deleted, its pattern is %s\n"%(signature, repr(signature2pattern[signature])))
+				edge_tuple = tuple(edge)
+				if edge_tuple not in edge2occurrence_vector:
+					edge2occurrence_vector[edge_tuple] = [1]
+					edge2occurrence_vector[edge_tuple].append(occurrence_vector)
+				else:
+					edge2occurrence_vector[edge_tuple][0] += 1
 				"""raw_input will stop the paralle program
 				is_continue = raw_input("Continue?(Y/n)")
 				if is_continue=='n':
@@ -109,11 +125,15 @@ def patternFormation(offset, parameter_list):
 def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc):
 	"""
 	08-07-05
+	08-09-05
+		calculate recurrence array for codense2db.py
 	"""
 	if no_cc:
 		vertex_set = codense2db_instance.vertex_set_from_cc_edge_list(edge_list)
 		vertex_set.sort()
-		of.write('%s\t%s\n'%(repr(vertex_set), repr(edge_list) ) )
+		combined_vector = get_combined_vector(edge_list)
+		recurrence_array = codense2db_instance.parse_recurrence(combined_vector)
+		of.write('%s\t%s\t%s\n'%(repr(vertex_set), repr(edge_list), repr(recurrence_array) ) )
 	else:
 		cf_instance = cc_from_edge_list()
 		cf_instance.run(edge_list)
@@ -124,8 +144,25 @@ def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc):
 			cc_edge_list = map(list, cc_edge_list)	#change the tuple type to list
 			for i in range(len(cc_edge_list)):
 				cc_edge_list[i].sort()	#sort it
-			of.write('%s\t%s\n'%(repr(vertex_set), repr(cc_edge_list) ) )
-	
+			combined_vector = get_combined_vector(cc_edge_list)
+			recurrence_array = codense2db_instance.parse_recurrence(combined_vector)
+			of.write('%s\t%s\t%s\n'%(repr(vertex_set), repr(cc_edge_list), repr(recurrence_array) ) )
+
+def get_combined_vector(edge_list):
+	"""
+	08-09-05
+		get combined_vector from global structure: edge2occurrence_vector
+		Reduce the counter of the edge, if the counter == 0, delete it.
+	"""
+	combined_vector = []
+	for edge in edge_list:
+		edge_tuple = tuple(edge)
+		combined_vector.append(edge2occurrence_vector[edge_tuple][1])
+		edge2occurrence_vector[edge_tuple][0] -= 1
+		if edge2occurrence_vector[edge_tuple][0] == 0:
+			del edge2occurrence_vector[edge_tuple]
+	return combined_vector
+
 def encodeOccurrence(ls):
 	"""
 	08-06-05
@@ -135,6 +172,17 @@ def encodeOccurrence(ls):
 	for digit in ls:
 		binary_number += int(math.pow(2, digit-1))	#int() because math.pow() returns float 
 			#IMPORTANT: later makes the binary_number approximate cause it's too large
+	return binary_number
+
+def encodeOccurrenceBv(ls):
+	"""
+	08-06-05
+		encode an occurrence vector to a binary number
+	"""
+	binary_number = 0
+	for i in range(len(ls)):
+		if ls[i] == 1:
+			binary_number += int(math.pow(2, i))
 	return binary_number
 
 def decodeOccurrence(signature):
@@ -179,7 +227,8 @@ class MpiFromDatasetSignatureToPattern:
 		08-06-05
 			Output edge data into an intermediate file to let other nodes to read.
 			(edge pair + occurrence vector)
-			
+		08-08-05
+			output sig_vector directly, not occurrence_vector
 		"""
 		writer = csv.writer(open(outputfile, 'w'), delimiter='\t')
 		sys.stderr.write("Getting edge matrix for all functions...\n")
@@ -196,11 +245,13 @@ class MpiFromDatasetSignatureToPattern:
 				sig_vector = map(int, sig_vector)
 				
 				if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+					"""
 					new_row = edge
 					for i in range(len(sig_vector)):
 						if sig_vector[i]==1:
 							new_row.append(i+1)
-					writer.writerow(new_row)
+					"""
+					writer.writerow(edge+sig_vector)
 				counter +=1
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, counter))
