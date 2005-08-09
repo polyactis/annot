@@ -182,6 +182,8 @@ class codense2db:
 			get a fair recurrence_array(see 'redefine recurrence and connectivity' in log_05)
 		07-03-05
 			combined_vector is already a 2d list.
+		08-09-05
+			replace no_of_edges with x_dimension, no_of_edges defunct
 		"""
 		cor_array = numarray.array(combined_vector)
 		x_dimension, y_dimension = cor_array.shape	#07-03-05	cor_array is 2d array
@@ -192,7 +194,7 @@ class codense2db:
 				edge_cor_in_one_dataset = numarray.greater_equal(cor_array[:,i], cor_cut_off)
 			else:
 				edge_cor_in_one_dataset = cor_array[:,i]
-			recurrence_array.append(sum(edge_cor_in_one_dataset)/float(no_of_edges))
+			recurrence_array.append(sum(edge_cor_in_one_dataset)/float(x_dimension))
 			if self.debug:
 				print edge_cor_in_one_dataset
 				print recurrence_array
@@ -289,22 +291,24 @@ class codense2db:
 		08-08-05
 			One procedure to speed up.
 			connectivity = splat_connectivity
+		08-09-05
+			second procedure to speed up
+			recurrence_array directly got from output of MpiFromDatasetSignatureToPattern.py
 		"""
 		
 		cluster_list = []
 		curs = argument2
 		cluster = cluster_dstructure()
-
-		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
-		cluster.cluster_id = self.cluster_no
-		self.cluster_no += 1
 		#initialize two sets
 		cluster.vertex_set = row[0][1:-1].split(',')
 		cluster.vertex_set = map(int, cluster.vertex_set)
 		if len(cluster.vertex_set)<self.min_cluster_size:	#pre-stop
 			return cluster_list
 		cluster.vertex_set.sort()
-
+		
+		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
+		cluster.cluster_id = self.cluster_no
+		
 		cluster.edge_set = row[1][2:-2].split('], [')
 		for i in range(len(cluster.edge_set)):
 			cluster.edge_set[i] = cluster.edge_set[i].split(',')
@@ -316,10 +320,14 @@ class codense2db:
 		no_of_nodes = len(cluster.vertex_set)
 		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
 		
-		(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
-		#cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
 		cluster.connectivity = cluster.splat_connectivity
+		cluster.recurrence_array = row[2][1:-1].split(',')
+		cluster.recurrence_array = map(float, cluster.recurrence_array)
+		"""
+		(combined_cor_vector, combined_sig_vector) = self.get_combined_cor_vector(curs, cluster.edge_set)
+		cluster.connectivity = self.parse_2nd_connectivity(combined_cor_vector, cluster.no_of_edges, len(cluster.vertex_set))
 		cluster.recurrence_array = self.parse_recurrence(combined_sig_vector, cluster.no_of_edges, self.cor_cut_off)
+		"""
 		
 		if self.debug:
 			print "cluster vertex_set: ", cluster.vertex_set
@@ -329,6 +337,7 @@ class codense2db:
 			raw_input("Continue?(Y/n)")
 		cluster_list.append(cluster)
 			
+		self.cluster_no += 1
 		self.cooccurrent_cluster_id += 1
 		return cluster_list
 	
@@ -431,7 +440,7 @@ class codense2db:
 			use min_cluster_size to cut off some small clusters
 		07-03-05
 			construct graph_modeling's cor_cut_off vector first
-			
+		
 			--db_connect()
 			--get_haiyan_no2gene_no()
 			--get_gene_id2gene_no()
