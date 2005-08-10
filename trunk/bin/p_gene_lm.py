@@ -17,6 +17,7 @@ Option:
 	-j ..., --judger_type=...	how to judge predicted functions, 0(default), 1, 2
 	-b ..., --bit_string=...	the bit_string control which parameter to be counted into regression
 		p_value, recurrence, connectivity, cluster_size, connectivity_2nd;	11111(default)
+	-n, --no_redundancy	use the pair accuracy to find score cutoff
 	-o, --logistic	logistic regression
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
@@ -71,7 +72,7 @@ class p_gene_lm:
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, netmine_fname=None, table=None, splat_table=None,\
 		mcl_table=None, lm_table=None, accuracy_cut_off=0, percentage=0.3, judger_type=0, bit_string='11111', min_data_points=5, \
-		logistic=0, needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
+		no_redundancy=0, logistic=0, needcommit=0, report=0, debug=0, valid_space=20, recurrence_gap_size=2, connectivity_gap_size=2):
 		"""
 		03-08-05
 			add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
@@ -80,6 +81,8 @@ class p_gene_lm:
 			add percentage
 		07-06-05
 			add logistic
+		08-08-05
+			add no_redundancy
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -95,6 +98,7 @@ class p_gene_lm:
 		self.judger_type = int(judger_type)
 		self.bit_string = bit_string
 		self.min_data_points = int(min_data_points)
+		self.no_redundancy = int(no_redundancy)
 		self.logistic = int(logistic)
 		self.needcommit = int(needcommit)
 		self.report = int(report)		
@@ -164,6 +168,8 @@ class p_gene_lm:
 			prediction_space goes to mcl_id2prediction_space
 		07-25-05
 			prediction_space goes back to go_no2prediction_space
+		08-08-05
+			add gene_no and go_no to control accuracy pair
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -195,7 +201,7 @@ class p_gene_lm:
 			p_value = -math.log(1e-8)
 		else:
 			p_value = -math.log(p_value)
-		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, is_correct]
+		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, gene_no, go_no, is_correct]	#add gene_no and go_no to control accuracy pair
 		#if mcl_id not in self.mcl_id2prediction_space:
 		#	self.mcl_id2prediction_space[mcl_id] = []
 		#self.mcl_id2prediction_space[mcl_id].append(unit)
@@ -344,6 +350,8 @@ class p_gene_lm:
 			add percentage
 		07-04-05
 			add connectivity_2nd
+		08-08-05
+			add gene_no and go_no to score_list
 		
 			--return_score_cut_off()
 		"""
@@ -358,7 +366,7 @@ class p_gene_lm:
 				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity + coeff4*cluster_size + coeff5*connectivity_2nd
 				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3] + coeff_list[5]*entry[4]
 				#score, is_correct
-				score_list.append([score, entry[-1]])	#06-30-05	-1 denotes is_correct
+				score_list.append([score, entry[-1], entry[-3], entry[-2]])	#06-30-05	-1 denotes is_correct, 08-08-05 -3,-2 are gene_no,go_no.
 			if accuracy_cut_off==0:
 				score_cut_off = self.return_score_cut_off_by_percentage(score_list, percentage, go_no)
 			else:
@@ -375,6 +383,10 @@ class p_gene_lm:
 	def return_score_cut_off(self, score_list, accuracy_cut_off, go_no):
 		"""
 		03-27-05
+		08-08-05
+			1. use the bicut method to speed up the score_cut_off searching
+			2. judge self.no_redundancy
+				get_pair_accuracy()
 		"""
 		sys.stderr.write("\tReturning score_cut_off for go %d..."%(go_no))
 		#default no score_cut_off
@@ -390,7 +402,37 @@ class p_gene_lm:
 		no_of_known_predictions = len(score_array)
 		if self.debug:
 			print "score\tis_correct_array\ttotal\taccuracy"
-		#calculate the accuracy from the low score cutoff to high score cutoff, once <= accuracy_cut_off, break
+		#08-08-05 	use the bicut method to speed up
+		gap = 1
+		lower = 0
+		upper = len(score_array)
+		list_index = upper/2
+		while gap>0.001:
+			score = score_array[list_index,0]
+			previous_list_index = list_index
+			if self.no_redundancy:	#08-08-05
+				accuracy = self.get_pair_accuracy(score_array[list_index:])
+			else:
+				correct_array = score_array[:,1][list_index:]
+				accuracy = sum(correct_array)/float(len(correct_array))
+				if self.debug:
+					sys.stderr.write("correct_array(%s, length): %s\n"%(len(correct_array), repr(correct_array)))
+			if self.debug:
+				print "list_index: %s; %s\t%s"%(list_index, score, accuracy)
+				raw_input("Continue:(Y/n)?")
+			gap = abs(accuracy-accuracy_cut_off)
+			if accuracy>=accuracy_cut_off:
+				upper = list_index
+				list_index = (list_index + lower)/2
+			else:
+				lower = list_index
+				list_index = (upper + list_index)/2
+			if list_index == previous_list_index:	#convergence failure
+				break
+		
+		score_cut_off = score
+		"""
+		#calculate the accuracy from the low score cutoff to high score cutoff, once >= accuracy_cut_off, break
 		for i in range(len(score_array)):
 			score = score_array[i,0]
 			if score == previous_score:
@@ -399,17 +441,38 @@ class p_gene_lm:
 			else:
 				#this score becomes previous_score for the next score
 				previous_score = score
-				#count the is_correct==1 entries from i-th row, and divide it by (no_of_known_predictions-i+1)
-				correct_array = score_array[:,1][i:]
-				accuracy = sum(correct_array)/float(len(correct_array))
+				if self.no_redundancy:	#08-08-05
+					accuracy = self.get_pair_accuracy(score_array[i:])
+				else:
+					#count the is_correct==1 entries from i-th row, and divide it by (no_of_known_predictions-i+1)
+					correct_array = score_array[:,1][i:]
+					accuracy = sum(correct_array)/float(len(correct_array))
+					if self.debug:
+						sys.stderr.write("correct_array(%s, length): %s\n"%(len(correct_array), repr(correct_array)))
 				if self.debug:
-					print "%s\t%s\t%s\t%s"%(score,repr(correct_array), len(correct_array), accuracy)
+					print "%s\t%s"%(score, accuracy)
 					raw_input("Continue:(Y/n)?")
 				if accuracy >= accuracy_cut_off:
 					score_cut_off = score
 					break
+		"""
 		sys.stderr.write("Done.\n")
 		return score_cut_off
+	
+	def get_pair_accuracy(self, partial_score_array):
+		"""
+		08-08-05
+			get the pair accuracy which is the non-redundant accuracy
+		"""
+		gene_no_go_no2correct = {}
+		for entry in partial_score_array:
+			score, is_correct, gene_no, go_no = entry
+			gene_no_go_no2correct[(gene_no, go_no)] = is_correct
+		accuracy = sum(gene_no_go_no2correct.values())/float(len(gene_no_go_no2correct))
+		if self.debug:
+			sys.stderr.write("No of gene_no:go_no pairs:%s; correct: %s\n"%\
+				(len(gene_no_go_no2correct), sum(gene_no_go_no2correct.values())))
+		return accuracy
 	
 	def return_score_cut_off_by_percentage(self, score_list, percentage, go_no):
 		"""
@@ -499,6 +562,7 @@ class p_gene_lm:
 			--lm_results_output()
 			--get_score_cut_off()
 				--return_score_cut_off()
+					--get_pair_accuracy()
 			--lm_results_output()
 			--submit()
 		
@@ -530,9 +594,10 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:ocru", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:t:s:m:l:a:p:j:b:nocru", ["help", "hostname=", \
 			"dbname=", "schema=", "netmine_fname=", "table=", "splat_table=", "mcl_table=",  "lm_table=", \
-			"accuracy_cut_off=", "percentage=", "judger_type=", "bit_string=", "logistic", "commit", "report", "debug"])
+			"accuracy_cut_off=", "percentage=", "judger_type=", "bit_string=", "no_redundancy", \
+			"logistic", "commit", "report", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -549,6 +614,7 @@ if __name__ == '__main__':
 	percentage = 0.3
 	judger_type = 0
 	bit_string = '11111'
+	no_redundancy = 0
 	logistic = 0
 	commit = 0
 	report = 0
@@ -587,6 +653,8 @@ if __name__ == '__main__':
 			judger_type = int(arg)
 		elif opt in ("-b", "--bit_string"):
 			bit_string = arg
+		elif opt in ("-n", "--no_redundancy"):
+			no_redundancy = 1
 		elif opt in ("-o", "--logistic"):
 			logistic = 1
 		elif opt in ("-c", "--commit"):
@@ -605,7 +673,7 @@ if __name__ == '__main__':
 	if schema and table and splat_table and mcl_table:
 		instance = p_gene_lm(hostname, dbname, schema, netmine_fname, table, splat_table, \
 			mcl_table, lm_table, accuracy_cut_off, percentage, judger_type, bit_string, min_data_points, \
-			logistic, commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
+			no_redundancy, logistic, commit, report, debug, valid_space, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
