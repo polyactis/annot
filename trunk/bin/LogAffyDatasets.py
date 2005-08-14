@@ -7,7 +7,8 @@ Option:
 	-o ... --outputdir=...,	directory containing output files
 	-d ... --delimiter=...,	delimiter character used to seperate columns, \t(default)
 	-s ... --threshold=...,	std/mean threshold
-	-l, --log	apply log transform
+	-y ... --type=...,	geo(1,default), or smd(2)
+	-l, --log	apply log transform (IGNORE)
 	-u, --debug	enable debugging
 	-h, --help              show this help
 	
@@ -24,19 +25,26 @@ from MA import array
 from Preprocess import PreprocessEdgeData
 
 class LogAffyDatasets:
-	def __init__(self, file_list, outputdir, delimiter, threshold, log=0, debug=0):
+	def __init__(self, file_list, outputdir, delimiter, threshold, type=1, log=0, debug=0):
 		""" 
 		07-31-05
+		08-09-05
+			add type
 		"""
 		self.files = file_list
 		self.files.sort()
 		self.outputdir = outputdir
 		self.delimiter = delimiter
 		self.threshold = float(threshold)
+		self.type = int(type)
 		self.log = int(log)
 		self.debug = int(debug)
 
-	def transform_one_file(self, src_pathname, delimiter, outputdir, b_instance, threshold, log):
+	def transform_one_file(self, src_pathname, delimiter, outputdir, b_instance, threshold, type):
+		"""
+		08-09-05
+			add type
+		"""
 		reader = csv.reader(file(src_pathname), delimiter=delimiter)
 		filename = os.path.basename(src_pathname)
 		output_filename = os.path.join(outputdir, filename)
@@ -54,9 +62,9 @@ class LogAffyDatasets:
 					continue
 				else:
 					value = float(row[i])
-					if value<=10:
-						value = 10
-					if log:
+					if type==1:
+						if value<=10:
+							value = 10
 						value = math.log(value, 2)
 					new_row.append(value)
 					mask_ls.append(0)
@@ -66,7 +74,13 @@ class LogAffyDatasets:
 				print "Its mask is ", ma_array.mask()
 			if len(ma_array.compressed())>1:	#at least two samples, otherwise, correlation can't be calculated
 				std = MLab.std(ma_array.compressed())	#disregard the NAs
-				ratio = std/MLab.mean(ma_array.compressed())
+				if type==1:
+					ratio = std/MLab.mean(ma_array.compressed())
+				elif type==2:
+					ratio = std
+				else:
+					sys.stderr.write("type %s not supported\n"%type)
+					sys.exit(2)
 				if self.debug:
 					print "std is ",std
 					print "ratio is ", ratio
@@ -85,7 +99,7 @@ class LogAffyDatasets:
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
 		for f in self.files:
 			sys.stderr.write("%d/%d:\t%s"%(self.files.index(f)+1,len(self.files),f))
-			self.transform_one_file(f, self.delimiter, self.outputdir, b_instance, self.threshold, self.log)
+			self.transform_one_file(f, self.delimiter, self.outputdir, b_instance, self.threshold, self.type)
 			sys.stderr.write("\n")
 
 
@@ -95,7 +109,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "ho:d:s:lu", ["help", "outputdir=", "delimiter=", "threshold=", "log", "debug"])
+		opts, args = getopt.getopt(sys.argv[1:], "ho:d:s:y:lu", ["help", "outputdir=", "delimiter=", "threshold=", "type=", "log", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -103,6 +117,7 @@ if __name__ == '__main__':
 	delimiter = '\t'
 	outputdir = None
 	threshold = 1.0
+	type = 1
 	log = 0
 	debug = 0
 	
@@ -116,13 +131,15 @@ if __name__ == '__main__':
 			delimiter = arg
 		elif opt in ("-s", "--threshold"):
 			threshold = float(arg)
+		elif opt in ("-y", "--type"):
+			type = int(arg)
 		elif opt in ("-l", "--log"):
 			log = 1
 		elif opt in ("-u", "--debug"):
 			debug = 1
 			
 	if len(args)>=1:
-		instance = LogAffyDatasets(args, outputdir, delimiter, threshold, log, debug)
+		instance = LogAffyDatasets(args, outputdir, delimiter, threshold, type, log, debug)
 		instance.run()
 	else:
 		print __doc__
