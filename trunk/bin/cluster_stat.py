@@ -13,7 +13,7 @@ Option:
 	-p ..., --output=...	specifiy the filename to output the cluster stat results
 	-u ..., --uniformity=...	the percentage of associated-genes over total known genes, 0.5(default)
 	-n ..., --min_node_size=...	the minimum size of a function node, 0(default)
-	-e ..., --max_node_depth=...	the maximum node depth, 15(default)
+	-e ..., --min_node_depth=...	the minimum node depth, 5(default)
 	-b, --bonferroni	bonferroni correction
 	-w, --wu	apply Wu's strategy(Default is Jasmine's strategy)
 	-c, --commit	commit the database transaction
@@ -45,6 +45,7 @@ Description:
 	The above difference is never true(08/23/04). Modified Jasmine's strategy is
 	quite similar to Wu's strategy. If you call gene_stat.py after this version of
 	cluster_stat.py, add the -w parameter to gene_stat.py
+	08-13-05	database table commit is not supported anymore.
 """
 
 import sys,os,psycopg,pickle,getopt
@@ -54,7 +55,7 @@ from sets import Set
 class cluster_stat:
 	def __init__(self, hostname, dbname, schema, source_table, target_table, offset, limit, \
 		output, bonferroni=0, report=0, log=0, wu=0, needcommit=0, uniformity=0.5, \
-		min_node_size=0, max_node_depth=15):
+		min_node_size=0, min_node_depth=15):
 		"""
 		04-18-05
 			add parameter uniformity
@@ -78,7 +79,7 @@ class cluster_stat:
 		self.needcommit = int(needcommit)
 		self.uniformity = float(uniformity)
 		self.min_node_size = int(min_node_size)	#06-11-05
-		self.max_node_depth = int(max_node_depth)	#06-11-05
+		self.min_node_depth = int(min_node_depth)	#06-11-05
 		
 		self.global_go_id_to_no_dict = {}
 		self.global_go_no_to_size_dict = {}
@@ -118,48 +119,7 @@ class cluster_stat:
 			self.known_genes_dict[row[0]] = Set()
 			for go_no in go_functions_list:
 				self.known_genes_dict[row[0]].add(int(go_no))
-		
-	def run(self):
-		if self.output and self.needcommit:
-			sys.stderr.write("output and needcommit are two incompatible options.\n")
-			sys.exit(2)
-	
-		if self.target_table != 'cluster_stat' and self.output == None:
-			try:
-				#03-18-05 cluster_stat_id is changed to be an integer, because the the name of xxx_cluster_stat_id_seq has limited length and got collisions.
-				self.curs.execute("create table %s(\
-					cluster_stat_id	integer,\
-					mcl_id	integer,\
-					leave_one_out	integer,\
-					p_value_vector	float[],\
-					connectivity	float)"%self.target_table)
-			except:
-				sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
-		self.curs.execute("begin")
-		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s order by mcl_id offset %s limit %s"%\
-			(self.source_table, self.offset, self.limit))
-		self.curs.execute("fetch 5000 from crs")
-		rows = self.curs.fetchall()
-		while rows:
-			for row in rows:
-				mcl_id = row[0]
-				vertex_set = row[1]
-				connectivity = row[2]
-				self._cluster_stat(mcl_id, vertex_set, connectivity)
-				
-			if self.report:
-				sys.stderr.write("%s%s"%("\x08"*20,self.no_of_records))
-			self.curs.execute("fetch 5000 from crs")
-			rows = self.curs.fetchall()
-		if self.needcommit:
-			self.curs.execute("create index %s_connectivity_idx on %s(connectivity)"%(self.target_table, self.target_table))
-			self.curs.execute("create index %s_mcl_id_idx on %s(mcl_id)"%(self.target_table, self.target_table))
-			self.curs.execute("end")
-			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
-		else:
-			self.conn.rollback()
-			sys.stderr.write('\n\tNo real updates\n')
-		
+
 	def _cluster_stat(self, mcl_id, vertex_set, connectivity):
 		"""
 		04-18-05
@@ -169,6 +129,13 @@ class cluster_stat:
 			2. apart from the percentage, the absolute number is also needed in case the cluster is too small.
 		04-19-05
 			fix a bug. self._no_of_known_genes_of_the_cluster could be 0.
+		08-13-05
+			remove the redundant information in the p_value_vector to save space
+				p_value_vector only keeps (p_value,go_no) pairs with lowest p_value and go_no>=min_node_depth
+			unknown_gene_ratio is split from p_value_vector
+			a bug found, p_value_vector is not grounded after each gene cycle
+			
+			table submit() is not supported anymore
 		"""	
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
@@ -178,14 +145,25 @@ class cluster_stat:
 			#this filter will only be useful when Jasmine's strategy is applied to whole gene-set(unknown included)
 				vertex_list.append(vertex_list_all[i])
 		cluster_size = len(vertex_list)
-		p_value_vector = [1] * self.no_of_functions
 		self.local_go_no_dict_construct(vertex_list)
 		for gene_no in vertex_list_all:
+			p_value_vector = []
 			self.go_no_dict_adjust(gene_no)
+			#for the unknown class, use the ratio instead of p_value, in accordance with mcl_result_stat.py
+			if self.wu:
+				unknown_gene_ratio = self._local_go_no_dict[0]/float(cluster_size)	#08-13-05	unknown_gene_ratio is split from p_value_vector
+			else:
+				#not wu's strategy, throw away the gene, the cluster_size is down by 1.
+				if self._local_go_no_dict.has_key(0):
+					#after leave_one_out, still unknown genes present
+					unknown_gene_ratio = self._local_go_no_dict[0]/float(cluster_size-1)
+				else:
+					#no unknown genes
+					unknown_gene_ratio = 0
 			for go_no in self._local_go_no_dict:
 				if self.global_go_no_to_size_dict[go_no]<self.min_node_size:	#06-11-05
 					continue
-				if self.go_no2depth[go_no]>self.max_node_depth:	#06-11-05
+				if self.go_no2depth[go_no]<self.min_node_depth:	#06-11-05, 08-13-05 max_node_depth changed to min_node_depth
 					continue
 				if self.wu or (gene_no not in self.global_gene_to_go_dict):
 				# code after 'or' deals with the situation that Jasmine's strategy is applied to whole gene-set(unknown included)
@@ -214,26 +192,42 @@ class cluster_stat:
 				if self.log:
 					self.logfile.write('%d %d %d %d %d %d %d %f\n'%\
 						(mcl_id,gene_no,go_no,x,m,n,k,p_value))
-				p_value_vector[go_no] = p_value
-			#for the unknown class, use the ratio instead of p_value, in accordance with mcl_result_stat.py
-			if self.wu:
-				p_value_vector[0] = self._local_go_no_dict[0]/float(cluster_size)
-			else:
-				#not wu's strategy, throw away the gene, the cluster_size is down by 1.
-				if self._local_go_no_dict.has_key(0):
-					#after leave_one_out, still unknown genes present
-					p_value_vector[0] = self._local_go_no_dict[0]/float(cluster_size-1)
-				else:
-					#no unknown genes
-					p_value_vector[0] = 1
+				p_value_vector.append([p_value, go_no])	#08-13-05
+			if len(p_value_vector) == 0:	#08-13-05	no qualified go_no for this gene_no
+				continue
+			p_value_vector = self.retain_min_p_value_pairs(p_value_vector)	#08-13-05	get the pairs with minimum p_value
+			
 			#03-18-05increment before inserted into table, cluster_stat_id starting from 1
 			self.no_of_records += 1
 			if self.output:
-				self.outf.write('%d\t%d\t%s\t%f\n'%(mcl_id, gene_no, repr(p_value_vector), connectivity))
+				self.outf.write('%d\t%d\t%s\t%f\t%f\n'%(mcl_id, gene_no, repr(p_value_vector), connectivity, unknown_gene_ratio))	#08-13-05
 			elif self.needcommit:
 				self.curs.execute("insert into %s(cluster_stat_id, mcl_id, leave_one_out, p_value_vector, connectivity)\
 				values(%d, %d, %d, ARRAY%s, %8.6f)"%(self.target_table, self.no_of_records, mcl_id, gene_no, repr(p_value_vector), connectivity))
 
+	def retain_min_p_value_pairs(self, p_value_vector):
+		"""
+		08-13-05
+			sort the p_value_vector, then only keep the minimum p-value(s)
+		08-14-05
+			fix a bug, when p_value_vector's length is only 1, will return empty list
+		"""
+		p_value_vector.sort()
+		min_p_value = p_value_vector[0][0]
+		for i in range(len(p_value_vector)):
+			if p_value_vector[i][0] > min_p_value:
+				break
+		if self.report:
+			print "sorted p_value_vector is", p_value_vector
+			print "min_p_value :", min_p_value
+			print "i:", i
+			print "selected pairs:", p_value_vector[:i]
+			raw_input("Pause:")
+		if i==0:
+			return [p_value_vector[0]]
+		else:
+			return p_value_vector[:i]	#08-13-05 [:i] doesn't include i.
+		
 	def local_go_no_dict_construct(self, vertex_list):
 		'''
 		construct a local go_no:size dictionary for a specific cluster.
@@ -287,6 +281,58 @@ class cluster_stat:
 				self._local_go_no_dict[0] = 1
 			self._global_go_no_dict[0] += 1
 
+		
+	def run(self):
+		"""
+		
+		--dstruc_loadin()
+		--_cluster_stat()
+			--local_go_no_dict_construct()
+			--go_no_dict_adjust()
+			--retain_min_p_value_pairs()
+		"""
+		self.dstruc_loadin()
+		
+		if self.output and self.needcommit:
+			sys.stderr.write("output and needcommit are two incompatible options.\n")
+			sys.exit(2)
+	
+		if self.target_table != 'cluster_stat' and self.output == None:
+			try:
+				#03-18-05 cluster_stat_id is changed to be an integer, because the the name of xxx_cluster_stat_id_seq has limited length and got collisions.
+				self.curs.execute("create table %s(\
+					cluster_stat_id	integer,\
+					mcl_id	integer,\
+					leave_one_out	integer,\
+					p_value_vector	float[],\
+					connectivity	float)"%self.target_table)
+			except:
+				sys.stderr.write("Error occurred when creating table %s\n"%self.target_table)
+		self.curs.execute("begin")
+		self.curs.execute("DECLARE crs CURSOR FOR select mcl_id,vertex_set,connectivity from %s order by mcl_id offset %s limit %s"%\
+			(self.source_table, self.offset, self.limit))
+		self.curs.execute("fetch 5000 from crs")
+		rows = self.curs.fetchall()
+		while rows:
+			for row in rows:
+				mcl_id = row[0]
+				vertex_set = row[1]
+				connectivity = row[2]
+				self._cluster_stat(mcl_id, vertex_set, connectivity)
+				
+			if self.report:
+				sys.stderr.write("%s%s"%("\x08"*20,self.no_of_records))
+			self.curs.execute("fetch 5000 from crs")
+			rows = self.curs.fetchall()
+		if self.needcommit:
+			self.curs.execute("create index %s_connectivity_idx on %s(connectivity)"%(self.target_table, self.target_table))
+			self.curs.execute("create index %s_mcl_id_idx on %s(mcl_id)"%(self.target_table, self.target_table))
+			self.curs.execute("end")
+			sys.stderr.write('\n\tTotal %d records.\n'%self.no_of_records)
+		else:
+			self.conn.rollback()
+			sys.stderr.write('\n\tNo real updates\n')
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -296,7 +342,7 @@ if __name__ == '__main__':
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], "hrlz:d:k:s:t:o:m:p:u:n:e:bcw", \
 			["help", "report", "log", "hostname=", "dbname=", "schema=", "source_table=", "target_table=", \
-			"offset=", "limit=", "output=", "uniformity=", "min_node_size=", "max_node_depth=",\
+			"offset=", "limit=", "output=", "uniformity=", "min_node_size=", "min_node_depth=",\
 			"bonferroni", "commit", "wu"])
 	except:
 		print __doc__
@@ -312,7 +358,7 @@ if __name__ == '__main__':
 	output = None
 	uniformity = 0.5
 	min_node_size = 0
-	max_node_depth = 15
+	min_node_depth = 5
 	bonferroni = 0
 	commit = 0
 	report = 0
@@ -342,8 +388,8 @@ if __name__ == '__main__':
 			uniformity = float(arg)
 		elif opt in ("-n", "--min_node_size"):
 			min_node_size = int(arg)
-		elif opt in ("-e", "--max_node_depth"):
-			max_node_depth = int(arg)
+		elif opt in ("-e", "--min_node_depth"):
+			min_node_depth = int(arg)
 		elif opt in ("-b", "--bonferroni"):
 			bonferroni = 1
 		elif opt in ("-c", "--commit"):
@@ -357,8 +403,7 @@ if __name__ == '__main__':
 
 	if schema:
 		instance = cluster_stat(hostname, dbname, schema, source_table, target_table, \
-			offset, limit, output, bonferroni, report, log, wu, commit, uniformity, min_node_size, max_node_depth)
-		instance.dstruc_loadin()
+			offset, limit, output, bonferroni, report, log, wu, commit, uniformity, min_node_size, min_node_depth)
 		instance.run()
 
 	else:
