@@ -13,12 +13,13 @@ Option:
 	-f ..., --dir_files=...	the file outputed by cluster_stat.py
 	-x ..., --recurrence_gap_size=...	2(default, IGNORE)
 	-y ..., --connectivity_gap_size=...	2(default, IGNORE)
+	-q ..., --subgraph_cut_off=...	the cut_off for the subgraph to be valid in one dataset, 0(default)
+		NOTICE: 0 means the binary conversion won't be used, just summing the floats
+	-n, --new_table	gene_table is new, need  to be created
 	-l, --leave_one_out	use the leave_one_out stat method, default is no leave_one_out
 	-w, --wu	Wu's strategy(Default is Jasmine's strategy)
 	-r, --report	report the progress(a number)
 	-c, --commit	commit the database transaction, records in table gene.
-	-q ..., --subgraph_cut_off=...	the cut_off for the subgraph to be valid in one dataset, 0(default)
-		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-b, --debug	enable debugging, no debug by default
 	-h, --help              show this help
 
@@ -32,6 +33,9 @@ Description:
 	
 	05-19-05
 		cluster_stat_table can be replaced by the file outputed by cluster_stat.py.
+	08-13-05
+		input from cluster_stat table is not supported any longer.
+		--wu is useless.
 
 """
 
@@ -42,18 +46,6 @@ from numarray import greater_equal
 
 class gene_stat:
 	"""
-	run()
-		--dstruc_loadin()
-		--core_from_files()
-		or
-		--core()
-			--_gene_stat_leave_one_out()
-				--index_tuple()
-				--direct_match()
-				--L1_match()
-				--common_ancestor_deep_enough()
-		--submit()
-	
 	03-08-05
 		add two more parameters, recurrence_gap_size and connectivity_gap_size (make them explicit)
 	03-14-05
@@ -65,7 +57,7 @@ class gene_stat:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, table=None, \
 		mcl_table=None, leave_one_out=0, wu=0, report=0,\
 		depth_cut_off =3, dir_files=None, needcommit=0, gene_table='p_gene',\
-		subgraph_cut_off=0, debug=0, recurrence_gap_size=2, connectivity_gap_size=2):
+		subgraph_cut_off=0, debug=0, new_table=0, recurrence_gap_size=2, connectivity_gap_size=2):
 		
 		self.hostname = hostname
 		self.dbname = dbname
@@ -82,6 +74,7 @@ class gene_stat:
 		self.subgraph_cut_off = float(subgraph_cut_off)
 		#debugging flag
 		self.debug = int(debug)
+		self.new_table = int(new_table)
 		
 		#debug flags in several functions
 		self.debug_L1_match = 0
@@ -132,6 +125,8 @@ class gene_stat:
 		"""
 		05-19-05
 			It's outdated compared with core(). So update it.
+		08-13-05
+			row[4] is unknown_gene_ratio
 		"""	
 		sys.stderr.write("Starting gene-stat...\n")
 		from gene_p_map_redundancy import gene_p_map_redundancy
@@ -154,6 +149,7 @@ class gene_stat:
 			row[0] = int(row[0])
 			row[1] = int(row[1])
 			row[3] = float(row[3])
+			row[4] = float(row[4])
 			curs.execute("select recurrence_array, vertex_set from %s where mcl_id=%d"%(self.mcl_table, int(row[0])) )
 			rows = curs.fetchall()
 			#first append the recurrence_array
@@ -230,15 +226,17 @@ class gene_stat:
 		
 		03-15-05
 			get lca's for common_ancestor_deep_enough approach
-		"""
-		
+		08-13-05
+			change following cluster_stat's change
+		"""		
 		mcl_id = row[0]
 		gene_no = row[1]
-		p_value_vector = row[2][1:-1].split(',')
+		p_value_vector = row[2][2:-2].split('], [')
 		connectivity = float(row[3])
-		recurrence_array = row[4][1:-1].split(',')
+		unknown_gene_ratio = float(row[4])
+		recurrence_array = row[5][1:-1].split(',')
 		recurrence_array = map(float, recurrence_array)
-		vertex_set = row[5][1:-1].split(',')
+		vertex_set = row[6][1:-1].split(',')
 		vertex_set = map(int, vertex_set)
 		
 		#subgraph_cut_off is the cutoff for a cluster to be counted as occurred
@@ -257,71 +255,37 @@ class gene_stat:
 		prediction_tuple = (recurrence, connectivity)
 		if prediction_tuple not in self.prediction_tuple2list:
 			self.prediction_tuple2list[prediction_tuple] = []
-		
-		#default min_p_value is 1.0
-		min_p_value = 1.0
-		
-		#transform into float type
-		p_value_index_tuple_list = self.index_tuple(p_value_vector)
-		for (p_value, index) in p_value_index_tuple_list:
-			if self.wu:
-				#index 0 corresponds to go_no 0.
-				go_no = index
-			else:
-				#index 0 corresponds to go_no 1
-				go_no = index+1
-			if self.go_no2depth[go_no] >= self.depth_cut_off:
-				min_p_value = p_value
-				break
-
-		#p-value 1.0 means the corresponding function has no associated genes in the cluster.
-		#this situation means the cluster's associated functions are above the depth_cut_off
-		if min_p_value >= 1.0:
-			return
 			
-		if self.wu:
-			unknown_gene_ratio = float(p_value_vector[0])
-		else:
-			unknown_gene_ratio = -1
-		#The cluster is an eligible cluster. Passing all the cut_offs.
-		#
 		self.no_of_records += 1
 		
-		#looking for go_nos that have the same min_p_value
-		for (p_value, index) in p_value_index_tuple_list:
-			if p_value > min_p_value:
-				break
-			elif index == 0 or p_value==1.0:
-				#0 is the unknown function, this is almost impossible because its depth = 2(see condition above)
-				#1.0 is for function that has no associated genes
+		for entry in p_value_vector:
+			p_value, go_no = entry.split(',')
+			p_value = float(p_value)
+			go_no = int(go_no)
+			if self.go_no2depth[go_no] < self.depth_cut_off:
+				#again we need the go_no to be deep enough
 				continue
-			elif p_value == min_p_value:
-				if self.wu:
-					#index 0 corresponds to go_no 0.
-					go_no = index
-				else:
-					#index 0 corresponds to go_no 1
-					go_no = index+1
-				if self.go_no2depth[go_no] < self.depth_cut_off:
-					#again we need the go_no to be deep enough
-					continue
+			
+			if gene_no in self.known_genes_dict:
+				k_functions_set = self.known_genes_dict[gene_no]
+				is_correct = self.direct_match(go_no, k_functions_set)
+				is_correct_L1 = self.L1_match(go_no, k_functions_set, node_distance_class, curs)
+				is_correct_lca = self.common_ancestor_deep_enough(go_no, k_functions_set, node_distance_class, curs)
+			else:
+				#unknown gene
+				is_correct = -1
+				is_correct_L1 = -1
+				is_correct_lca = -1
+				#clear lca_list
+				self.lca_list = []
 				
-				if gene_no in self.known_genes_dict:
-					k_functions_set = self.known_genes_dict[gene_no]
-					is_correct = self.direct_match(go_no, k_functions_set)
-					is_correct_L1 = self.L1_match(go_no, k_functions_set, node_distance_class, curs)
-					is_correct_lca = self.common_ancestor_deep_enough(go_no, k_functions_set, node_distance_class, curs)
-				else:
-					#unknown gene
-					is_correct = -1
-					is_correct_L1 = -1
-					is_correct_lca = -1
-					#clear lca_list
-					self.lca_list = []
-					
-				prediction_list = [p_value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
-					is_correct_lca, len(vertex_set), unknown_gene_ratio, self.lca_list]
-				self.prediction_tuple2list[prediction_tuple].append(prediction_list)
+			prediction_list = [p_value, mcl_id, gene_no, go_no, is_correct, is_correct_L1, \
+				is_correct_lca, len(vertex_set), unknown_gene_ratio, self.lca_list]
+			self.prediction_tuple2list[prediction_tuple].append(prediction_list)
+			if self.debug:
+				print "recurrence and connectivity",prediction_tuple
+				print "prediction_list", prediction_list
+				raw_input("pause:")
 
 	def index_tuple(self, list):
 		"""
@@ -461,33 +425,10 @@ class gene_stat:
 				print "No common_ancestors deep enough for function %s"%self.go_no2go_id[p_go_no]
 			self.lca_list = []
 			return 0
-
 	
-	def submit(self, curs, gene_table):
+	def createGeneTable(self, curs, gene_table):
 		"""
-		02-21-05
-			Changes to table p_gene,
-			1. one row means one gene, one cluster, one function. No merging of the clusters.
-			2. avg_p_value is the real p-value.
-			3. cluster_context and cluster_array loses its meaning. But I kept cluster_array
-				because it's easy. And cluster_context is empty.
-				context_specific.py and subgraph_visualize.py are going to be changed.
-			4. p_value_cut_off is the real p_value(same as avg_p_value).
-			5. recurrence_cut_off is the real recurrence of the cluster.
-			6. connectivity_cut_off is the real connectivity of the cluster.
-			7. cluster_size_cut_off is the real size of the cluster.
-			8. all the predictions are kept, no any cutoff.
-			9. add one field, mcl_id to the end of table p_gene to ease table linking.
-			10. add two more integers, is_correct_L1, is_correct_lca
-			11. unknown_cut_off is the real unknown_gene_ratio
-			12. e_accuracy is deprecated
-		03-15-05
-			add another column lca_list to store the lowest common ancestors between
-			the predicted functions and the assigned ones
-		03-27-05
-			use %s instead of %f when inserting p_value_cut_off and avg_p_value
-			'%f' only preserves 6 float digits. '%s' preserves all and converts
-			long float to scientific representation.
+		08-14-05
 		"""
 		sys.stderr.write("Creating table %s..."%gene_table)
 		if gene_table!='p_gene':
@@ -514,7 +455,35 @@ class gene_stat:
 				lca_list integer[]\
 				)"%gene_table)
 		sys.stderr.write("Done.\n")
-		
+	
+	def submit(self, curs, gene_table):
+		"""
+		02-21-05
+			Changes to table p_gene,
+			1. one row means one gene, one cluster, one function. No merging of the clusters.
+			2. avg_p_value is the real p-value.
+			3. cluster_context and cluster_array loses its meaning. But I kept cluster_array
+				because it's easy. And cluster_context is empty.
+				context_specific.py and subgraph_visualize.py are going to be changed.
+			4. p_value_cut_off is the real p_value(same as avg_p_value).
+			5. recurrence_cut_off is the real recurrence of the cluster.
+			6. connectivity_cut_off is the real connectivity of the cluster.
+			7. cluster_size_cut_off is the real size of the cluster.
+			8. all the predictions are kept, no any cutoff.
+			9. add one field, mcl_id to the end of table p_gene to ease table linking.
+			10. add two more integers, is_correct_L1, is_correct_lca
+			11. unknown_cut_off is the real unknown_gene_ratio
+			12. e_accuracy is deprecated
+		03-15-05
+			add another column lca_list to store the lowest common ancestors between
+			the predicted functions and the assigned ones
+		03-27-05
+			use %s instead of %f when inserting p_value_cut_off and avg_p_value
+			'%f' only preserves 6 float digits. '%s' preserves all and converts
+			long float to scientific representation.
+		08-14-05
+			gene_table creation is split into another function, createGeneTable()
+		"""		
 		sys.stderr.write("Database submitting...")
 		"""the value of self.prediction_tuple2list, [[p_value, cluster_id, gene_no, go_no, is_correct, \
 			is_correct_L1, is_correct_lca, cluster_size, unknown_gene_ratio], [...],  ... ] """
@@ -559,6 +528,24 @@ class gene_stat:
 		03-14-05
 			module reuse direction
 			load go distance on demand
+		08-14-05
+			autocommit()
+			createGeneTable()
+		
+		--dstruc_loadin()
+		--core_from_files()
+		or
+		--core()
+			--_gene_stat_leave_one_out()
+				--index_tuple()
+				--direct_match()
+				--L1_match()
+				--common_ancestor_deep_enough()
+		if self.needcommit:
+			if self.new_table:
+				--createGeneTable()
+			--submit()
+			
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		self.dstruc_loadin(curs)
@@ -571,10 +558,12 @@ class gene_stat:
 			self.core(curs)
 
 		if self.needcommit and self.leave_one_out:
+			conn.autocommit()	#08-14-05 use autocommit() instead
+			curs.execute("set search_path to %s"%self.schema)	#08-14-05	after autocommit(), the search_path needs to be reset
+			if self.new_table:	#08-14-05
+				self.createGeneTable(curs, self.gene_table)
 			#Database updating is too slow. Do it only if needcommit.
 			self.submit(curs, self.gene_table)
-		if self.needcommit:
-			curs.execute("end")
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -583,9 +572,9 @@ if __name__ == '__main__':
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", "mcl_table=", \
 		"depth_cut_off=", "dir_files=", "leave_one_out", "wu", "report", "commit", "gene_table=", \
-		"subgraph_cut_off=", "debug", "recurrence_gap_size=", "connectivity_gap_size="]
+		"subgraph_cut_off=", "debug", "new_table", "recurrence_gap_size=", "connectivity_gap_size="]
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:e:f:x:y:lwrcg:q:b", long_options_list)
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:e:f:x:y:lwrcg:q:bn", long_options_list)
 	except:
 		print __doc__
 		sys.exit(2)
@@ -604,6 +593,7 @@ if __name__ == '__main__':
 	gene_table = 'p_gene'
 	subgraph_cut_off = 0
 	debug = 0
+	new_table = 0
 	recurrence_gap_size = 2
 	connectivity_gap_size = 2
 	for opt, arg in opts:
@@ -636,6 +626,8 @@ if __name__ == '__main__':
 			gene_table = arg
 		elif opt in ("-q", "--subgraph_cut_off="):
 			subgraph_cut_off = float(arg)
+		elif opt in ("-n", "--new_table"):
+			new_table = 1
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-x", "--recurrence_gap_size"):
@@ -646,7 +638,7 @@ if __name__ == '__main__':
 	if schema:
 		instance = gene_stat(hostname, dbname, schema, table, mcl_table, \
 			leave_one_out, wu, report, depth_cut_off, dir_files, commit, gene_table, \
-			subgraph_cut_off, debug, recurrence_gap_size, connectivity_gap_size)
+			subgraph_cut_off, debug, new_table, recurrence_gap_size, connectivity_gap_size)
 		instance.run()
 	else:
 		print __doc__
