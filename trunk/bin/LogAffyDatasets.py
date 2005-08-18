@@ -6,7 +6,7 @@ Option:
 	FILES are a list of files whose columns are going to be counted.
 	-o ... --outputdir=...,	directory containing output files
 	-d ... --delimiter=...,	delimiter character used to seperate columns, \t(default)
-	-s ... --threshold=...,	std/mean threshold
+	-s ... --threshold=...,	std/mean threshold, 1.0 (default)
 	-y ... --type=...,	geo(1,default), or smd(2)
 	-l, --log	apply log transform (IGNORE)
 	-u, --debug	enable debugging
@@ -17,6 +17,7 @@ Examples:
 
 Description:
 	Program to log transform affymetrix datasets.
+	geo: log +std/mean, smd: std
 """
 
 import sys, os, re, getopt, csv, math
