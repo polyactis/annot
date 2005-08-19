@@ -133,10 +133,20 @@ class p_gene_lm:
 			fetch cluster_size_cut_off
 		07-04-05
 			fetch m.connectivity(2nd-order density)
+		08-15-05
+			regard 1e7 as the memory threshold, use step to select entries
 			
 			--prediction_space_setup()
 		"""
 		sys.stderr.write("Setting Up prediction_space...\n")
+		
+		#08-15-05	step to control memory usage
+		curs.execute("select count(*) from %s"%table)
+		rows = curs.fetchall()
+		no_of_entries = rows[0][0]
+		step = int(no_of_entries/1e7) + 1
+		sys.stderr.write("\tstep is %s.\n"%step)
+		
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
 			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off,m.connectivity from %s p, %s s, %s m where \
 			p.mcl_id=s.splat_id and p.mcl_id=m.mcl_id"\
@@ -146,7 +156,8 @@ class p_gene_lm:
 		rows = curs.fetchall()
 		while rows:
 			for row in rows:
-				self.prediction_space_setup(row)
+				if (no_of_records%step) == 0:
+					self.prediction_space_setup(row)
 				no_of_records += 1
 			if self.report:
 				sys.stderr.write('%s%s'%('\x08'*20, no_of_records))
@@ -254,7 +265,7 @@ class p_gene_lm:
 			--data_prepare
 			--submit
 		"""
-		sys.stderr.write("Linear Model Fitting...")
+		sys.stderr.write("Linear Model Fitting...\n")
 		go_no2lm_results = {}
 		
 		#06-30-05	setup the formula_list based on bit_string
@@ -265,7 +276,7 @@ class p_gene_lm:
 				formula_list.append(coeff_name_list[i])
 		
 		for (go_no,data) in go_no2prediction_space.iteritems():
-			
+			sys.stderr.write("%s prediction entries from %s.\n"%(len(data), go_no))
 			coeff_list = [0]*6	#intercept, p_value, recurrence, connectivity, cluster_size
 			coeff_p_value_list = [1]*6
 			index = 0	#06-30-05	the pointer for summary_stat
