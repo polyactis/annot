@@ -134,9 +134,12 @@ class cluster_stat:
 				p_value_vector only keeps (p_value,go_no) pairs with lowest p_value and go_no>=min_node_depth
 			unknown_gene_ratio is split from p_value_vector
 			a bug found, p_value_vector is not grounded after each gene cycle
-			
 			table submit() is not supported anymore
-		"""	
+		08-15-05
+			if go_no == 0, skip p-value calculation
+			self.local_go_no_dict[go_no]<3, skip the go_no. previously it's using self._local_go_no_dict[go_no] to do filter,
+			known genes and unknown genes get different treatment.
+		"""
 		vertex_list_all = vertex_set[1:-1].split(',')
 		vertex_list = []
 		for i in range(len(vertex_list_all)):
@@ -161,6 +164,11 @@ class cluster_stat:
 					#no unknown genes
 					unknown_gene_ratio = 0
 			for go_no in self._local_go_no_dict:
+				if go_no == 0:	#unknown function category doesn't need to do calculation
+					continue
+				if self.local_go_no_dict[go_no]<3:	#apart from the percentage, the absolute number is also needed in case the cluster is too small.
+					#08-15-05 fix a bug here, previously it's using self._local_go_no_dict[go_no] to do filter. known genes and unknown genes get different treatment.
+					continue
 				if self.global_go_no_to_size_dict[go_no]<self.min_node_size:	#06-11-05
 					continue
 				if self.go_no2depth[go_no]<self.min_node_depth:	#06-11-05, 08-13-05 max_node_depth changed to min_node_depth
@@ -182,8 +190,6 @@ class cluster_stat:
 					go_no_ratio = float(x)/self._no_of_known_genes_of_the_cluster	#NOTE: it's different from no_of_known_genes_of_the_cluster
 				if  go_no_ratio < self.uniformity and go_no!=0:	#It doesn't apply to the 0(unknown) category.
 					#ignore the function category if its percentage is < uniformity
-					continue
-				if x < 3 and go_no!=0:	#apart from the percentage, the absolute number is also needed in case the cluster is too small.
 					continue
 				if self.bonferroni:
 					p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)*len(self._local_go_no_dict)
