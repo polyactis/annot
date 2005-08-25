@@ -362,6 +362,7 @@ class p_gene_analysis:
 		'''
 		02-21-05
 			get some global statistics
+		08-23-05 add one output line to concatenate all stats together to ease summarizing
 			--return_known_unknown_gene_sets()
 		'''
 		sys.stderr.write("Outputing overview stats...")
@@ -405,7 +406,10 @@ class p_gene_analysis:
 		
 		self.stat_table_f.writerow(['known genes', no_of_known_genes])
 		self.stat_table_f.writerow(['unknown genes', no_of_unknown_genes])
-		sys.stderr.write("Done\n")		
+		#08-23-05 add one output line to concatenate all stats together to ease summarizing
+		self.stat_table_f.writerow(['%.4f/%i/%i/%.4f/%i/%i/%i/%i'%(total_accuracy, total_known_predictions, total_unknown_predictions,\
+			total_accuracy_pair, total_known_predictions_pair, total_unknown_predictions_pair, no_of_known_genes, no_of_unknown_genes)])
+		sys.stderr.write("Done\n")
 	
 	def return_known_unknown_gene_sets(self, prediction_pair_list):
 		known_gene_set = Set()
