@@ -11,6 +11,9 @@
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_histogram.h>
 #include <gsl/gsl_statistics_double.h>
+#include <algorithm>	//08-24-05 for std::copy
+#include <iterator>	//08-24-05 for std::ostream_iterator
+#include <boost/tokenizer.hpp>	//08-24-05 for tokenizer, parse input file
 #include "boost/tuple/tuple.hpp"	//for boost::tuple	06-22-05
 
 using namespace std;

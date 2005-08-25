@@ -287,15 +287,44 @@ void graph_construct::gene_array_fill(vector<string> expr_array, int no_genes)
 }
 
 void graph_construct::split(string line)
+/*
+*08-24-05
+*	use tokenizer to parse one line, copied from clustering.cc
+*/
 {
 	vf gene_vector;
 	string gene_label;
 	bit_vector bv;
 
-	int no_of_tabs = 0;
 	int no_of_nas = 0;
 	string tmp = "";
-
+	
+	boost::char_separator<char> sep(" \t\r");		//blank or '\t' or '\r' is the separator
+	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
+	tokenizer line_toks(line, sep);
+	tokenizer::iterator tokenizer_iter = line_toks.begin();
+	gene_label = *tokenizer_iter++;	//first field is gene label
+	
+	for (; tokenizer_iter!=line_toks.end();++tokenizer_iter)
+	{
+		tmp = *tokenizer_iter;
+		if(tmp=="NA")
+		{
+			gene_vector.push_back(GSL_NAN);
+			bv.push_back(true);
+			no_of_nas++;
+		}
+		else
+		{
+			if(tmp!="")
+			{
+				gene_vector.push_back(atof(tmp.c_str()) );
+				bv.push_back(false);
+			}
+		}
+	}
+	/*
+	int no_of_tabs = 0;
 	for(int i=0; i< line.size(); i++)
 	{
 		if (line[i]=='\t')
@@ -323,7 +352,7 @@ void graph_construct::split(string line)
 			tmp+=line[i];
 	}
 	//the last field
-	if (tmp=="NA")
+	if (tmp=="NA")	//08-24-05 here's a bug, line has an ending '\r' character('\n' is already gone), which makes "NA\r" not "NA"
 	{
 		gene_vector.push_back(GSL_NAN);
 		bv.push_back(true);
@@ -335,6 +364,10 @@ void graph_construct::split(string line)
 			gene_vector.push_back(atof(tmp.c_str())  );
 			bv.push_back(false);
 		}
+	#if defined(DEBUG)
+		std::cerr<<"The last field: "<<tmp<<" with size"<<tmp.size()<<std::endl;
+	#endif
+	*/
 	
 	//discard some genes with too many missing values.
 
@@ -343,6 +376,12 @@ void graph_construct::split(string line)
 		gene_labels_vector.push_back(gene_label);
 		mask_vector.push_back(bv);
 		gene_array.push_back(gene_vector);
+		#if defined(DEBUG)
+			std::cerr<<"Gene label:"<<gene_label<<"size: "<<gene_vector.size()<<"no_of_nas:"<<no_of_nas<<std::endl;
+			std::cerr<<"gene_vector is";
+			std::copy(gene_vector.begin(), gene_vector.end(), std::ostream_iterator<float>(std::cerr, " "));
+			std::cerr<<std::endl;
+		#endif
 	}
 }
 
@@ -580,7 +619,8 @@ void print_usage(FILE* stream,int exit_code)
 		"\t\t if p_value_cut_off=0 and cor_cut_off=0, top_percentage is used to select edges.\n"\
 		"\t-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).\n"\
 		"\t-l, --leave_one_out	leave_one_out.\n"\
-		"\tFor long option, = or ' '(blank) is same.\n");
+		"\tFor long option, = or ' '(blank) is same.\n"\
+		"\tLine tokenizer is one space, tab, or \\r\n");
 	exit(3);
 }
 
