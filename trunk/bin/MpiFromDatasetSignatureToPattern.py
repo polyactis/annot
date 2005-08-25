@@ -43,15 +43,20 @@ def patternFormation(offset, parameter_list):
 		intermediateFile is outputed by outputEdgeData()
 	08-08-05
 		store the occurrence_vector in edge2occurrence_vector
+	08-24-05
+		edge_sig_matrix replaces the intermediateFile
 		
-		--encodeOccurrence()
-		--encodeOccurrenceBv()
-		--outputCcFromEdgeList()
-			--get_combined_vector()
-			--codense2db_instance.parse_recurrence()
+		(loop)
+			--encodeOccurrence()
+		(loop)
+			--decodeOccurrenceBv()
+			--outputCcFromEdgeList()
+				--get_combined_vector()
+				--codense2db_instance.parse_recurrence()
 	"""
 	offset = int(offset)
-	datasetSignatureFname, intermediateFile, outputfile, offset_list, no_cc, debug = parameter_list
+	datasetSignatureFname, intermediateFile, outputfile, offset_list, no_cc, \
+		edge_sig_matrix, no_of_datasets, debug = parameter_list
 	node_outputfile = '%s.%s'%(outputfile, offset)
 	#initialize the signatures in signature2pattern
 	signature2pattern = {}
@@ -68,7 +73,8 @@ def patternFormation(offset, parameter_list):
 			if debug:
 				sys.stderr.write("dataset signature is %s with frequency %s\n"%(repr(sig_row), frequency))
 				sys.stderr.write("its binary form is %s\n"%occurrenceBinaryForm)
-			"""raw_input will stop the paralle program
+			"""
+			raw_input will stop the paralle program
 			is_continue = raw_input("Continue?(Y/n)")
 			if is_continue=='n':
 				sys.exit(2)
@@ -80,15 +86,15 @@ def patternFormation(offset, parameter_list):
 				sys.exit(2)
 	del dSF
 	#fill patterns in signature2pattern
-	iF = csv.reader(open(intermediateFile,'r'), delimiter='\t')
+	#iF = csv.reader(open(intermediateFile,'r'), delimiter='\t')	#08-24-05 intermediateFile defunct
 	of = open(node_outputfile, 'w')
 	codense2db_instance = codense2db()
 	counter = 0
-	for row in iF:
+	for row in edge_sig_matrix:
 		counter += 1
 		edge = map(int, row[:2])
-		occurrence_vector = map(int, row[2:])
-		occurrenceBinaryForm = encodeOccurrenceBv(occurrence_vector)
+		occurrenceBinaryForm = row[2]	#08-24-05	already encoded when edge_sig_matrix is filled in
+		occurrence_vector = decodeOccurrenceToBv(occurrenceBinaryForm, no_of_datasets)
 		signatureToBeDeleted = []
 		for signature in signature2pattern:
 			if (occurrenceBinaryForm&signature)==signature:
@@ -118,7 +124,7 @@ def patternFormation(offset, parameter_list):
 		sys.stderr.write('Weird %s signatures are still available\n'%len(signature2pattern))
 		if debug:
 			sys.stderr.write('%s\n'%repr(signature2pattern))
-	del iF
+	#del iF
 	of.close()
 	return node_outputfile
 
@@ -203,6 +209,24 @@ def decodeOccurrence(signature):
 	occurrence_vector.append(len(binary_list))
 	return occurrence_vector
 
+def decodeOccurrenceToBv(signature, no_of_datasets):
+	"""
+	08-24-05
+		similar to decodeOccurrence(), but it's binary vector of length no_of_datasets
+	"""
+	occurrence_vector = [0]*no_of_datasets
+	binary_list = []
+	if signature <=0:
+		return [0]
+	while signature!=1:
+		signature, m = divmod(signature, 2)
+		binary_list.append(m)
+		if m==1:
+			occurrence_vector[len(binary_list)-1] = 1
+	binary_list.append(1)	#the last 1
+	occurrence_vector[len(binary_list)-1] = 1
+	return occurrence_vector
+	
 class MpiFromDatasetSignatureToPattern:
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
 		outputfile=None, min_sup=0, max_sup=200, no_cc=0, debug=0, report=0):
@@ -222,6 +246,30 @@ class MpiFromDatasetSignatureToPattern:
 		self.debug = int(debug)
 		self.report = int(report)
 	
+	def get_no_of_edges_and_no_of_datasets(self, curs, edge_table='edge_cor_vector'):
+		"""
+		08-24-05
+			get the no_of_edges and no_of_datasets
+				no_of_edges got from edge_cor_vector_edge_id_seq
+				no_of_datasets got from the first sig_vector
+		"""
+		sys.stderr.write("Getting no_of_edges and no_of_datasets...")
+		array_to_return = Numeric.zeros(2, Numeric.Int)
+		curs.execute("select last_value from %s_edge_id_seq"%edge_table)
+		rows = curs.fetchall()
+		array_to_return[0] = rows[0][0]
+		if array_to_return[0]<=1:
+			sys.stderr.write("edge_cor_vector_edge_id_seq says there's <=1 edge. something wrong, exit.\n")
+			sys.exit(2)
+		curs.execute("select sig_vector from %s limit 1"%edge_table)
+		rows = curs.fetchall()
+		for row in rows:
+			sig_vector = row[0][1:-1].split(',')
+			no_of_datasets = len(sig_vector)
+		array_to_return[1] = no_of_datasets
+		sys.stderr.write("Done.\n")
+		return array_to_return
+	
 	def outputEdgeData(self, curs, outputfile, min_sup, max_sup, edge_table='edge_cor_vector'):
 		"""
 		08-06-05
@@ -230,8 +278,8 @@ class MpiFromDatasetSignatureToPattern:
 		08-08-05
 			output sig_vector directly, not occurrence_vector
 		"""
-		writer = csv.writer(open(outputfile, 'w'), delimiter='\t')
 		sys.stderr.write("Getting edge matrix for all functions...\n")
+		writer = csv.writer(open(outputfile, 'w'), delimiter='\t')
 		curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
 			from %s"%(edge_table))
 		curs.execute("fetch 5000 from crs")
@@ -259,7 +307,46 @@ class MpiFromDatasetSignatureToPattern:
 			rows = curs.fetchall()
 		sys.stderr.write("Done\n")
 		del writer
-
+	
+	def fillEdgeSigMatrix(self, curs, edge_sig_matrix, min_sup, max_sup, edge_table='edge_cor_vector'):
+		"""
+		08-24-05
+			similar to outputEdgeData() but read it into edge_sig_matrix, instead of output
+		"""
+		sys.stderr.write("Getting edge matrix for all functions...\n")
+		curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
+			from %s"%(edge_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		counter = 0
+		pointer = 0
+		while rows:
+			for row in rows:
+				edge = row[0][1:-1].split(',')
+				edge = map(int, edge)
+				sig_vector = row[1][1:-1].split(',')
+				sig_vector = map(int, sig_vector)
+				
+				if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+					"""
+					new_row = edge
+					for i in range(len(sig_vector)):
+						if sig_vector[i]==1:
+							new_row.append(i+1)
+					"""
+					edge_sig_matrix[pointer] = edge[0], edge[1], encodeOccurrenceBv(sig_vector)
+					pointer += 1
+				else:
+					if self.debug:
+						sys.stderr.write("edge %s with support %s, not included.\n"%(repr(edge), sum(sig_vector)))
+				counter +=1
+			if self.report:
+				sys.stderr.write('%s%s'%('\x08'*20, counter))
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		sys.stderr.write("Done\n")
+		return pointer	#return the number of edges satisfying the min_sup and max_sup
+		
 	def createOffsetList(self, inputfile, no_of_nodes):
 		"""
 		08-06-05
@@ -293,24 +380,52 @@ class MpiFromDatasetSignatureToPattern:
 	def run(self):
 		"""
 		08-06-05
+		08-24-05
+			read all edge data into matrix
 		"""
 		communicator = MPI.world.duplicate()
 		
 		intermediateFile = '%s.int'%self.outputfile
 		offset_list = Numeric.zeros((communicator.size), Numeric.Int)	#not communicator.size-1, 
+		two_number_array = Numeric.zeros(2, Numeric.Int)	#08-24-05, no_of_edges and no_of_datasets
 		if communicator.rank == 0:
 			sys.stderr.write("this is node %s\n"%communicator.rank)
 			(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-			self.outputEdgeData(curs, intermediateFile, self.min_sup, self.max_sup)
 			offset_list[:] = self.createOffsetList(self.inputfile, communicator.size-1)
 			if self.debug:
-				sys.stderr.write("offset_list: %s"%repr(offset_list))
+				sys.stderr.write("offset_list: %s\n"%repr(offset_list))
+			two_number_array = self.get_no_of_edges_and_no_of_datasets(curs)
+			if self.debug:
+				sys.stderr.write("two_number_array is %s\n"%repr(two_number_array))
+			del conn, curs
 		
 		communicator.broadcast(offset_list, 0)	#share the offset_list
-		
 		mpi_synchronize(communicator)
+		
+		communicator.broadcast(two_number_array, 0)	#broadcast no_of_edges and no_of_datasets
+		mpi_synchronize(communicator)
+		no_of_edges, no_of_datasets = two_number_array
+		#read all edges and its encoded occurrence into edge_sig_matrix and broadcast it
+		edge_sig_matrix = Numeric.zeros((no_of_edges, 3), Numeric.Int)
+		real_no_of_edges = Numeric.zeros(1,Numeric.Int)
+		if communicator.rank == 0:
+			sys.stderr.write("this is node %s\n"%communicator.rank)
+			(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+			real_no_of_edges[0] = self.fillEdgeSigMatrix(curs, edge_sig_matrix, self.min_sup, self.max_sup)
+			if self.debug:
+				sys.stderr.write("real_no_of_edges is %s\n"%repr(real_no_of_edges))
+			del conn, curs
+		communicator.broadcast(edge_sig_matrix, 0)
+		mpi_synchronize(communicator)
+		
+		#broadcast real_no_of_edges
+		communicator.broadcast(real_no_of_edges, 0)
+		mpi_synchronize(communicator)
+		#resize the edge_sig_matrix, throw away additional zeros
+		edge_sig_matrix = Numeric.resize(edge_sig_matrix, (real_no_of_edges[0], 3))
+		
 		job_list = range(communicator.size-1)	#corresponding to the indices in the offset_list
-		parameter_list =[self.inputfile, intermediateFile, self.outputfile, offset_list, self.no_cc, self.debug]
+		parameter_list =[self.inputfile, intermediateFile, self.outputfile, offset_list, self.no_cc, edge_sig_matrix,  no_of_datasets, self.debug]
 		if self.debug:
 			sys.stderr.write("The common parameter_list is %s.\n"%repr(parameter_list))
 		of_name_list = mpi_schedule_jobs(communicator, job_list, patternFormation, parameter_list, self.debug)
@@ -323,6 +438,7 @@ class MpiFromDatasetSignatureToPattern:
 			netmine_wrapper_instance = netmine_wrapper()
 			netmine_wrapper_instance.collect_and_merge_output(of_name_list, intermediateFile)
 			self.uniqueSort(intermediateFile, self.outputfile)
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
