@@ -8,7 +8,7 @@ Option:
 	-d ... --delimiter=...,	delimiter character used to seperate columns, \t(default)
 	-s ... --threshold=...,	std/mean threshold, 1.0 (default)
 	-y ... --type=...,	geo(1,default), or smd(2)
-	-l, --log	apply log transform (IGNORE)
+	-n ... --no_of_valids=...	min number of non-NA, 8(default)
 	-u, --debug	enable debugging
 	-h, --help              show this help
 	
@@ -16,8 +16,9 @@ Examples:
 	LogAffyDatasets.py -o datasets/sc_log/ datasets/sc/*
 
 Description:
-	Program to log transform affymetrix datasets.
+	Program to filter datasets based on std or std/mean.
 	geo: log +std/mean, smd: std
+	GEO datasets will be logged(base = 2, <=10 truncated to 10).
 """
 
 import sys, os, re, getopt, csv, math
@@ -26,7 +27,7 @@ from MA import array
 from Preprocess import PreprocessEdgeData
 
 class LogAffyDatasets:
-	def __init__(self, file_list, outputdir, delimiter, threshold, type=1, log=0, debug=0):
+	def __init__(self, file_list, outputdir, delimiter, threshold, type=1, no_of_valids=8, debug=0):
 		""" 
 		07-31-05
 		08-09-05
@@ -38,13 +39,15 @@ class LogAffyDatasets:
 		self.delimiter = delimiter
 		self.threshold = float(threshold)
 		self.type = int(type)
-		self.log = int(log)
+		self.no_of_valids = int(no_of_valids)
 		self.debug = int(debug)
 
-	def transform_one_file(self, src_pathname, delimiter, outputdir, b_instance, threshold, type):
+	def transform_one_file(self, src_pathname, delimiter, outputdir, b_instance, threshold, type, no_of_valids):
 		"""
 		08-09-05
 			add type
+		08-29-05
+			add no_of_valids to cut genes with too few valid values
 		"""
 		reader = csv.reader(file(src_pathname), delimiter=delimiter)
 		filename = os.path.basename(src_pathname)
@@ -73,7 +76,8 @@ class LogAffyDatasets:
 			if self.debug:
 				print "The data vector is ",ma_array
 				print "Its mask is ", ma_array.mask()
-			if len(ma_array.compressed())>1:	#at least two samples, otherwise, correlation can't be calculated
+			if len(ma_array.compressed())>=no_of_valids:	#at least two samples, otherwise, correlation can't be calculated
+				#08-29-05	no_of_valids controls not too many NA's, which is for graph_modeling
 				std = MLab.std(ma_array.compressed())	#disregard the NAs
 				if type==1:
 					ratio = std/MLab.mean(ma_array.compressed())
@@ -100,7 +104,7 @@ class LogAffyDatasets:
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
 		for f in self.files:
 			sys.stderr.write("%d/%d:\t%s"%(self.files.index(f)+1,len(self.files),f))
-			self.transform_one_file(f, self.delimiter, self.outputdir, b_instance, self.threshold, self.type)
+			self.transform_one_file(f, self.delimiter, self.outputdir, b_instance, self.threshold, self.type, self.no_of_valids)
 			sys.stderr.write("\n")
 
 
@@ -110,7 +114,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "ho:d:s:y:lu", ["help", "outputdir=", "delimiter=", "threshold=", "type=", "log", "debug"])
+		opts, args = getopt.getopt(sys.argv[1:], "ho:d:s:y:n:u", ["help", "outputdir=", \
+			"delimiter=", "threshold=", "type=", "no_of_valids=", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -119,7 +124,7 @@ if __name__ == '__main__':
 	outputdir = None
 	threshold = 1.0
 	type = 1
-	log = 0
+	no_of_valids = 8
 	debug = 0
 	
 	for opt, arg in opts:
@@ -134,13 +139,13 @@ if __name__ == '__main__':
 			threshold = float(arg)
 		elif opt in ("-y", "--type"):
 			type = int(arg)
-		elif opt in ("-l", "--log"):
-			log = 1
+		elif opt in ("-n", "--no_of_valids"):
+			no_of_valids = int(arg)
 		elif opt in ("-u", "--debug"):
 			debug = 1
 			
 	if len(args)>=1:
-		instance = LogAffyDatasets(args, outputdir, delimiter, threshold, type, log, debug)
+		instance = LogAffyDatasets(args, outputdir, delimiter, threshold, type, no_of_valids, debug)
 		instance.run()
 	else:
 		print __doc__
