@@ -27,6 +27,10 @@ from sets import Set
 
 class gene_id_to_no:
 	def __init__(self, dir, hostname, dbname, orgn, log, gene=0, needcommit=0):
+		"""
+		08-30-05
+			add rn to org_short2long
+		"""
 		self.dir = dir
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -37,6 +41,8 @@ class gene_id_to_no:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',
