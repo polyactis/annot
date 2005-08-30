@@ -194,6 +194,11 @@ graph_construct::~graph_construct()
 }
 
 int graph_construct::input(float top_percentage)
+/*
+*08-29-05
+*	if no_of_genes==0, no_of_cols=0
+*	
+*/
 {	
 	#if defined(DEBUG)
 		std::cerr<<"Read in the data...";
@@ -204,7 +209,10 @@ int graph_construct::input(float top_percentage)
 		split(line);
 	}
 	no_of_genes = gene_array.size();
-	no_of_cols = gene_array[0].size();
+	if(no_of_genes==0)	//08-29-05
+		no_of_cols =0;
+	else
+		no_of_cols = gene_array[0].size();
 	#if defined(DEBUG)
 		std::cerr<<no_of_genes<<" genes."<<endl;
 	#endif
@@ -588,6 +596,9 @@ void graph_construct::output()
 }
 
 void graph_construct::run()
+/*08-29-05
+*	deal with the case with no_of_genes==0
+*/
 {
 	cor_cut_off_vector = cor_cut_off_array_construct(p_value_cut_off, cor_cut_off, max_degree);
 	int top_number = input(top_percentage);
@@ -599,8 +610,13 @@ void graph_construct::run()
 		#endif
 		top_number_to_be_passed = top_number;
 	}
-	edge_construct(leave_one_out, top_number_to_be_passed);	//0 means no top_number selection, non 0 means top_number selection
-	output();
+	if (no_of_genes>=2)
+	{
+		edge_construct(leave_one_out, top_number_to_be_passed);	//0 means no top_number selection, non 0 means top_number selection
+		output();
+	}
+	else
+		std::cerr<<"No of genes is "<<no_of_genes<<", not enough."<<endl;
 }
 
 const char* program_name;
