@@ -1,6 +1,12 @@
 I. Annot pipeline(05-16-05, yh)
 
-run annot/bin/MpiGraphModeling.py to construct correlation graphs
+shell/mdb_output.sh
+	call microarray/microarraydb.py to output datasets
+annot/gene_id_to_no.py to construct table graph.gene_id_to_no
+shell/datasets_filter.sh
+	annot/LogAffyDatasets.py to filter genes
+	annot/MergeGenes.py to merge genes
+	annot/bin/MpiGraphModeling.py to construct correlation graphs
 shell/SchemaDatasetSetup.py to setup datasets and gph files
 database schema sql/graph.sql loadin on zhoudb
 shell/SchemaPreSetup.sh to setup database gene, go tables
@@ -16,7 +22,7 @@ shell/graph_merge.sh
 	generate the cor_vector and sig_vector files
 	convert the summary graph(gspan format) into matrix format(netmine)
 	dump cor_vector and sig_vector files into database
-shell/netmine.sh
+[shell/netmine.sh]
 	calculate #edges, #genes, #no_of_columns
 	annot/bin/netmine_wrapper.py
 	shell/cluster_stat.sh
@@ -27,6 +33,11 @@ shell/netmine.sh
 		 annot/bin/gene_p_map_redundancy.py
 		 annot/bin/connectivity_original.py
 	annot/bin/EdgeClusterFromCopathOutput.py
+	shell/cluster_stat.sh
+[shell/fim_wrapper.sh (08-20-05)]
+	annot/PreFimInput.py
+	fim_closed
+	annot/MpiFromDatasetSignatureToPattern.py
 	shell/cluster_stat.sh
 
 II. Biclustering (05-14-05)
