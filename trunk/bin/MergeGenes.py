@@ -91,10 +91,11 @@ class MergeGenes:
 				data_ls_2d.append(data_ls)
 				mask_ls_2d.append(mask_ls)
 			elif len(gene_id_set)==2:
-				pre_gene_id, ar = self.mergeBlock(data_ls_2d, mask_ls_2d, gene_id_set, gene_id)
 				if self.debug:
 					print 'data_ls_2d is ',data_ls_2d
 					print 'mask_ls_2d is ', mask_ls_2d
+				pre_gene_id, ar = self.mergeBlock(data_ls_2d, mask_ls_2d, gene_id_set, gene_id)
+				if self.debug:
 					print 'final block is ', ar
 					raw_input("Continue?(Y/n)")
 				if ar.mask():
