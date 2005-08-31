@@ -11,6 +11,8 @@ annot/gene_id_to_no.py to construct table graph.gene_id_to_no
 
 shell/annot.sh
 	shell/SchemaDatasetSetup.py to setup datasets and gph files
+		shell/file_batch_move.py
+		shell/file_rename.py
 	shell/SchemaPreSetup.sh to setup database gene, go tables
 		annot/gene_table.py
 		annot/find_unknown_genes.py
