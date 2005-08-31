@@ -29,6 +29,10 @@ class gene_table:
 	Initialize the local gene_id:gene_no mapping in table schema.gene
 	'''
 	def __init__(self, dir, hostname, dbname, schema, orgn, union=0, needcommit=0):
+		"""
+		08-30-05
+			add rn to org_short2long
+		"""
 		self.dir = dir
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -41,6 +45,8 @@ class gene_table:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',
