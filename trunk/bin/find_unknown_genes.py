@@ -25,6 +25,10 @@ class find_unknown_genes:
 	'''
 	'''
 	def __init__(self, hostname, dbname, orgn, unknown_file):
+		"""
+		08-30-05
+			add rn to org_short2long
+		"""
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.org_short2long = {'at':'Arabidopsis thaliana',
@@ -33,6 +37,8 @@ class find_unknown_genes:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',

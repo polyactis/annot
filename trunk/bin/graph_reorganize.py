@@ -142,6 +142,10 @@ class graph_reorganize:
 	Transform graph.cc results into gspan input.
 	'''
 	def __init__(self, hostname, dbname, schema, type, orgn):
+		"""
+		08-30-05
+			add rn to org_short2long
+		"""
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -152,6 +156,8 @@ class graph_reorganize:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',

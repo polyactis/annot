@@ -105,6 +105,11 @@ parser_map = {"ming":ming_parser(),\
 
 class go_table_setup:
 	def __init__(self, fname, hostname, dbname, schema, parser, u_fname, orgn, needcommit=0):
+		"""
+		08-30-05
+			add rn to org_short2long
+			remove self.organism
+		"""
 		self.go_inf = open(fname, 'r')
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
@@ -118,6 +123,8 @@ class go_table_setup:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',
@@ -125,7 +132,6 @@ class go_table_setup:
 			'Mus musculus':'Mus musculus',
 			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
-		self.organism = self.org_short2long[orgn]
 		#mapping between gene_id and gene_no
 		self.vertex_dict = {}
 		#stores all the unknown genes in schema.gene

@@ -26,6 +26,11 @@ class gene_go_functions:
 	Initialize the go_functions column in table schema.gene
 	'''
 	def __init__(self, hostname, dbname, schema, orgn, needcommit=0):
+		"""
+		08-30-05
+			add rn to org_short2long
+			remove self.organism
+		"""
 		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
 		self.curs = self.conn.cursor()
 		self.curs.execute("set search_path to %s"%schema)
@@ -36,6 +41,8 @@ class gene_go_functions:
 			'hs':'Homo sapiens',
 			'mm':'Mus musculus',
 			'sc':'Saccharomyces cerevisiae',
+			'rn':'Rattus norvegicus',
+			'Rattus norvegicus':'Rattus norvegicus',
 			'Arabidopsis thaliana':'Arabidopsis thaliana',
 			'Caenorhabditis elegans':'Caenorhabditis elegans',
 			'Drosophila melanogaster':'Drosophila melanogaster',
@@ -43,7 +50,6 @@ class gene_go_functions:
 			'Mus musculus':'Mus musculus',
 			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
 			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
-		self.organism = self.org_short2long[orgn]
 		#mapping between gene_no and GO list
 		self.geneno_go_dict = {}
 		#mapping between gene_no and gene_id
