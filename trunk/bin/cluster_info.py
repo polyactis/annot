@@ -31,7 +31,7 @@ from codense.common import db_connect
 from codense.codense2db import codense2db
 from codense.codense2db import cluster_dstructure
 from codense.common import parse_splat_table_edge_set
-from codense.common import get_no_of_total_genes
+from codense.common import get_no_of_total_genes, get_gene_no2gene_id
 from graphlib import Graph
 from CoexprFromCooccu  import CoexprFromCooccu
 
@@ -230,16 +230,22 @@ class cluster_info:
 		return accuracy2cluster
 
 	
-	def data_fetch(self, curs, splat_table, mcl_table, crs_no=0):
+	def data_fetch(self, curs, splat_table, mcl_table, crs_no=0, output_fname=None):
 		"""
 		04-17-05
 			fetch cluster_dstructures for all clusters(Jasmine's request)	
 		04-19-05
 			1. return a mcl_id2cluster_dstructure
 			2. crs_no
+		08-31-05
+			output clusters directly to output_fname
+			
 		"""
-		mcl_id2cluster_dstructure = {}
+		gene_no2gene_id = get_gene_no2gene_id(curs)	#08-31-05
+		outf = open(output_fname, 'w')	#08-31-05
+		outf.write("r:=[")	#08-31-05
 		
+		mcl_id2cluster_dstructure = {}
 		no_of_total_genes = get_no_of_total_genes(curs)
 		sys.stderr.write("Getting the basic information for all clusters...\n")
 		curs.execute("DECLARE crs%s CURSOR FOR select m.mcl_id, m.vertex_set, m.connectivity, 0,\
@@ -266,7 +272,9 @@ class cluster_info:
 					unit.go_no2association_genes, len(unit.vertex_set), no_of_total_genes, p_value_cut_off=0.05)	#jasmine wants to cut some go-nos.
 				unit.edge_cor_2d_list, unit.edge_sig_2d_list = self.get_cor_sig_2d_list(curs, unit.edge_set)
 				
-				mcl_id2cluster_dstructure[unit.cluster_id] = unit
+				str_tmp = self.return_string_form_of_cluster_dstructure(unit, gene_no2gene_id)	#08-31-05
+				outf.write("%s,"%str_tmp)
+				#mcl_id2cluster_dstructure[unit.cluster_id] = unit
 				"""
 				order_1st_id, order_2nd_id = map(int, unit.cooccurrent_cluster_id.split('.'))
 				if order_1st_id not in self.order_1st_id2all_clusters:
@@ -277,6 +285,8 @@ class cluster_info:
 				"""
 			curs.execute("fetch 5000 from crs%s"%crs_no)
 			rows = curs.fetchall()
+		outf.write("]:")	#08-31-05
+		del outf
 		sys.stderr.write("Done.\n")
 		return mcl_id2cluster_dstructure
 		
@@ -309,10 +319,12 @@ class cluster_info:
 		04-19-05
 			wrap the information jasmine wants out of a cluster_dstructure into a string form, which
 			is in array-form of darwin.
+		08-31-05
+			add connectivity after cluster_id
 		"""
 		str_tmp ="["
 		str_tmp+="[%s],\n"%cluster.cluster_id
-		
+		str_tmp+="[%s],\n"%cluster.connectivity	#08-31-05
 		str_tmp_list = []
 		for edge in cluster.edge_set:
 			str_tmp_list.append("{'%s','%s'}"%(gene_no2gene_id[edge[0]], gene_no2gene_id[edge[1]]))
@@ -419,25 +431,32 @@ class cluster_info:
 			Serve for jasmine's darwin input.
 		04-19-05
 			changed to put 2nd-order clusters and its connected components into one file.
+		08-31-05
+			much simpler, just output clusters from mcl_table
 			
 			--db_connect()
-			--CoexprFromCooccu.data_fetch()
 			--data_fetch()
-			--data_fetch()
-			--cluster_dstructure_output_with_both_hierarchy()
-
+				(loop)
+					--get_gene_no2gene_id()
+					--get_no_of_total_genes()
+					--get_go_functions_of_this_gene_set()
+					--get_information_of_go_functions()
+					--get_cor_sig_2d_list()
+					--return_string_form_of_cluster_dstructure()
 		"""
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
 		
-		e_splat_table = self.table+'e'
-		e_mcl_table = self.mcl_table+'e'
-		CoexprFromCooccu_instance = CoexprFromCooccu()
-		pre_2nd_cc_hierarchy = CoexprFromCooccu_instance.data_fetch(curs, self.mcl_table, e_mcl_table)
-		mcl_id2cluster_dstructure = self.data_fetch(curs, self.table,  self.mcl_table, crs_no=1)
-		mcl_id_2nd_order2cluster_dstructure = self.data_fetch(curs, e_splat_table, e_mcl_table, crs_no=2)
-		self.cluster_dstructure_output_with_both_hierarchy(curs, self.output_fname, pre_2nd_cc_hierarchy,\
-			mcl_id2cluster_dstructure, mcl_id_2nd_order2cluster_dstructure)
+		
+		#e_splat_table = self.table+'e'
+		#e_mcl_table = self.mcl_table+'e'
+		#CoexprFromCooccu_instance = CoexprFromCooccu()
+		#pre_2nd_cc_hierarchy = CoexprFromCooccu_instance.data_fetch(curs, self.mcl_table, e_mcl_table)
+		#mcl_id2cluster_dstructure = self.data_fetch(curs, self.table,  self.mcl_table, crs_no=1)
+		#mcl_id_2nd_order2cluster_dstructure = self.data_fetch(curs, e_splat_table, e_mcl_table, crs_no=2)
+		#self.cluster_dstructure_output_with_both_hierarchy(curs, self.output_fname, pre_2nd_cc_hierarchy,\
+		#	mcl_id2cluster_dstructure, mcl_id_2nd_order2cluster_dstructure)
 		#self.cluster_dstructure_output(curs, self.output_fname, self.order_1st_id2all_clusters)
+		self.data_fetch(curs, self.table, self.mcl_table, crs_no=1, output_fname=self.output_fname)
 		
 
 if __name__ == '__main__':
