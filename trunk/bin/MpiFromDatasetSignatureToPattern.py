@@ -308,44 +308,72 @@ class MpiFromDatasetSignatureToPattern:
 		sys.stderr.write("Done\n")
 		del writer
 	
-	def fillEdgeSigMatrix(self, curs, edge_sig_matrix, min_sup, max_sup, edge_table='edge_cor_vector'):
+	def fillEdgeSigMatrix(self, communicator, hostname, dbname, schema, no_of_datasets, min_sup, max_sup, edge_table='edge_cor_vector'):
 		"""
 		08-24-05
 			similar to outputEdgeData() but read it into edge_sig_matrix, instead of output
+		08-31-05
+			Because Numeric.Int is only 32 bits. So it can't encode occurrence_vector and send it.
+			If sending occurrence_vector directly, it will blow the message size. So send block by block
 		"""
-		sys.stderr.write("Getting edge matrix for all functions...\n")
-		curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
-			from %s"%(edge_table))
-		curs.execute("fetch 5000 from crs")
-		rows = curs.fetchall()
-		counter = 0
-		pointer = 0
-		while rows:
-			for row in rows:
-				edge = row[0][1:-1].split(',')
-				edge = map(int, edge)
-				sig_vector = row[1][1:-1].split(',')
-				sig_vector = map(int, sig_vector)
-				
-				if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
-					"""
-					new_row = edge
-					for i in range(len(sig_vector)):
-						if sig_vector[i]==1:
-							new_row.append(i+1)
-					"""
-					edge_sig_matrix[pointer] = edge[0], edge[1], encodeOccurrenceBv(sig_vector)
-					pointer += 1
-				else:
-					if self.debug:
-						sys.stderr.write("edge %s with support %s, not included.\n"%(repr(edge), sum(sig_vector)))
-				counter +=1
-			if self.report:
-				sys.stderr.write('%s%s'%('\x08'*20, counter))
+		node_returned_value_list = []
+		node_rank = communicator.rank
+		edge_sig_matrix = []
+		edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
+		if node_rank == 0:		
+			sys.stderr.write("Getting edge matrix for all functions...\n")
+			(conn, curs) = db_connect(hostname, dbname, schema)
+			curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
+				from %s"%(edge_table))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
-		sys.stderr.write("Done\n")
-		return pointer	#return the number of edges satisfying the min_sup and max_sup
+			counter = 0
+			while rows:
+				#clear to zero before going ahead
+				pointer = 0
+				edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
+				for row in rows:
+					edge = row[0][1:-1].split(',')
+					edge = map(int, edge)
+					sig_vector = row[1][1:-1].split(',')
+					sig_vector = map(int, sig_vector)
+					
+					if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+						edge_sig_block[pointer] = edge+sig_vector
+						pointer += 1
+					else:
+						if self.debug:
+							sys.stderr.write("edge %s with support %s, not included.\n"%(repr(edge), sum(sig_vector)))
+					counter +=1
+				if self.report:
+					sys.stderr.write('%s%s'%('\x08'*20, counter))
+				for node in range(1, communicator.size):	#send it to everyone
+					communicator.send(edge_sig_block, node, 0)
+					if self.debug:
+						sys.stderr.write("a block sent to %s.\n"%node)
+				curs.execute("fetch 5000 from crs")
+				rows = curs.fetchall()
+			del conn, curs
+			#tell each node to exit the loop
+			edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
+			edge_sig_block[0,0] = -1
+			for node in range(1, communicator.size):	#send it to everyone
+					communicator.send(edge_sig_block, node, 0)
+			sys.stderr.write("edge_sig_matrix fetching Done\n")
+		else:
+			edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
+			while edge_sig_block:
+				if edge_sig_block[0,0]==-1:
+					if debug:
+						sys.stderr.write("node %s breaked with %s edges.\n"%(node_rank, len(edge_sig_matrix)))
+					break
+				else:
+					for edge_sig_vector in edge_sig_block:
+						if edge_sig_block[0]!=-1 and edge_sig_vector[0]!=0 and edge_sig_vector[1]!=0:	#skip the 0 vectors
+							edge_sig_matrix.append([edge_sig_vector[0], edge_sig_vector[1], encodeOccurrenceBv(edge_sig_vector[2:])])
+				edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
+		
+		return edge_sig_matrix
 		
 	def createOffsetList(self, inputfile, no_of_nodes):
 		"""
@@ -382,6 +410,9 @@ class MpiFromDatasetSignatureToPattern:
 		08-06-05
 		08-24-05
 			read all edge data into matrix
+		08-31-05
+			the integer returned by encodeOccurrenceBv() could be 138-bit(human no_of_datasets)
+			And Numeric.Int is only 32 bit. So Change edge_sig_matrix format.
 		"""
 		communicator = MPI.world.duplicate()
 		
@@ -405,24 +436,11 @@ class MpiFromDatasetSignatureToPattern:
 		communicator.broadcast(two_number_array, 0)	#broadcast no_of_edges and no_of_datasets
 		mpi_synchronize(communicator)
 		no_of_edges, no_of_datasets = two_number_array
-		#read all edges and its encoded occurrence into edge_sig_matrix and broadcast it
-		edge_sig_matrix = Numeric.zeros((no_of_edges, 3), Numeric.Int)
-		real_no_of_edges = Numeric.zeros(1,Numeric.Int)
-		if communicator.rank == 0:
-			sys.stderr.write("this is node %s\n"%communicator.rank)
-			(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
-			real_no_of_edges[0] = self.fillEdgeSigMatrix(curs, edge_sig_matrix, self.min_sup, self.max_sup)
-			if self.debug:
-				sys.stderr.write("real_no_of_edges is %s\n"%repr(real_no_of_edges))
-			del conn, curs
-		communicator.broadcast(edge_sig_matrix, 0)
-		mpi_synchronize(communicator)
-		
-		#broadcast real_no_of_edges
-		communicator.broadcast(real_no_of_edges, 0)
-		mpi_synchronize(communicator)
-		#resize the edge_sig_matrix, throw away additional zeros
-		edge_sig_matrix = Numeric.resize(edge_sig_matrix, (real_no_of_edges[0], 3))
+
+		edge_sig_matrix = self.fillEdgeSigMatrix(communicator, self.hostname, self.dbname, self.schema, no_of_datasets, self.min_sup, self.max_sup)
+		if self.debug:
+			sys.stderr.write("edge_sig_matrix[:3] is %s\n"%(repr(edge_sig_matrix[:3])))
+		mpi_synchronize(communicator)		
 		
 		job_list = range(communicator.size-1)	#corresponding to the indices in the offset_list
 		parameter_list =[self.inputfile, intermediateFile, self.outputfile, offset_list, self.no_cc, edge_sig_matrix,  no_of_datasets, self.debug]
