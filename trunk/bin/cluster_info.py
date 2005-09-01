@@ -239,7 +239,8 @@ class cluster_info:
 			2. crs_no
 		08-31-05
 			output clusters directly to output_fname
-			
+		09-01-05
+			add the last []
 		"""
 		gene_no2gene_id = get_gene_no2gene_id(curs)	#08-31-05
 		outf = open(output_fname, 'w')	#08-31-05
@@ -285,7 +286,7 @@ class cluster_info:
 				"""
 			curs.execute("fetch 5000 from crs%s"%crs_no)
 			rows = curs.fetchall()
-		outf.write("]:")	#08-31-05
+		outf.write("[]]:")	#08-31-05, 09-01-05 add the last blank []
 		del outf
 		sys.stderr.write("Done.\n")
 		return mcl_id2cluster_dstructure
@@ -321,10 +322,17 @@ class cluster_info:
 			is in array-form of darwin.
 		08-31-05
 			add connectivity after cluster_id
+		09-01-05
+			add the vertex_set
 		"""
-		str_tmp ="["
-		str_tmp+="[%s],\n"%cluster.cluster_id
-		str_tmp+="[%s],\n"%cluster.connectivity	#08-31-05
+		str_tmp = "["
+		str_tmp += "[%s],\n"%cluster.cluster_id
+		str_tmp += "[%s],\n"%cluster.connectivity	#08-31-05
+		str_tmp_list = []
+		for vertex in cluster.vertex_set:	#09-01-05	add in the vertex_set
+			str_tmp_list.append("%s"%gene_no2gene_id[vertex])
+		str_tmp += "[%s],\n"%(','.join(str_tmp_list))
+		
 		str_tmp_list = []
 		for edge in cluster.edge_set:
 			str_tmp_list.append("{'%s','%s'}"%(gene_no2gene_id[edge[0]], gene_no2gene_id[edge[1]]))
