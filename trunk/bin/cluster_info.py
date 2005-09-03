@@ -324,6 +324,9 @@ class cluster_info:
 			add connectivity after cluster_id
 		09-01-05
 			add the vertex_set
+		09-02-05
+			no edge_set
+			recurrence_array replaces edge_sig_2d_array
 		"""
 		str_tmp = "["
 		str_tmp += "[%s],\n"%cluster.cluster_id
@@ -332,24 +335,26 @@ class cluster_info:
 		for vertex in cluster.vertex_set:	#09-01-05	add in the vertex_set
 			str_tmp_list.append("%s"%gene_no2gene_id[vertex])
 		str_tmp += "[%s],\n"%(','.join(str_tmp_list))
-		
+		"""
 		str_tmp_list = []
 		for edge in cluster.edge_set:
 			str_tmp_list.append("{'%s','%s'}"%(gene_no2gene_id[edge[0]], gene_no2gene_id[edge[1]]))
 		str_tmp += "[%s],\n"%(','.join(str_tmp_list))
+		"""
 		
 		str_tmp_list = []
 		for go_no, information in cluster.go_no2information.iteritems():
 			str_tmp_list.append("['%s','%s',%s,%s,%s,%s]\n"%(information[1], information[2], \
 				information[3],information[4],information[5],information[6]))
-		str_tmp += "[%s],"%(",".join(str_tmp_list))
-		
+		str_tmp += "[%s],\n"%(",".join(str_tmp_list))
+		str_tmp += "%s]\n"%(repr(cluster.recurrence_array))
+		"""
 		edge_sig_2d_array = array(cluster.edge_sig_2d_list)
 		str_tmp_list = []
 		for i in range(edge_sig_2d_array.shape[1]):
 			str_tmp_list.append("%s\n"%repr(list(edge_sig_2d_array[:,i])))
 		str_tmp += "[%s]]"%(",".join(str_tmp_list))
-		
+		"""
 		return str_tmp
 	
 	def cluster_dstructure_output_with_both_hierarchy(self, curs, output_fname, \
