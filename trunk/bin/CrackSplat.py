@@ -128,10 +128,12 @@ class crack_by_modes:
 		"""
 		modes_path = os.path.join(os.path.expanduser('~'), 'bin/hhu_clustering/bin/modes')
 		if not os.path.isfile(modes_path):
-			print 'program not available'%modes_path
+			print 'program %s not available'%modes_path
 			sys.exit(1)
 		###!!!, the argument list must comprise of all strings, not integer, or float.
 		wl = ['modes', infname, repr(no_of_genes), outfname, repr(parameter_b), '1', repr(int(parameter_a*10)), '80']
+		if self.debug:
+			print "modes' parameter is %s",wl
 		return os.spawnvp(os.P_WAIT, modes_path, wl)
 
 	
@@ -361,8 +363,8 @@ class CrackSplat:
 		self.tmpinfname = os.path.join(self.dir_files, 'input')
 		self.tmpoutfname = os.path.join(self.dir_files, 'output')
 		
-		self.crack_dict = {1: crack_by_modes(),
-			2:crack_by_splat()}
+		self.crack_dict = {1: crack_by_modes(self.debug),
+			2:crack_by_splat(self.debug)}
 		self.argument1_dict = {1: self.clustering_test_instance,
 			2: self.splat_to_db_instance}
 		
