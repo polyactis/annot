@@ -271,18 +271,35 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, int size_cutoff, 
 	
 }
 
-boost::python::list ClusterByEBC::graph2list(Graph &graph)
+twoListTuple ClusterByEBC::graph2list(Graph &graph)
 /*
 *09-05-05
 *	similar to subgraph2list()
+*09-05-05
+*	transform the vertex set as well.
 */
 {
 	boost::python::list graph_edge_list;	//store the egdes
+	boost::python::list graph_vertex_list;	//store the vertices
 	
 	vertex_name_type vertex2name = get(vertex_name, graph);	//mapping
 	
-	boost::graph_traits<Graph>::vertex_descriptor
-	vertex1, vertex2;
+	std::pair<vertexIterator, vertexIterator> vp;
+	#ifdef DEBUG
+		std::cout<<"vertices(g) = ";
+	#endif
+	for (vp = vertices(graph); vp.first != vp.second; ++vp.first)
+	{
+		graph_vertex_list.append(get(vertex2name, *vp.first));
+		#ifdef DEBUG
+			std::cout << get(vertex2name, *vp.first) <<  " ";
+		#endif
+	}
+	#if defined(DEBUG)
+		std::cout << std::endl;
+	#endif
+	
+	vertexDescriptor vertex1, vertex2;
 	#if defined(DEBUG)
 		std::cout << "edges(g) = ";
 	#endif
@@ -301,13 +318,15 @@ boost::python::list ClusterByEBC::graph2list(Graph &graph)
 	#if defined(DEBUG)
 		std::cout << std::endl;
 	#endif
-	return graph_edge_list;
+	return boost::make_tuple(graph_vertex_list,graph_edge_list);
 }
 
 void ClusterByEBC::run(boost::python::list edge_list, int size_cutoff, float conn_cutoff)
 /*
 *09-04-05
 *	override the run() of the parent class
+*09-05-05
+*	append the cc_vertex_list
 */
 {
 	#ifdef DEBUG
@@ -329,8 +348,9 @@ void ClusterByEBC::run(boost::python::list edge_list, int size_cutoff, float con
 	}
 	for(g_iterator=good_subgraph_vector.begin();g_iterator!=good_subgraph_vector.end();++g_iterator)
 	{
-		boost::python::list graph_edge_list = graph2list(*g_iterator);
-		cc_list.append(graph_edge_list);
+		twoListTuple vertex_edge_tuple = graph2list(*g_iterator);
+		cc_vertex_list.append(vertex_edge_tuple.get<0>());
+		cc_list.append(vertex_edge_tuple.get<1>());
 	}
 }
 
@@ -345,5 +365,6 @@ BOOST_PYTHON_MODULE(cc_from_edge_list)
 	class_<ClusterByEBC, bases<cc_from_edge_list> >("ClusterByEBC")
 		.def("run", &ClusterByEBC::run)
 		.def_readonly("cc_list", &ClusterByEBC::cc_list)
+		.def_readonly("cc_vertex_list", &ClusterByEBC::cc_vertex_list)
 	;
 }

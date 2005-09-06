@@ -16,6 +16,7 @@ if len(sys.argv)==3:
 	
 	cf_instance.run(edge_list,int(sys.argv[1]),float(sys.argv[2]))
 	print "final clusters is"
+	print cf_instance.cc_vertex_list
 	print cf_instance.cc_list
 else:
 	print __doc__

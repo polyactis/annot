@@ -16,6 +16,7 @@
 #include <boost/property_map.hpp>	//09-05-05 for iterator_property_map
 #include <boost/graph/betweenness_centrality.hpp>	//09-05-05 for betweenness_centrality
 #include <boost/pending/indirect_cmp.hpp>	//Mon Sep  5 11:38:25 2005 for indirect_cmp
+#include <boost/tuple/tuple.hpp>	//Mon Sep  5 19:03:02 2005 for boost::tuple
 
 using namespace boost;
 using namespace boost::python;
@@ -32,6 +33,9 @@ typedef graph_traits<Graph>::edge_descriptor edgeDescriptor;
 typedef	boost::iterator_property_map<vector<double>::iterator,\
 	EdgeIndexMap, double, double&> EdgeCentralityMap;
 typedef property_traits<EdgeCentralityMap>::value_type centrality_type;
+//Mon Sep  5 18:45:37 2005
+typedef graph_traits<Graph>::vertex_iterator vertexIterator;
+typedef boost::tuple<boost::python::list, boost::python::list> twoListTuple;
 
 class cc_from_edge_list
 {
@@ -55,6 +59,7 @@ class ClusterByEBC:public cc_from_edge_list
 	public:
 		void cut_by_betweenness_centrality(Graph &graph, int size_cutoff, float conn_cutoff);
 		void run(boost::python::list edge_list, int size_cutoff, float conn_cutoff);
-		boost::python::list graph2list(Graph &graph);
+		twoListTuple graph2list(Graph &graph);
 		std::vector<Graph> good_subgraph_vector;
+		boost::python::list cc_vertex_list;	//09-05-05	to return the vertex_list as well
 };
