@@ -369,12 +369,22 @@ class complete_cor_vector:
 		"""
 		06-30-05
 			the first edge in gph_file is the lowest correlation due to the nature of priority_queue
+		09-05-05
+			deal with except
 		"""
 		reader = csv.reader(open(gph_file, 'r'), delimiter='\t')
 		reader.next()	#skip the first line containing gph name
-		row = reader.next()	#one line is 'e       Mm.153061       Mm.3295 0.361159'
+		corCut = 1.0	#default corCut is 1.0
+		try:
+			row = reader.next()	#one line is 'e       Mm.153061       Mm.3295 0.361159'
+			corCut = float(row[3])
+		except StopIteration:
+			sys.stderr.write("StopIteration encountered for %s, regard corCut as 1.0.\n"%gph_file)
+		except:
+			sys.stderr.write('Unknown except, exit: %s\n'%repr(sys.exc_info()[0]))
+			sys.exit(3)
 		del reader
-		return float(row[3])
+		return corCut
 	
 	def cor_vector_from_files(self, communicator, dir, gph_dir, cor_fname, sig_fname, p_value_cut_off, cor_cut_off):
 		"""
