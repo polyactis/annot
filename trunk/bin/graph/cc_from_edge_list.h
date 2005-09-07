@@ -17,6 +17,9 @@
 #include <boost/graph/betweenness_centrality.hpp>	//09-05-05 for betweenness_centrality
 #include <boost/pending/indirect_cmp.hpp>	//Mon Sep  5 11:38:25 2005 for indirect_cmp
 #include <boost/tuple/tuple.hpp>	//Mon Sep  5 19:03:02 2005 for boost::tuple
+#include <boost/tokenizer.hpp>	//for tokenizer, parse input file
+#include <getopt.h>	//to parse program options.
+#include <fstream>	//to read input_filename
 
 using namespace boost;
 using namespace boost::python;
@@ -36,6 +39,8 @@ typedef property_traits<EdgeCentralityMap>::value_type centrality_type;
 //Mon Sep  5 18:45:37 2005
 typedef graph_traits<Graph>::vertex_iterator vertexIterator;
 typedef boost::tuple<boost::python::list, boost::python::list> twoListTuple;
+//Tue Sep  6 21:50:15 2005
+typedef boost::tokenizer<boost::char_separator<char> > char_tokenizer;
 
 class cc_from_edge_list
 {
@@ -57,9 +62,31 @@ class cc_from_edge_list
 class ClusterByEBC:public cc_from_edge_list
 {
 	public:
-		void cut_by_betweenness_centrality(Graph &graph, int size_cutoff, float conn_cutoff);
-		void run(boost::python::list edge_list, int size_cutoff, float conn_cutoff);
-		twoListTuple graph2list(Graph &graph);
-		std::vector<Graph> good_subgraph_vector;
-		boost::python::list cc_vertex_list;	//09-05-05	to return the vertex_list as well
+	ClusterByEBC();
+	ClusterByEBC(boost::python::list edge_list, int size_cutoff, float conn_cutoff);
+	ClusterByEBC(std::string input_filename, int min_edge_weight, int size_cutoff, \
+		float conn_cutoff, int format_type=1, int offset=0, std::string output_filename="");
+	~ClusterByEBC();
+	void init_graph_from_file(const std::string &input_filename, Graph &graph, const int &min_edge_weight);
+	void init_graph_from_file(const std::string &input_filename, Graph &graph, const int &size_cutoff, const int &offset);
+	void reindex_edge(Graph &graph);
+	void cut_by_betweenness_centrality(Graph &graph, const int &size_cutoff, const float &conn_cutoff);
+	void run();
+	twoListTuple graph2list(Graph &graph);
+	void output_graph(std::ofstream &outf, Graph &graph);
+
+	std::vector<Graph> good_subgraph_vector;
+	boost::python::list cc_vertex_list;	//09-05-05	to return the vertex_list as well
+	//input edge_list
+	boost::python::list _edge_list;
+	//options
+	private:
+	const std::string _input_filename;
+	const std::string _output_filename;
+	const int _min_edge_weight;
+	const int _size_cutoff;
+	const float _conn_cutoff;
+	const int _format_type;
+	const int _offset;
+
 };

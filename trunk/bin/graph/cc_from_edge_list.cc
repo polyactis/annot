@@ -193,11 +193,191 @@ void cc_from_edge_list::run(boost::python::list edge_list)
 *
 */
 
+ClusterByEBC::ClusterByEBC()
+	:_input_filename(""),_min_edge_weight(0),_size_cutoff(5),_conn_cutoff(0.2),_output_filename(""),_format_type(1),_offset(0)
+/*
+*09-06-05
+*	do nothing
+*/
+{
+}
 
-void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, int size_cutoff, float conn_cutoff)
+ClusterByEBC::ClusterByEBC(boost::python::list edge_list, int size_cutoff, float conn_cutoff)\
+	:_input_filename(""),_min_edge_weight(0), _size_cutoff(size_cutoff),_conn_cutoff(conn_cutoff),_output_filename(""),_format_type(3),_offset(0)
+/*
+*09-06-05
+	Constructor for python to call
+	Watch: _format_type(3)
+*/
+{
+	_edge_list = edge_list;
+}
+
+ClusterByEBC::ClusterByEBC(std::string input_filename, int min_edge_weight, int size_cutoff, \
+	float conn_cutoff, int format_type, int offset, std::string output_filename):\
+	_input_filename(input_filename),_min_edge_weight(min_edge_weight),_size_cutoff(size_cutoff),\
+	_conn_cutoff(conn_cutoff), _format_type(format_type), _offset(offset),  _output_filename(output_filename)
+/*
+09-06-05
+	Normal constructor
+*/
+{
+}
+
+
+ClusterByEBC::~ClusterByEBC()
+/*
+*09-06-06
+*	clear the good_subgraph_vector
+*/
+{
+	good_subgraph_vector.clear();
+}
+
+void ClusterByEBC::init_graph_from_file(const std::string &input_filename, Graph &graph, const int &min_edge_weight)
+/*09-06-05
+*	declare weight_array and edge_weight to float
+*/
+{
+	#ifdef DEBUG
+		std::cerr<<"Read in graph from "<<input_filename<<" ...";
+	#endif
+	std::ifstream datafile(input_filename.c_str());
+	std::vector<float> weight_array;	//a local weight_array
+	std::map<std::string, vertexDescriptor> VertexNameMap;	//to check whether one vertex is already inserted
+	vertex_name_type vertex2name = get(vertex_name, graph);
+	char_separator<char> sep(" \t");		//blank or '\t' is the separator
+	for (std::string line; std::getline(datafile, line);) {
+		char_tokenizer line_toks(line, sep);
+		char_tokenizer::iterator tokenizer_iter = line_toks.begin();
+		if(*tokenizer_iter=="t")
+			continue;	//skip the whole line
+		if(*tokenizer_iter=="v")
+			continue;	//skip the whole line
+		if(*tokenizer_iter=="e")
+			*tokenizer_iter++;	//skip 'e'
+		
+		std::string gene1 = *tokenizer_iter++;
+		std::string gene2 = *tokenizer_iter++;
+		std::string edge_weight_string = *tokenizer_iter;
+		float edge_weight = atof(edge_weight_string.c_str());
+		if (edge_weight>=min_edge_weight)
+		{
+			std::map<std::string, vertexDescriptor>::iterator pos;
+			bool inserted;
+			vertexDescriptor u, v;
+			tie(pos, inserted) = VertexNameMap.insert(std::make_pair(gene1, vertexDescriptor()));
+			if (inserted) {
+				u = add_vertex(graph);
+				vertex2name[u] = atoi(gene1.c_str());
+				pos->second = u;
+			} else
+				u = pos->second;
+			tie(pos, inserted) = VertexNameMap.insert(std::make_pair(gene2, vertexDescriptor()));
+			if (inserted) {
+				v = add_vertex(graph);
+				vertex2name[v] = atoi(gene2.c_str());
+				pos->second = v;
+			} else
+				v = pos->second;
+	
+			graph_traits < Graph >::edge_descriptor e;
+			tie(e, inserted) = add_edge(u, v, graph);
+			if (inserted)
+				weight_array.push_back(edge_weight);
+		}
+	}
+	datafile.close();
+	#ifdef DEBUG
+		std::cerr<<"Done."<<std::endl;
+	#endif
+
+}
+
+void ClusterByEBC::init_graph_from_file(const std::string &input_filename, Graph &graph, const int &size_cutoff, const int &offset)
+/*
+*09-06-05
+*	construct the graph from MpiFromDatasetSignatureToPattern.py output file, given an offset
+*		size_cutoff is not used.
+*/
+{
+	#ifdef DEBUG
+		std::cerr<<"Read in graph from "<<input_filename<<" ...";
+	#endif
+	std::ifstream datafile(input_filename.c_str());
+	std::vector<float> weight_array;	//a local weight_array
+	std::map<std::string, vertexDescriptor> VertexNameMap;	//to check whether one vertex is already inserted
+	vertex_name_type vertex2name = get(vertex_name, graph);
+	char_separator<char> line_sep("\t");		//'\t' is the separator
+	char_separator<char> gene_no_list_sep("[], ", "", boost::drop_empty_tokens);	//[ ] , or blank is separator and drop the empty token
+	std::string line;
+	//skip some lines based on offset
+	for (int no_of_lines_skipped=0;no_of_lines_skipped<=offset;std::getline(datafile, line),no_of_lines_skipped++)
+	{
+		#ifdef DEBUG
+			std::cerr<<"lines skipped is "<<no_of_lines_skipped<<std::endl;
+		#endif
+	}
+	//line is the last fetched
+	char_tokenizer line_toks(line, line_sep);
+	char_tokenizer::iterator tok_iter = line_toks.begin();
+	std::string vertex_list_string = *tok_iter++;
+	std::string edge_list_string = *tok_iter++;
+
+	//parse the vertex_list_string
+	char_tokenizer vertex_list_string_tok(vertex_list_string, gene_no_list_sep);
+	vertexDescriptor u, v;
+	for(char_tokenizer::iterator tok_iter = vertex_list_string_tok.begin(); tok_iter != vertex_list_string_tok.end(); ++tok_iter)
+	{
+		std::string gene_no = *tok_iter;
+		#ifdef DEBUG
+			std::cerr<<"Gene_no is "<<gene_no<<std::endl;
+		#endif
+		u = add_vertex(graph);
+		VertexNameMap.insert(std::make_pair(gene_no, u));
+		vertex2name[u] = atoi(gene_no.c_str());
+	}
+	//parse the edge_list_string
+	char_tokenizer edge_list_string_tok(edge_list_string, gene_no_list_sep);
+	for(char_tokenizer::iterator tok_iter = edge_list_string_tok.begin(); tok_iter != edge_list_string_tok.end();)	//Watch: no tok_iter++
+	{
+		std::string gene1 = *tok_iter++;
+		std::string gene2 = *tok_iter++;
+		#ifdef DEBUG
+			std::cerr<<"gene1 and gene2 is "<<gene1<<" and "<<gene2<<std::endl;
+		#endif
+		u = VertexNameMap[gene1];
+		v = VertexNameMap[gene2];
+		add_edge(u, v, graph);
+	}
+	datafile.close();
+	#ifdef DEBUG
+		std::cerr<<"Done."<<std::endl;
+	#endif
+}
+
+void ClusterByEBC::reindex_edge(Graph &graph)
+/*
+09-06-05
+	reindex the edges to be sure they are in the range[0, num_edges(graph))
+*/
+{
+	EdgeIndexMap edge2index = get(edge_index, graph);
+	graph_traits<Graph>::edge_iterator ei, ei_end;
+	int no_of_edges = 0;
+	for (tie(ei,ei_end) = edges(graph); ei != ei_end; ++ei)
+	{
+		edge2index[*ei] = no_of_edges;
+		no_of_edges++;
+	}
+}
+
+void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_cutoff, const float &conn_cutoff)
 /*
 *09-04-05
 *	cut the graph with the edge of maximum betweenness_centrality
+09-07-05
+	a bug arises in calling brandes_betweenness_centrality(), Doug's email solved it.
 */
 {
 	int no_of_vertices = num_vertices(graph);
@@ -238,11 +418,15 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, int size_cutoff, 
 				std::cerr<<"max_centrality is "<<max_centrality<<std::endl;
 			#endif
 			remove_edge(e, graph);
+			reindex_edge(graph);	//09-07-05	fix an important bug here.
 			#ifdef DEBUG
 				std::cerr<<"after removal the subgraph has "<<num_edges(graph)<<" edges."<<std::endl;
 			#endif
 			std::vector<int> component(num_vertices(graph));
 			int no_of_components = connected_components(graph, &component[0]);
+			#ifdef DEBUG
+				std::cerr<<"no_of_components: "<<no_of_components<<std::endl;
+			#endif
 			if (no_of_components==1)	//keep cutting
 			{
 				#ifdef DEBUG
@@ -321,18 +505,84 @@ twoListTuple ClusterByEBC::graph2list(Graph &graph)
 	return boost::make_tuple(graph_vertex_list,graph_edge_list);
 }
 
-void ClusterByEBC::run(boost::python::list edge_list, int size_cutoff, float conn_cutoff)
+void ClusterByEBC::output_graph(std::ofstream &outf, Graph &graph)
+/*
+09-06-05
+	output the graph to output_filename
+*/
+{
+	vertex_name_type vertex2name = get(vertex_name, graph);	//mapping
+	
+	std::pair<vertexIterator, vertexIterator> vp;
+	outf<<"[";
+	int no_of_vertices=0;
+	for (vp = vertices(graph); vp.first != vp.second; ++vp.first)
+	{
+		no_of_vertices++;
+		if (no_of_vertices==num_vertices(graph))	//the difference from the middle to the end
+			outf<<get(vertex2name, *vp.first);
+		else
+			outf << get(vertex2name, *vp.first) <<  ", ";
+	}
+	outf<<"]\t";
+	int no_of_edges =0;
+	vertexDescriptor vertex1, vertex2;
+	outf<<"[";
+	graph_traits<Graph>::edge_iterator ei, ei_end;
+	for (tie(ei,ei_end) = edges(graph); ei != ei_end; ++ei)
+	{
+		no_of_edges++;
+		vertex1 = source(*ei, graph);
+		vertex2 = target(*ei, graph);
+		outf << "[" << get(vertex2name, vertex1)
+			<< ", " << get(vertex2name, vertex2) << "]";
+		if (no_of_edges!=num_edges(graph))
+			outf<<", ";
+	}
+	outf<<"]"<<std::endl;
+}
+
+void ClusterByEBC::run()
 /*
 *09-04-05
 *	override the run() of the parent class
 *09-05-05
 *	append the cc_vertex_list
+	
+	--init_graph_from_file()
+	or
+	--init_graph_from_file()(overloaded)
+	or
+	--init_graph_from_edge_list()
+
+	--connected_components()
+	--graph_components()
+	(loop)
+		--cut_by_betweenness_centrality()
+	(loop)
+		--graph2list()
+		or
+		--output_graph()
 */
 {
-	#ifdef DEBUG
-		std::cerr<<"starting ClusterByEBC...";
-	#endif
-	init_graph_from_edge_list(edge_list, g);
+	if (_format_type==1 && _input_filename!="")
+		init_graph_from_file(_input_filename, g, _min_edge_weight);
+	else
+	{
+		if (_format_type==2 &&_input_filename!="")
+			init_graph_from_file(_input_filename, g, _size_cutoff, _offset);
+		else
+		{
+			if (_format_type==3 && _input_filename=="")
+				init_graph_from_edge_list(_edge_list, g);
+			else
+			{
+				std::cerr<<"Exit: format_type "<<_format_type<<" and input_filename "\
+					<<_input_filename<<" combination error."<<std::endl;
+				exit(3);
+			}
+		}
+	}
 	//get the connected_components out of g
 	std::vector<int> component(num_vertices(g));
 	int no_of_components = connected_components(g, &component[0]);
@@ -344,15 +594,26 @@ void ClusterByEBC::run(boost::python::list edge_list, int size_cutoff, float con
 	#endif
 	for(g_iterator=vector_graph.begin();g_iterator!=vector_graph.end();++g_iterator)
 	{
-		cut_by_betweenness_centrality(*g_iterator, size_cutoff, conn_cutoff);
+		cut_by_betweenness_centrality(*g_iterator, _size_cutoff, _conn_cutoff);
 	}
-	for(g_iterator=good_subgraph_vector.begin();g_iterator!=good_subgraph_vector.end();++g_iterator)
+	
+	if (_output_filename=="")
 	{
-		twoListTuple vertex_edge_tuple = graph2list(*g_iterator);
-		cc_vertex_list.append(vertex_edge_tuple.get<0>());
-		cc_list.append(vertex_edge_tuple.get<1>());
+		for(g_iterator=good_subgraph_vector.begin();g_iterator!=good_subgraph_vector.end();++g_iterator)
+		{
+			twoListTuple vertex_edge_tuple = graph2list(*g_iterator);
+			cc_vertex_list.append(vertex_edge_tuple.get<0>());
+			cc_list.append(vertex_edge_tuple.get<1>());
+		}
+	}
+	else
+	{		
+		std::ofstream outf(_output_filename.c_str());
+		for(g_iterator=good_subgraph_vector.begin();g_iterator!=good_subgraph_vector.end();++g_iterator)
+			output_graph(outf, *g_iterator);
 	}
 }
+
 
 BOOST_PYTHON_MODULE(cc_from_edge_list)
 {
@@ -363,8 +624,104 @@ BOOST_PYTHON_MODULE(cc_from_edge_list)
 	;
 	
 	class_<ClusterByEBC, bases<cc_from_edge_list> >("ClusterByEBC")
+		.def(init<std::string, int, int, float, boost::python::optional<int, int, std::string> >())
+		.def(init<boost::python::list, int, float>())
 		.def("run", &ClusterByEBC::run)
 		.def_readonly("cc_list", &ClusterByEBC::cc_list)
 		.def_readonly("cc_vertex_list", &ClusterByEBC::cc_vertex_list)
 	;
+}
+
+void print_usage(FILE* stream, char* program_name)
+{
+	assert(stream !=NULL);
+        fprintf(stream,"Usage: %s options -i INPUTFILE\n",program_name);
+	fprintf(stream,"\t-h  --help	Display the usage infomation.\n"\
+		"\t-i ..., --input=...	INPUTFILE\n"\
+		"\t-o ..., --output=...	if not given, no output\n"\
+		"\t-s ..., --min_size=...	Min graph size, 5(default)\n"\
+		"\t-d ..., --density_cutoff=...	density cutoff, 0.2(default)\n"\
+		"\t-e ..., --min_edge_weight=...	minimum edge weight, 0(default).\n"\
+		"\t-m ..., --format_type=...	the format type, 1(gspan format, default), 2, 3\n"\
+		"\t-f ..., --offset=...	the offset into the inputfile, 0(default)\n"\
+		"\tFor long option, = or ' '(blank) is same.\n"\
+		"\tFormat 2 is MpiFromDatasetSignatureToPattern.py output format.\n"\
+		"\tFormat 3 is to get edge_list from python.\n");
+	exit(3);
+}
+
+
+int main(int argc, char* argv[])
+{
+	int next_option;
+	const char* const short_options="hi:o:s:d:e:m:f:";
+	const struct option long_options[]={
+	  {"help",0,NULL,'h'},
+	  {"input", 1, NULL, 'i'},
+	  {"output",1,NULL,'o'},
+	  {"min_size",1,NULL,'s'},
+	  {"density_cutoff", 1, NULL, 'd'},
+	  {"min_edge_weight", 1, NULL, 'e'},
+	  {"format_type",1,NULL,'m'},
+	  {"offset",1,NULL,'f'},
+	  {NULL,0,NULL,0}
+	};
+	
+	char* program_name=argv[0];	
+	std::string input_filename = "";
+	std::string output_filename = "";
+	int min_size = 5;
+	double density_cutoff = 0.2;
+	int min_edge_weight = 0;
+	int format_type = 1;
+	int offset = 0;
+
+	do
+	{
+		next_option=getopt_long(argc,argv,short_options,long_options,NULL);
+		switch(next_option)
+		{
+		case 'h':
+			print_usage(stdout,0);
+	  		exit(1);
+		case 'i':
+			input_filename = optarg;
+			break;
+		case 'o':
+			output_filename = optarg;
+			break;
+		case 's':
+			min_size = atoi(optarg);
+			break;
+		case 'd':
+			density_cutoff = atof(optarg);
+			break;
+		case 'e':
+			min_edge_weight = atoi(optarg);
+			break;
+		case 'm':
+			format_type = atoi(optarg);
+			break;
+		case 'f':
+			offset = atoi(optarg);
+			break;
+		case '?':
+			print_usage(stderr, program_name);
+		case -1:
+			break;
+		default:
+			abort();
+		}
+	}while(next_option!=-1);
+	
+	//ifstream inf(argv[1]);
+	//ofstream outf(argv[2], ios::app | ios::out);
+
+	if (input_filename!="")
+	{
+		ClusterByEBC instance(input_filename, min_edge_weight, min_size, density_cutoff, format_type, offset, output_filename);
+		instance.run();
+	}
+	else
+		print_usage(stderr, program_name);
 }
