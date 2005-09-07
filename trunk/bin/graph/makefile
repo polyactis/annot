@@ -10,7 +10,7 @@ FORTRAN_LIB	= ~/script/hhu_clustering/lib/libg2c.a
 
 
 BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so
-BoostPythonBinary	= clustering
+BoostPythonBinary	= clustering cc_from_edge_list
 BoostPythonLib  = -lboost_python
 
 SwigInclude	= /usr/include/python2.3
@@ -19,8 +19,8 @@ SwigPy		= graph_modeling.py
 CxxWrap	= graph_modeling_wrap.cc
 
 
-CFlags		= -O2
-CxxFlags	= -O2 -fPIC
+CFlags		= -O3
+CxxFlags	= -O3 -fPIC
 SharedLibFlags	= -shared -fPIC
 
 .SUFFIXES:	.i .cc .c .so .o _wrap.o .py
