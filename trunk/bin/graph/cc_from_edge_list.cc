@@ -358,7 +358,7 @@ void ClusterByEBC::init_graph_from_file(const std::string &input_filename, Graph
 
 void ClusterByEBC::reindex_edge(Graph &graph)
 /*
-09-06-05
+09-07-05
 	reindex the edges to be sure they are in the range[0, num_edges(graph))
 */
 {
@@ -372,12 +372,16 @@ void ClusterByEBC::reindex_edge(Graph &graph)
 	}
 }
 
-void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_cutoff, const float &conn_cutoff)
+void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, vector<double> &edge_centrality_vector, const int &size_cutoff, const float &conn_cutoff)
 /*
 *09-04-05
 *	cut the graph with the edge of maximum betweenness_centrality
 09-07-05
 	a bug arises in calling brandes_betweenness_centrality(), Doug's email solved it.
+	1. reindex_edge()
+	2. allocate edge_centrality_vector for the total number of  edges *outside* of the cut_by_betweenness_centrality
+		I used 2 because it's faster.
+	
 */
 {
 	int no_of_vertices = num_vertices(graph);
@@ -401,9 +405,8 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_c
 		}
 		else
 		{
-			vector<double> edge_centrality(no_of_edges);
-			EdgeCentralityMap ec_map(edge_centrality.begin(), get(edge_index, graph));
-				//"make_iterator_property_map(edge_centrality.begin(), get(edge_index, subgraph), double())" also works.
+			EdgeCentralityMap ec_map(edge_centrality_vector.begin(), get(edge_index, graph));
+				//"make_iterator_property_map(edge_centrality_vector.begin(), get(edge_index, subgraph), double())" also works.
 			indirect_cmp<EdgeCentralityMap, std::less<centrality_type> > cmp(ec_map);
 			#ifdef DEBUG
 				std::cerr<<"running brandes_betweenness_centrality... ";
@@ -418,7 +421,7 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_c
 				std::cerr<<"max_centrality is "<<max_centrality<<std::endl;
 			#endif
 			remove_edge(e, graph);
-			reindex_edge(graph);	//09-07-05	fix an important bug here.
+			//reindex_edge(graph);	//09-07-05	see doc of this function
 			#ifdef DEBUG
 				std::cerr<<"after removal the subgraph has "<<num_edges(graph)<<" edges."<<std::endl;
 			#endif
@@ -432,7 +435,7 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_c
 				#ifdef DEBUG
 					std::cerr<<"only one component, keep cutting "<<std::endl;
 				#endif
-				cut_by_betweenness_centrality(graph, size_cutoff, conn_cutoff);
+				cut_by_betweenness_centrality(graph, edge_centrality_vector, size_cutoff, conn_cutoff);
 			}
 			else	//first get the connected_components into a vector_sub_subgraph and cut them separately
 			{
@@ -443,7 +446,7 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, const int &size_c
 				std::vector<Graph>::iterator g_iterator;
 				for(g_iterator=vector_graph.begin();g_iterator!=vector_graph.end();++g_iterator)
 				{
-					cut_by_betweenness_centrality(*g_iterator, size_cutoff, conn_cutoff);
+					cut_by_betweenness_centrality(*g_iterator, edge_centrality_vector, size_cutoff, conn_cutoff);
 				}
 			}
 		}
@@ -592,9 +595,11 @@ void ClusterByEBC::run()
 	#ifdef DEBUG
 		std::cerr<<"No. of components in graph is: "<<vector_graph.size()<<std::endl;
 	#endif
+	vector<double> edge_centrality_vector(num_edges(g));
+	
 	for(g_iterator=vector_graph.begin();g_iterator!=vector_graph.end();++g_iterator)
 	{
-		cut_by_betweenness_centrality(*g_iterator, _size_cutoff, _conn_cutoff);
+		cut_by_betweenness_centrality(*g_iterator, edge_centrality_vector, _size_cutoff, _conn_cutoff);
 	}
 	
 	if (_output_filename=="")

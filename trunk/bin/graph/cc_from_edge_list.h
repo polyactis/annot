@@ -70,7 +70,7 @@ class ClusterByEBC:public cc_from_edge_list
 	void init_graph_from_file(const std::string &input_filename, Graph &graph, const int &min_edge_weight);
 	void init_graph_from_file(const std::string &input_filename, Graph &graph, const int &size_cutoff, const int &offset);
 	void reindex_edge(Graph &graph);
-	void cut_by_betweenness_centrality(Graph &graph, const int &size_cutoff, const float &conn_cutoff);
+	void cut_by_betweenness_centrality(Graph &graph, vector<double> &edge_centrality_vector, const int &size_cutoff, const float &conn_cutoff);
 	void run();
 	twoListTuple graph2list(Graph &graph);
 	void output_graph(std::ofstream &outf, Graph &graph);
