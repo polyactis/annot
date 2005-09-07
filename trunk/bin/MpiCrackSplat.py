@@ -12,7 +12,7 @@ Option:
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
 	-s ..., --min_size=...	minimum size of a cluster(5 default)
 	-c ..., --min_con=...	minimum connectivity(0.5, default)
-	-y ..., --cluster_block_size=...	min no of clusters in cluster_block_matrix(1500, default)
+	-y ..., --cluster_block_size=...	min no of clusters in cluster_block_matrix(1500, default)IGNORE
 	-w ..., --cluster_block_edges=...	min no of edges in cluster_block_matrix(25,000, default)
 	-b, --debug	debug version.
 	-r, --report	enable report flag
@@ -25,7 +25,7 @@ Examples:
 	
 Description:
 	Counterpart of CrackSplat.py, but uses ClusterByEBC and MPI.
-	Watch -y and -w, Numeric resize is very expensive.
+	Watch -w, control the transmission block size.
 	
 """
 
@@ -93,15 +93,30 @@ class MpiCrackSplat:
 	def get_cluster_block(self, reader, min_size, max_no_of_clusters=1000, edge_limit=20000):
 		"""
 		09-05-05
+		
 			Format of cluster_block_matrix:
 				[vertex1, vertex2, cluster1, cluster2, ...]
 			cluster1, cluster2, ... are occurrence flags
 			Dictionay edge2index keeps track of the pointer of each edge in the cluster_block_matrix.
 			
 			Numeric resize is very expensive, try to avoid it.
+		09-07-05
+			re-encode the cluster_block_matrix
+			Format:
+				[
+				[v1_of_e1, v2_of_e1]
+				[v2_of_e1, v2_of_e2]
+				...
+				[-2,-2]
+				[v1_of_e1, v2_of_e1]
+				[v2_of_e1, v2_of_e2]
+				...
+				[-2,-2]
+				...
+				]
 		"""
-		edge2index = {}
-		cluster_block_matrix = Numeric.zeros((edge_limit,max_no_of_clusters+2), Numeric.Int)
+		cluster_block_matrix = []	#Numeric.zeros((edge_limit,max_no_of_clusters+2), Numeric.Int)
+		numb_edge = [-2, -2]	#separator of clusters
 		counter = 0
 		for row in reader:
 			vertex_list = row[0][1:-1].split(',')
@@ -112,33 +127,16 @@ class MpiCrackSplat:
 				edge = edge.split(',')
 				edge = map(int, edge)
 				edge.sort()	#ascending order
-				edge = tuple(edge)
-				if edge not in edge2index:
-					edge2index[edge] = len(edge2index)
-					if edge2index[edge]>=edge_limit:	#Watch: >=. means a new edge appears and matrix already exceeds the limit
-						#extend the cluster_block_matrix
-						shape_x, shape_y = cluster_block_matrix.shape
-						cluster_block_matrix = Numeric.resize(cluster_block_matrix, (shape_x+1, shape_y))
-						if self.debug:
-							sys.stderr.write("cluster_block_matrix enlarged to %s.\n"%cluster_block_matrix.shape[0])
-					#put the edge into cluster_block_matrix
-					index = edge2index[edge]
-					cluster_block_matrix[index,0] = edge[0]
-					cluster_block_matrix[index,1] = edge[1]
-				#turn on that flag
-				index = edge2index[edge]
-				cluster_block_matrix[index, counter+2] = 1	#Watch: +2
+				cluster_block_matrix.append(edge)
+			cluster_block_matrix.append(numb_edge)	#attach the separator
 			counter += 1	#posterior plus
-			if self.debug:
-				sys.stderr.write("Counter is %s\n"%counter)
-			if counter==max_no_of_clusters:	#enough, revisit later
+			if len(cluster_block_matrix)>=edge_limit:	#enough, revisit later
+				if self.debug:
+					sys.stderr.write("No of clustes is %s\n"%counter)
+					sys.stderr.write("No of edges is %s.\n"%len(cluster_block_matrix))
 				break
-		#resize the cluster_block_matrix in case the matrix is not full
-		no_of_edges = len(edge2index)
-		if no_of_edges==0:
-			cluster_block_matrix = None
-		elif no_of_edges<edge_limit:
-			cluster_block_matrix = Numeric.resize(cluster_block_matrix, (no_of_edges, max_no_of_clusters+2))
+		#transform it into Numeric.array
+		cluster_block_matrix = Numeric.array(cluster_block_matrix)
 		if self.debug:
 			sys.stderr.write("The shape of cluster_block_matrix is %s.\n"%(repr(cluster_block_matrix.shape)))
 		return cluster_block_matrix
@@ -179,10 +177,10 @@ class MpiCrackSplat:
 		"""
 		09-05-05
 			what the computing_node does
-			
+		09-07-05
+			the cluster_block_matrix's format was changed in get_cluster_block(), follow it.
 			--node_fire()
 		"""
-		shape_y = max_no_of_clusters +2
 		node_rank = communicator.rank
 		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
 		while data:
@@ -191,8 +189,8 @@ class MpiCrackSplat:
 					sys.stderr.write("node %s breaked.\n"%node_rank)
 				break
 			else:
-				shape_x = count/shape_y
-				data.shape = (shape_x, shape_y)
+				shape_x = count/2
+				data.shape = (shape_x, 2)
 				self.node_fire(communicator, data, min_size, min_con)
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
 		#tell the last node to stop
@@ -213,20 +211,26 @@ class MpiCrackSplat:
 				[v1_of_e1, v2_of_e1,0,0,...]
 				[v1_of_e2, v2_of_e2,0,0,...]
 				]
+		09-07-05
+			the cluster_block_matrix's format was changed in get_cluster_block(), follow it.
+			Also change the format of edge_block:
+				[
+				[no_of_vertices, no_of_edges]
+				[v1,0]
+				[v2,0]
+				...
+				[vn,0]
+				[v1_of_e1, v2_of_e1]
+				...
+				]
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
-		shape_x, shape_y = cluster_block_matrix.shape
-		for i in range(2, shape_y):	#skip the 1st two-vertices
-			edge_list = []
-			for j in range(shape_x):
-				if cluster_block_matrix[j,i]==1:
-					edge_list.append([cluster_block_matrix[j,0], cluster_block_matrix[j,1]])
-			if len(edge_list)==0:	#no more clusters
-				break
-			else:
+		edge_list = []
+		for edge in cluster_block_matrix:
+			if edge==[-2,-2]:	#cluster separator
 				if self.debug:
-					sys.stderr.write("The raw edge_list is %s"%repr(edge_list))
+					sys.stderr.write("The raw edge_list is %s.\n"%repr(edge_list))
 				ClusterByEBC_instance = ClusterByEBC(edge_list, min_size, min_con)
 				ClusterByEBC_instance.run()
 				for k in range(len(ClusterByEBC_instance.cc_list)):
@@ -237,25 +241,31 @@ class MpiCrackSplat:
 						sys.stderr.write("The vertex_list is %s.(from node %s)\n"%(repr(vertex_list), node_rank))
 					no_of_vertices = len(vertex_list)
 					no_of_edges = len(edge_list)
-					edge_block = Numeric.zeros((no_of_edges+2, no_of_vertices), Numeric.Int)	#Watch: +2
-					edge_block[0,0], edge_block[0,1] = edge_block.shape
+					edge_block = Numeric.zeros((no_of_vertices+no_of_edges+1, 2), Numeric.Int)	#Watch: +2
+					edge_block[0,0], edge_block[0,1] = no_of_vertices, no_of_edges
 					vertex_list.sort()
-					edge_block[1] = vertex_list
+					for i in range(no_of_vertices):
+						edge_block[i+1][0] = vertex_list[i]
 					for l in range(no_of_edges):
 						edge = edge_list[l]
 						if edge[0]>edge[1]:
 							edge.reverse()
-						edge_block[l+2,0], edge_block[l+2,1] = edge
+						edge_block[no_of_vertices+l+1,0], edge_block[no_of_vertices+l+1,1] = edge
 					if self.debug:
 						sys.stderr.write("The edge_block is %s.(from node %s)\n"%(repr(edge_block), node_rank))
 					communicator.send(edge_block, communicator.size-1, 1)
 				del ClusterByEBC_instance
+				edge_list= []	#clean up
+			else:
+				edge_list.append(list(edge))	#Watch: convert to list
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 	
 	def output_node(self, communicator, outputfile, codense2db_instance, edge2encodedOccurrence, no_of_datasets):
 		"""
 		09-05-05
 			what the output_node does
+		09-07-05
+			node_fire() changed the format of edge_block, follow it
 			
 			--output_cluster()
 		"""
@@ -273,8 +283,8 @@ class MpiCrackSplat:
 					if self.debug:
 						sys.stderr.write("node %s output finished.\n"%node_rank)
 			else:
-				shape_x, shape_y = data[0], data[1]
-				data.shape = (shape_x, shape_y)
+				shape_x = count/2
+				data.shape = (shape_x, 2)
 				self.output_cluster(writer, codense2db_instance, edge2encodedOccurrence, data, no_of_datasets)
 			data, source, tag, count = communicator.receive(Numeric.Int, None, 1)
 		del writer
@@ -283,11 +293,18 @@ class MpiCrackSplat:
 		"""
 		09-05-05
 			output the cluster
+		09-07-05
+			node_fire() changed the format of edge_block, follow it
 		"""
-		vertex_list = list(edge_block[1])
+		no_of_vertices, no_of_edges = edge_block[0]
+		
+		vertex_list = []
+		for i in range(1, no_of_vertices+1):
+			vertex_list.append(edge_block[i,0])
+		
 		edge_list = []
 		combined_vector = []
-		for i in range(2, edge_block.shape[0]):
+		for i in range(no_of_vertices+1, edge_block.shape[0]):
 			edge = [edge_block[i,0], edge_block[i,1]]
 			edge_list.append(edge)
 			edge_tuple = tuple(edge)
@@ -295,6 +312,7 @@ class MpiCrackSplat:
 				sys.stderr.write("edge %s not in edge2encodedOccurrence.\n"%(repr(edge)))
 			combined_vector.append(decodeOccurrenceToBv(edge2encodedOccurrence[edge_tuple], no_of_datasets))
 		recurrence_array = codense2db_instance.parse_recurrence(combined_vector)
+		edge_list.sort()
 		writer.writerow([repr(vertex_list), repr(edge_list), repr(recurrence_array)] )
 	
 	def run(self):
