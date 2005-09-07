@@ -227,8 +227,8 @@ class MpiCrackSplat:
 			else:
 				if self.debug:
 					sys.stderr.write("The raw edge_list is %s"%repr(edge_list))
-				ClusterByEBC_instance = ClusterByEBC()
-				ClusterByEBC_instance.run(edge_list, min_size, min_con)
+				ClusterByEBC_instance = ClusterByEBC(edge_list, min_size, min_con)
+				ClusterByEBC_instance.run()
 				for k in range(len(ClusterByEBC_instance.cc_list)):
 					edge_list = ClusterByEBC_instance.cc_list[k]
 					vertex_list = ClusterByEBC_instance.cc_vertex_list[k]
