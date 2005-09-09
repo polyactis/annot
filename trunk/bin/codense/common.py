@@ -656,3 +656,45 @@ def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=1, fu
 			output_f.write('\t%s -- %s ;\n'%(edge_tuple[0], edge_tuple[1]))
 	output_f.write('}\n')
 	sys.stderr.write("Done\n")
+
+def org2tax_id(organism):
+	"""
+	09-08-05
+		return tax_id, given organism
+	"""
+	tax_id = None
+	org2tax_id = {'Arabidopsis thaliana':3702,
+		'Caenorhabditis elegans':6239,
+		'Drosophila melanogaster':7227,
+		'Homo sapiens':9606,
+		'Mus musculus':10090,
+		'Saccharomyces cerevisiae':4932,
+		'Rattus norvegicus':10116}
+	if organism in org2tax_id:
+		tax_id = org2tax_id[organism]
+	return tax_id
+
+def org_short2long(organism):
+	"""
+	09-08-05
+		return long-form organism
+	"""
+	long_organism = None
+	org_short2long = {'at':'Arabidopsis thaliana',
+		'ce':'Caenorhabditis elegans',
+		'dm':'Drosophila melanogaster',
+		'hs':'Homo sapiens',
+		'mm':'Mus musculus',
+		'sc':'Saccharomyces cerevisiae',
+		'rn':'Rattus norvegicus',
+		'Rattus norvegicus':'Rattus norvegicus',
+		'Arabidopsis thaliana':'Arabidopsis thaliana',
+		'Caenorhabditis elegans':'Caenorhabditis elegans',
+		'Drosophila melanogaster':'Drosophila melanogaster',
+		'Homo sapiens':'Homo sapiens',
+		'Mus musculus':'Mus musculus',
+		'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
+		'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
+	if organism in org_short2long:
+		long_organism = org_short2long[organism]
+	return long_organism
