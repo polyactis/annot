@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """
 Usage: TF_functions.py schema organism inputfile
-09-08-05
+
+Example:
+	TF_functions.py hs_fim_138 hs /tmp/list1.txt.gene_id  >/tmp/list1.out
+
+Description:
 	some functions to do TF stat of a cluster
 """
 
