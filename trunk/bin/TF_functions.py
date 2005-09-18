@@ -104,6 +104,9 @@ def tf_combo_stat(tf2gene_no_set_global, tf_stat_list, no_of_total_genes, cluste
 		second, for each pair, get its genome-wide prob and joint prob
 		3rd, calculate the likelihood seeing #pairs in the cluster and whole genome
 		4th, likelihood ratio
+	09-17-05
+		log the likeli1 and likeli2
+		l_ratio = likeli1 - likeli2 (previous is /)
 	"""
 	tf_gene_no_set_list = []
 	for row in tf_stat_list:
@@ -121,13 +124,14 @@ def tf_combo_stat(tf2gene_no_set_global, tf_stat_list, no_of_total_genes, cluste
 			prob_tf2 = len(tf2_gene_no_set_global)/float(no_of_total_genes)
 			prob_combo = prob_tf1*prob_tf2
 			combo_size_global = len(tf1_gene_no_set_global&tf2_gene_no_set_global)
-			likeli1 = r.dbinom(combo_size_local, cluster_size, prob_combo)
-			likeli2 = r.dbinom(combo_size_global, no_of_total_genes, prob_combo)
+			likeli1 = r.dbinom(combo_size_local, cluster_size, prob_combo,log=r.TRUE)
+			likeli2 = r.dbinom(combo_size_global, no_of_total_genes, prob_combo, log=r.TRUE)
 			if likeli2==0:
 				l_ratio = 1
 			else:
-				l_ratio = likeli1/likeli2
-			tf_combo_stat_list.append([l_ratio, combo_size_local, cluster_size, combo_size_global, no_of_total_genes, prob_tf1, prob_tf2, prob_combo, likeli1, likeli2, list(tf1_gene_no_set&tf2_gene_no_set), (tf1,tf2)])
+				l_ratio = likeli1-likeli2
+			tf_combo_stat_list.append([l_ratio, combo_size_local, cluster_size, combo_size_global, no_of_total_genes, \
+				prob_tf1, prob_tf2, prob_combo, likeli1, likeli2, list(tf1_gene_no_set&tf2_gene_no_set), (tf1,tf2)])
 	return tf_combo_stat_list
 	
 
@@ -163,6 +167,7 @@ if __name__ == '__main__':
 		writer.writerow(["Genes_with_no_tf"]+no_tf_gene_no_list)
 		tf_combo_stat_list.sort()
 		for row in tf_combo_stat_list:
+			row[-2] = repr(row[-2])[1:-1]
 			writer.writerow(row)
 		del writer
 		
