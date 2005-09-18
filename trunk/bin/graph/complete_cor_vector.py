@@ -68,17 +68,21 @@ class complete_cor_vector:
 		add collect_and_merge_output(), node_fire() and modify file_combine()
 	
 	'''
-	def __init__(self, data_dir, hostname, dbname, schema, table, input_file, output_file, \
-		significance_file, label, gph_dir=None, p_value_cut_off=0.01, cor_cut_off=0.6, \
-		report=0, debug=0):
+	def __init__(self, data_dir=None, hostname='zhoudb', dbname='graphdb', schema=None, table=None,\
+		input_file=None, output_file=None, significance_file=None, label=1, gph_dir=None, \
+		p_value_cut_off=0.01, cor_cut_off=0.6, report=0, debug=0):
 		"""
 		05-14-05
 			add debug flag.
 			dir_files is useless.
 		06-30-05
 			dir_files renamed to be gph_dir
+		09-15-05
+			db connection goes to run()
 		"""
 		self.dir = data_dir
+		self.hostname = hostname
+		self.dbname = dbname
 		self.schema = schema
 		self.table = table
 		self.input_file = input_file
@@ -90,14 +94,6 @@ class complete_cor_vector:
 		self.cor_cut_off = float(cor_cut_off)
 		self.debug = int(debug)
 		
-		if self.schema:
-			self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-			self.curs = self.conn.cursor()
-			self.curs.execute("set search_path to %s"%self.schema)
-		else:
-			if self.dir == None:
-				sys.stderr.write("Either schema or data directory should be specified\n")
-				sys.exit(2)
 		
 		#mapping between gene_no and gene_id
 		self.gene_index2no = {}
@@ -508,6 +504,14 @@ class complete_cor_vector:
 			--cor_vector_from_files
 
 		"""
+		if self.schema:
+			self.conn = psycopg.connect('host=%s dbname=%s'%(self.hostname, self.dbname))
+			self.curs = self.conn.cursor()
+			self.curs.execute("set search_path to %s"%self.schema)
+		else:
+			if self.dir == None:
+				sys.stderr.write("Either schema or data directory should be specified\n")
+				sys.exit(2)
 		communicator = MPI.world.duplicate()
 		
 		self.dstruc_loadin(communicator)
