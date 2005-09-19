@@ -39,6 +39,8 @@ Examples:
 	14: connectivity2homogeneity
 04-03-05
 	15: TestGraphModelingGraphCC
+09-18-05
+	16: Test_attr_of_mt_id
 """
 import unittest, os, sys, getopt, csv
 
@@ -973,7 +975,45 @@ class TestGraphModelingGraphCC(unittest.TestCase):
 					sys.stderr.write("edge: %s, summary weight: %s, database weight: %s.\n"\
 						%(repr(edge), weight, edge_weight))
 				sys.stderr.write('%s%s'%('\x08'*10, no_of_edges))
+
+class Test_attr_of_mt_id(unittest.TestCase):
+	"""
+	09-18-05
+	"""
 	
+	def test_attr_of_mt_id(self):
+		"""
+		04-03-05
+		"""
+		ls = [
+		[0.847, 'BC073913', 1],
+		[0.858, 'BC073912', 2],
+		[0.883, 'BC073911', 3],
+		[0.925, 'BC073910', 4],
+		[0.925, 'BC073913', 5],
+		[0.847, 'BC073912', 6],
+		[0.858, 'BC073911', 7],
+		[0.883, 'BC073910', 8],
+		[0.858, 'BC073913', 9],
+		[0.883, 'BC073912', 10],
+		[0.925, 'BC073911', 11],
+		[0.847, 'BC073910', 12],
+		[0.883, 'BC073913', 13],
+		[0.925, 'BC073912', 14],
+		[0.847, 'BC073911', 15],
+		[0.858, 'BC073910', 16],
+		]
+		from binding_site2gene_id2mt_id import attr_of_mt_id
+		unit = attr_of_mt_id(4, 1)	#top_number is 3, and debug is enabled.
+		for matrix_similarity_score, prom_acc, id in ls:
+			unit.consume_new_row(matrix_similarity_score, prom_acc, id)
+		from heapq import heappush, heappop
+		
+		while len(unit.hq_list)>0:
+			row = heappop(unit.hq_list)
+			print row
+		print unit.acc2id_set
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1000,7 +1040,8 @@ if __name__ == '__main__':
 		12: TestCrackBySplat,
 		13: TestPGeneFactor,
 		14: TestConnectivity2Homogeneity,
-		15: TestGraphModelingGraphCC}
+		15: TestGraphModelingGraphCC,
+		16: Test_attr_of_mt_id}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
