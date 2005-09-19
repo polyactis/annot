@@ -40,7 +40,7 @@ Examples:
 04-03-05
 	15: TestGraphModelingGraphCC
 09-18-05
-	16: Test_attr_of_mt_id
+	16: Test_attr_of_mt_no
 """
 import unittest, os, sys, getopt, csv
 
@@ -976,12 +976,12 @@ class TestGraphModelingGraphCC(unittest.TestCase):
 						%(repr(edge), weight, edge_weight))
 				sys.stderr.write('%s%s'%('\x08'*10, no_of_edges))
 
-class Test_attr_of_mt_id(unittest.TestCase):
+class Test_attr_of_mt_no(unittest.TestCase):
 	"""
 	09-18-05
 	"""
 	
-	def test_attr_of_mt_id(self):
+	def test_attr_of_mt_no(self):
 		"""
 		04-03-05
 		"""
@@ -1003,8 +1003,8 @@ class Test_attr_of_mt_id(unittest.TestCase):
 		[0.847, 'BC073911', 15],
 		[0.858, 'BC073910', 16],
 		]
-		from binding_site2gene_id2mt_id import attr_of_mt_id
-		unit = attr_of_mt_id(4, 1)	#top_number is 3, and debug is enabled.
+		from binding_site2gene_id2mt_no import attr_of_mt_no
+		unit = attr_of_mt_no(4, 1)	#top_number is 3, and debug is enabled.
 		for matrix_similarity_score, prom_acc, id in ls:
 			unit.consume_new_row(matrix_similarity_score, prom_acc, id)
 		from heapq import heappush, heappop
@@ -1041,7 +1041,7 @@ if __name__ == '__main__':
 		13: TestPGeneFactor,
 		14: TestConnectivity2Homogeneity,
 		15: TestGraphModelingGraphCC,
-		16: Test_attr_of_mt_id}
+		16: Test_attr_of_mt_no}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
