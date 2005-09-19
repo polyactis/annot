@@ -8,6 +8,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-g ..., --organism=...	two letter organism abbreviation
+	-o ...,	output_table(gene, default)
 	-u, --union	takes the union of all genes in the datasets, default is intersection
 	-c, --commit	commits the database transaction
 	-h, --help              show this help
@@ -23,95 +24,99 @@ Description:
 
 import pickle, sys, os, psycopg, csv, getopt
 from sets import Set
+from codense.common import db_connect, get_gene_id2mt_no_list, get_global_gene_id2gene_no, org2tax_id, org_short2long
 
 class gene_table:
 	'''
 	Initialize the local gene_id:gene_no mapping in table schema.gene
 	'''
-	def __init__(self, dir, hostname, dbname, schema, orgn, union=0, needcommit=0):
+	def __init__(self, dir=None, hostname='zhoudb', dbname='graphdb', schema=None, \
+		output_table='gene', orgn='', union=0, needcommit=0):
 		"""
 		08-30-05
 			add rn to org_short2long
 		"""
 		self.dir = dir
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to %s"%schema)
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
+		self.output_table = output_table
+		self.organism = org_short2long(orgn)
 		self.union = int(union)
-		self.needcommit = int(needcommit)
-		self.org_short2long = {'at':'Arabidopsis thaliana',
-			'ce':'Caenorhabditis elegans',
-			'dm':'Drosophila melanogaster',
-			'hs':'Homo sapiens',
-			'mm':'Mus musculus',
-			'sc':'Saccharomyces cerevisiae',
-			'rn':'Rattus norvegicus',
-			'Rattus norvegicus':'Rattus norvegicus',
-			'Arabidopsis thaliana':'Arabidopsis thaliana',
-			'Caenorhabditis elegans':'Caenorhabditis elegans',
-			'Drosophila melanogaster':'Drosophila melanogaster',
-			'Homo sapiens':'Homo sapiens',
-			'Mus musculus':'Mus musculus',
-			'Gorilla gorilla Pan paniscus Homo sapiens':'Homo sapiens',
-			'Saccharomyces cerevisiae':'Saccharomyces cerevisiae'}
-		self.organism = self.org_short2long[orgn]
-		#mapping between gene_id and gene_no
-		self.gene_id2gene_no = {}
-		#mapping between gene_id and its occurence
-		self.gene_id2freq = {}
-		#unique gene collection, for database submission
-		self.gene_set = Set()
-		
-	def dstruc_loadin(self):
-		#setup self.gene_id2gene_no
-		self.curs.execute("select gene_id, gene_no from graph.gene_id_to_no where organism='%s'"%self.organism)
-		rows = self.curs.fetchall()
-		for row in rows:
-			self.gene_id2gene_no[row[0]] = row[1]
+		self.needcommit = int(needcommit)		
 	
-	def run(self):
-		#load in the data structures first.
-		self.dstruc_loadin()
+	def return_gene_id_set(self, dir, gene_id2gene_no, union):
+		"""
+		09-19-05
+			rewrite and split from run()
+		"""
 		#iterate over all the datasets, find all the genes
-		files = os.listdir(self.dir)
+		files = os.listdir(dir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		new_yeast_gene_list = []
+		gene_id2freq = {}
+		gene_id_set = Set()
 		for f in files:
 			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
-			f_path = os.path.join(self.dir, f)
+			f_path = os.path.join(dir, f)
 			reader = csv.reader(file(f_path), delimiter='\t')
 			for row in reader:
-				if row[0] in self.gene_id2gene_no:
+				if row[0] in gene_id2gene_no:
 				#03-29-05, ignore genes not in graph.gene_id_to_no.
-					if row[0] in self.gene_id2freq:
+					if row[0] in gene_id2freq:
 					#not first encountering
-						self.gene_id2freq[row[0]] += 1
+						gene_id2freq[row[0]] += 1
 					else:
 					#first encountering
-						self.gene_id2freq[row[0]] = 1
+						gene_id2freq[row[0]] = 1
 			del reader
 		
-		if self.union:
+		if union:
 		#take the union set
-			self.gene_set = Set(self.gene_id2freq.keys())
+			gene_id_set = Set(gene_id2freq.keys())
 		else:
 		#take the intersection set
-			for (gene_id, freq) in self.gene_id2freq.iteritems():
+			for (gene_id, freq) in gene_id2freq.iteritems():
 				if freq == len(files):
 				#occur in all datasets
-					self.gene_set.add(gene_id)
-		sys.stderr.write("%d genes to be submitted\n"%len(self.gene_set))
-		#database submission
-		self.submit()
-		
-	def submit(self):
+					gene_id_set.add(gene_id)
+		sys.stderr.write("%d genes to be submitted\n"%len(gene_id_set))
+		return gene_id_set
+	
+	def submit(self, curs, output_table, gene_id_set, gene_id2gene_no, gene_id2mt_no_list):
 		sys.stderr.write("Database transacting...")
-		for gene_id in self.gene_set:
-			self.curs.execute("insert into gene(gene_id, gene_no) values ('%s', %d)"%\
-				(gene_id, self.gene_id2gene_no[gene_id] ))
-		if self.needcommit:
-			self.conn.commit()
+		for gene_id in gene_id_set:
+			mt_no_list = gene_id2mt_no_list.get(gene_id)
+			gene_no = gene_id2gene_no[gene_id]
+			if mt_no_list:
+				mt_no_list.sort()
+				curs.execute("insert into %s(gene_id, gene_no, trans_fac)  values\
+					('%s', %s, '{%s}')"%(output_table, gene_id, gene_no, repr(mt_no_list)[1:-1]))
+			else:
+				curs.execute("insert into %s(gene_id, gene_no) values ('%s', %d)"%\
+					(output_table, gene_id, gene_no ))
 		sys.stderr.write("done.\n")
+	
+	def run(self):
+		"""
+		09-19-05
+			rewrite
+			
+			--db_connect()
+			--get_global_gene_id2gene_no()
+			--org2tax_id()
+			--get_gene_id2mt_no_list()
+			--return_gene_id_set()
+			--submit()
+		"""
+		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+		gene_id2gene_no = get_global_gene_id2gene_no(curs, self.organism)
+		tax_id = org2tax_id(self.organism)
+		gene_id2mt_no_list = get_gene_id2mt_no_list(tax_id)
+		gene_id_set = self.return_gene_id_set(self.dir, gene_id2gene_no, self.union)
+		self.submit(curs, output_table, gene_id_set, gene_id2gene_no, gene_id2mt_no_list)
+		if self.needcommit:
+			conn.commit()
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -119,7 +124,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:uc", ["help", "hostname=", "dbname=", "schema=", "organism=", "union", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:o:g:uc", ["help", "hostname=", "dbname=", "schema=", "organism=", "union", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -127,6 +132,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	output_table = 'gene'
 	organism = ''
 	union = 0
 	commit = 0
@@ -140,6 +146,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-o"):
+			output_table = arg
 		elif opt in ("-g", "--organism"):
 			organism = arg
 		elif opt in ("-u", "--union"):
@@ -147,8 +155,8 @@ if __name__ == '__main__':
 		elif opt in ("-c", "--commit"):
 			commit = 1
 			
-	if schema and organism and len(args) == 1:
-		instance = gene_table(args[0], hostname, dbname, schema, organism, union, commit)
+	if schema and organism and len(args) == 1 and output_table:
+		instance = gene_table(args[0], hostname, dbname, schema, output_table, organism, union, commit)
 		instance.run()
 	else:
 		print __doc__
