@@ -698,3 +698,49 @@ def org_short2long(organism):
 	if organism in org_short2long:
 		long_organism = org_short2long[organism]
 	return long_organism
+
+def get_mt_id2no(hostname='zhoudb', dbname='graphdb', schema='transfac', table='matrix'):
+	"""
+	09-19-05
+	"""
+	sys.stderr.write("Getting mt_id2no...")
+	mt_id2no = {}
+	(conn, curs) =  db_connect(hostname, dbname, schema)
+	curs.execute("select mt_id, id from %s"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		mt_id2no[row[0]] = row[1]
+	del conn, curs
+	sys.stderr.write("Done\n")
+	return mt_id2no
+	
+def get_gene_id2mt_no_list(tax_id, hostname='zhoudb', dbname='graphdb', schema='graph', table='gene_id2mt_no'):
+	"""
+	09-19-05
+	"""
+	sys.stderr.write("Getting gene_id2mt_no_list...")
+	gene_id2mt_no_list = {}
+	(conn, curs) =  db_connect(hostname, dbname, schema)
+	curs.execute("select gene_id, mt_no from %s where tax_id=%s"%(table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id, mt_no = row
+		if gene_id not in gene_id2mt_no_list:
+			gene_id2mt_no_list[gene_id] = []
+		gene_id2mt_no_list[gene_id].append(mt_no)
+	del conn, curs
+	sys.stderr.write("Done\n")
+	return gene_id2mt_no_list
+
+def get_global_gene_id2gene_no(curs, organism, table='graph.gene_id_to_no'):
+	"""
+	09-19-05
+	"""
+	sys.stderr.write("Getting global gene_id2gene_no...")
+	gene_id2gene_no = {}
+	curs.execute("select gene_id, gene_no from %s where organism='%s'"%(table, organism))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id2gene_no[row[0]] = row[1]
+	sys.stderr.write("Done.\n")
+	return gene_id2gene_no
