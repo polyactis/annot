@@ -138,10 +138,9 @@ class MpiClusterBsStat:
 	def input_node(self, communicator, curs, gene_p_table, p_gene_table, mcl_table, size):
 		sys.stderr.write("Reading clusters from tables...\n")
 		node_rank = communicator.rank
-		curs.execute("DECLARE crs CURSOR FOR select m.mcl_id, m.vertex_set from %s m limit 8000"%(mcl_table))
-			#,\
-			#%s p, %s m where n.p_gene_id=p.p_gene_id and m.mcl_id=p.mcl_id"%(gene_p_table,
-			#p_gene_table, mcl_table))
+		curs.execute("DECLARE crs CURSOR FOR select distinct m.mcl_id, m.vertex_set from %s n,\
+			%s p, %s m where n.p_gene_id=p.p_gene_id and m.mcl_id=p.mcl_id"%(gene_p_table,
+			p_gene_table, mcl_table))
 		cluster_block = self.fetch_cluster_block(curs, size)
 		which_node = 0
 		while cluster_block:
@@ -239,7 +238,7 @@ class MpiClusterBsStat:
 				offset2 = no_of_bs_nos + no_of_genes + 2
 				bs_no_list = row[2:offset1]
 				bs_no_list = map(int, bs_no_list)
-				gene_no_list = row[offset1, offset2]
+				gene_no_list = row[offset1: offset2]
 				gene_no_list = map(int, gene_no_list)
 				global_ratio, local_ratio, expected_ratio, unknown_ratio, score, score_type = row[offset2:]
 				score_type = int(score_type)
@@ -257,14 +256,14 @@ class MpiClusterBsStat:
 	def output_node(self, communicator, curs, cluster_bs_table):
 		"""
 		09-19-05
-			
+			BUG!!!  while 1: not while data: (mcl_id could just be 0, data is [0], which is nothing)
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
 		data, source, tag, count = communicator.receive(Numeric.Float, None, 1)
 		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
-		sys.std .write("The data is %s.\n"%repr(data))
-		while data:
+		sys.stderr.write("The data is %s.\n"%repr(data))
+		while 1:
 			if data[0]==-1.0:
 				no_of_resting_nodes += 1
 				if self.debug:
