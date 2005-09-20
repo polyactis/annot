@@ -305,6 +305,8 @@ class MpiClusterBsStat:
 		elif node_rank>0 and node_rank<communicator.size-1:
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)
 			gene_no2bs_no_set, bs_no2gene_no_set = self.construct_two_dicts(node_rank, data)
+		elif node_rank==communicator.size-1:	#establish connection before pursuing
+			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
@@ -312,7 +314,6 @@ class MpiClusterBsStat:
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, self.top_number)
 		elif node_rank==communicator.size-1:
-			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
 			self.output_node(communicator, curs, self.cluster_bs_table)
