@@ -1,15 +1,13 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiClusterBsStat.py -k SCHEMA -n GENE_P_TABLE -p P_GENE_TABLE
-	-m MCL_TABLE -b CLUSTER_BS_TABLE [OPTION]
+Usage: MpiClusterBsStat.py -k SCHEMA -g GOOD_CLUSTER_TABLE
+	-l CLUSTER_BS_TABLE [OPTION]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-g ...,	GENE_P_TABLE
-	-p ...,	P_GENE_TABLE
-	-m ...,	MCL_TABLE
+	-g ...,	GOOD_CLUSTER_TABLE
 	-l ...,	CLUSTER_BS_TABLE
 	-s ...,	no of clusters per transmission, 2000(default)
 	-a ...,	min ratio of #associated genes for one bs_no vs cluster size, 1/3(default)
@@ -22,8 +20,7 @@ Option:
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiClusterBsStat.py
-	-k mm_fim_97 -g gene_p_mm_fim_97m4x200_e5_a60
-	-p p_gene_mm_fim_97m4x200_e5 -m mcl_mm_fim_97m4x200 -l cluster_bs
+	-k mm_fim_97 -g good_clusters -l cluster_bs
 	
 Description:
 	Program to do binding site enrichment analysis for a module.
@@ -41,17 +38,15 @@ class MpiClusterBsStat:
 	"""
 	09-19-05
 	"""
-	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, gene_p_table=None,\
-		p_gene_table=None, mcl_table=None, cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, \
+	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
+		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, \
 		top_number=5, new_table=0, commit=0, debug=0, report=0):
 		"""
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
-		self.gene_p_table = gene_p_table
-		self.p_gene_table = p_gene_table
-		self.mcl_table = mcl_table
+		self.good_cluster_table = good_cluster_table
 		self.cluster_bs_table = cluster_bs_table
 		self.size = int(size)
 		self.ratio_cutoff = float(ratio_cutoff)
@@ -135,12 +130,11 @@ class MpiClusterBsStat:
 		cluster_block = Numeric.array(cluster_block)
 		return cluster_block
 	
-	def input_node(self, communicator, curs, gene_p_table, p_gene_table, mcl_table, size):
+	def input_node(self, communicator, curs, good_cluster_table, size):
 		sys.stderr.write("Reading clusters from tables...\n")
 		node_rank = communicator.rank
-		curs.execute("DECLARE crs CURSOR FOR select distinct m.mcl_id, m.vertex_set from %s n,\
-			%s p, %s m where n.p_gene_id=p.p_gene_id and m.mcl_id=p.mcl_id"%(gene_p_table,
-			p_gene_table, mcl_table))
+		curs.execute("DECLARE crs CURSOR FOR select distinct mcl_id, vertex_set\
+			from %s "%(good_cluster_table))
 		cluster_block = self.fetch_cluster_block(curs, size)
 		which_node = 0
 		while cluster_block:
@@ -195,7 +189,7 @@ class MpiClusterBsStat:
 		"""
 		node_rank = communicator.rank
 		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
-		while data:
+		while 1:
 			if data[0]==-1:
 				if self.debug:
 					sys.stderr.write("node %s breaked.\n"%node_rank)
@@ -262,7 +256,6 @@ class MpiClusterBsStat:
 		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
 		data, source, tag, count = communicator.receive(Numeric.Float, None, 1)
 		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
-		sys.stderr.write("The data is %s.\n"%repr(data))
 		while 1:
 			if data[0]==-1.0:
 				no_of_resting_nodes += 1
@@ -309,7 +302,7 @@ class MpiClusterBsStat:
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			self.input_node(communicator, curs, self.gene_p_table, self.p_gene_table, self.mcl_table, self.size)
+			self.input_node(communicator, curs, self.good_cluster_table, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, self.top_number)
 		elif node_rank==communicator.size-1:
@@ -325,7 +318,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:p:m:l:s:a:t:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -334,9 +327,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
-	gene_p_table = None
-	p_gene_table = None
-	mcl_table = None
+	good_cluster_table = None
 	cluster_bs_table = None
 	size = 2000
 	ratio_cutoff = 1.0/3
@@ -356,11 +347,7 @@ if __name__ == '__main__':
 		elif opt in ("-k", "--schema"):
 			schema = arg
 		elif opt in ("-g"):
-			gene_p_table = arg
-		elif opt in ("-p"):
-			p_gene_table = arg
-		elif opt in ("-m"):
-			mcl_table = arg
+			good_cluster_table = arg
 		elif opt in ("-l"):
 			cluster_bs_table = arg
 		elif opt in ("-s"):
@@ -377,9 +364,9 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and gene_p_table and p_gene_table and mcl_table and cluster_bs_table:
-		instance = MpiClusterBsStat(hostname, dbname, schema, gene_p_table, p_gene_table,\
-			mcl_table, cluster_bs_table, size, ratio_cutoff, top_number, new_table, commit, debug, report)
+	if schema and good_cluster_table and cluster_bs_table:
+		instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
+			cluster_bs_table, size, ratio_cutoff, top_number, new_table, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
