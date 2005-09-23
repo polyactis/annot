@@ -30,12 +30,6 @@ shell/annot.sh
 		calculate #edges, #genes, #no_of_columns
 		annot/bin/netmine_wrapper.py
 		shell/cluster_stat.sh
-			 annot/bin/codense/codense2db.py
-			 annot/bin/cluster_stat.py
-			 annot/bin/gene_stat.py
-			 annot/bin/p_gene_analysis.py
-			 annot/bin/gene_p_map_redundancy.py
-			 annot/bin/connectivity_original.py
 		annot/bin/EdgeClusterFromCopathOutput.py
 		shell/cluster_stat.sh
 	[shell/fim_wrapper.sh (08-20-05)]
@@ -44,6 +38,20 @@ shell/annot.sh
 		annot/MpiFromDatasetSignatureToPattern.py
 		shell/cluster_stat.sh
 
+shell/cluster_stat.sh
+	annot/bin/codense/codense2db.py
+	annot/bin/cluster_stat.py
+	annot/bin/gene_stat.py
+	shell/cluster_stat2.sh
+	annot/bin/PredictionFilterByClusterSize.py
+	shell/cluster_stat2.sh
+
+shell/cluster_stat2.sh
+	annot/bin/p_gene_analysis.py
+	annot/bin/gene_p_map_redundancy.py
+	shell/filter.sh
+	#annot/bin/connectivity_original.py
+	 
 II. Biclustering (05-14-05)
 	MpiBiclustering.py
 	CcFromBiclusteringOutput.py
