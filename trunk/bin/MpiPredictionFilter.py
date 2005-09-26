@@ -31,17 +31,47 @@ Description:
 import sys, os, getopt
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect
+from gene_stat import gene_stat
 
-def PredictionFilterByClusterSize(hostname='zhoudb', dbname='graphdb', schema=None, splat_table=None,\
-	mcl_table=None, p_gene_table=None, splat_view=None, mcl_view=None, p_gene_view=None, max_size=40, \
-	commit=0, debug=0, report=0):
-	(conn, curs) =  db_connect(hostname, dbname, schema)
-	curs.execute("CREATE OR REPLACE VIEW %s AS SELECT * FROM %s"%(splat_view, splat_table))
-	curs.execute("CREATE OR REPLACE VIEW %s AS SELECT * FROM %s"%(mcl_view, mcl_table))
-	curs.execute("CREATE OR REPLACE VIEW %s AS SELECT * FROM %s \
-		where cluster_size_cut_off<=%s"%(p_gene_view, p_gene_table, max_size))
-	if commit:
-		curs.execute("End")
+class PredictionFilterByClusterSize:
+	"""
+	09-26-05
+		upgrade the function-form to class, 
+		p_gene_view is not a view anymore, a real table derived from p_gene_table
+			because runtime select cluster_size_cut_off<=max_size blows the memory
+	"""
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, splat_table=None,\
+		mcl_table=None, p_gene_table=None, splat_view=None, mcl_view=None, p_gene_view=None, max_size=40, \
+		commit=0, debug=0, report=0):
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
+		self.splat_table = splat_table
+		self.mcl_table = mcl_table
+		self.p_gene_table = p_gene_table
+		self.splat_view = splat_view
+		self.mcl_view = mcl_view
+		self.p_gene_view = p_gene_view
+		self.max_size = int(max_size)
+		self.commit = int(commit)
+		self.debug = int(debug)
+		self.report = int(report)
+	
+	def view_from_table(self, curs, table, view):
+		curs.execute("CREATE OR REPLACE VIEW %s AS SELECT * FROM %s"%(view, table))
+		
+	def new_p_gene_table(self, curs, p_gene_table, p_gene_view, max_size):
+		gene_stat_instance = gene_stat()
+		gene_stat_instance.createGeneTable(curs, p_gene_view)
+		curs.execute("INSERT INTO %s SELECT * from %s where cluster_size_cut_off<=%s"%(p_gene_view, p_gene_table, max_size))
+		
+	def run(self):
+		(conn, curs) =  db_connect(hostname, dbname, schema)
+		self.view_from_table(curs, self.splat_table, self.splat_view)
+		self.view_from_table(curs, self.mcl_table, self.mcl_view)
+		self.new_p_gene_table(curs, self.p_gene_table, self.p_gene_view, self.max_size)
+		if commit:
+			curs.execute("End")
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -99,8 +129,9 @@ if __name__ == '__main__':
 		elif opt in ("-r"):
 			report = 1
 	if schema and splat_table and p_gene_table and mcl_table and splat_view and mcl_view and p_gene_view:
-		PredictionFilterByClusterSize(hostname, dbname, schema, splat_table, mcl_table, p_gene_table,\
+		instance = PredictionFilterByClusterSize(hostname, dbname, schema, splat_table, mcl_table, p_gene_table,\
 			splat_view, mcl_view, p_gene_view, max_size, commit, debug, report)
+		instance.run()
 	else:
 		print __doc__
 		sys.exit(2)
