@@ -766,19 +766,19 @@ def get_mcl_id2tf_set(curs, table, mt_no2tf_name):
 	"""
 	sys.stderr.write("Getting mcl_id2tf_set...")
 	mcl_id2tf_set = {}
-	curs.execute("select mcl_id, bs_no_list, gene_no_list from %s where bs_no_list is not null"%table)
+	curs.execute("select mcl_id, bs_no_list, global_ratio, local_ratio, expected_ratio from %s where bs_no_list is not null"%table)
 	rows = curs.fetchall()
 	for row in rows:
-		mcl_id, bs_no_list, gene_no_list = row
+		mcl_id, bs_no_list, global_ratio, local_ratio, expected_ratio = row
 		bs_no_list = bs_no_list[1:-1].split(',')
 		bs_no_list = map(int, bs_no_list)
-		if gene_no_list!='{}':
-			#gene_no_list = gene_no_list[1:-1].split(',')	#for future
-			#gene_no_list = map(int, gene_no_list)
-			tf_name_list = dict_map(mt_no2tf_name, bs_no_list)
+		if local_ratio>0:
+			tf_name_tuple = tuple(dict_map(mt_no2tf_name, bs_no_list))
+			ratio_tuple = tuple([global_ratio, local_ratio, expected_ratio])
+			value_tuple = tuple([tf_name_tuple, ratio_tuple])
 			if mcl_id not in mcl_id2tf_set:
-				mcl_id2tf_set[mcl_id] = Set([tuple(tf_name_list)])
+				mcl_id2tf_set[mcl_id] = Set([value_tuple])
 			else:
-				mcl_id2tf_set[mcl_id].add(tuple(tf_name_list))
+				mcl_id2tf_set[mcl_id].add(value_tuple)
 	sys.stderr.write("Done.\n")
 	return mcl_id2tf_set
