@@ -110,6 +110,9 @@ class DrawGenePresenceMatrix:
 			ylength is no of genes
 		09-26-05
 			fix sme bugs, frequency is already string, repr causes additional "'"
+		09-26-05
+			each cell's height reduced to 1, too big to use char_height,
+			gene_id is not drawn, frequency drawn every 2000 genes
 		"""
 		sys.stderr.write("Drawing gene presence_vector...")
 		ylength_output = os.popen('wc %s'%input_fname)
@@ -122,16 +125,12 @@ class DrawGenePresenceMatrix:
 		
 		char_width, char_height = self.get_char_dimension()
 		dataset_no_dimension = (char_width*len(repr(xlength)), char_height)
-		gene_id_max_length = 10
-		gene_id_dimension = (char_width*gene_id_max_length, char_height)
-		
 		x_offset0 = 0
 		x_offset1 = x_offset0 + dataset_no_dimension[0]
-		x_offset2 = x_offset1 + dataset_no_dimension[1]*xlength
 		y_offset0 = 0
 		y_offset1 = y_offset0 + dataset_no_dimension[0]
 		
-		whole_dimension = (x_offset2+gene_id_dimension[0], y_offset1+dataset_no_dimension[1]*ylength)
+		whole_dimension = (x_offset1+dataset_no_dimension[1]*xlength, y_offset1+ylength)
 		
 		reader = csv.reader(open(input_fname,'r'), delimiter='\t')
 		im = Image.new('RGB',whole_dimension,(255,255,255))
@@ -139,32 +138,30 @@ class DrawGenePresenceMatrix:
 		
 		for i in range(xlength):	#write the text to a region and rotate anti-clockwise and paste it back
 			text_region = self.get_text_region(repr(i+1), dataset_no_dimension)	#rotate
-			box = (x_offset1+i*dataset_no_dimension[1], y_offset0, x_offset1+(i+1)*dataset_no_dimension[1], y_offset0+dataset_no_dimension[0])
+			box = (x_offset1+i*dataset_no_dimension[1], y_offset0, x_offset1+(i+1)*dataset_no_dimension[1], y_offset1)
 			im.paste(text_region, box)
 		
+		gene_id_max_length = 10
 		counter = 0
 		for row in reader:
 			frequency = row[0]
 			presence_vector = row[1:-1]
-			gene_id = row[-1]
+			gene_id = row[-1]	#not used
 			if len(gene_id)>gene_id_max_length:
 				gene_id = gene_id[:gene_id_max_length]
 			
-			y_offset_upper = y_offset1+counter*dataset_no_dimension[1]
-			y_offset_lower = y_offset1+(counter+1)*dataset_no_dimension[1]
-			#draw the frequency
-			text_region = self.get_text_region(frequency, dataset_no_dimension, rotate=0)	#no rotate
-			box = (x_offset0, y_offset_upper, x_offset1, y_offset_lower)
-			im.paste(text_region, box)
+			y_offset_upper = y_offset1+counter
+			y_offset_lower = y_offset1+counter
 			#draw the presence_vector
 			for i in range(len(presence_vector)):
 				if presence_vector[i]=='1':
 					draw.rectangle((x_offset1+i*dataset_no_dimension[1], y_offset_upper, \
 						x_offset1+(i+1)*dataset_no_dimension[1], y_offset_lower), fill=(0,255,0))
-			#draw the gene_id
-			text_region = self.get_text_region(gene_id, gene_id_dimension, rotate=0)	#no rotate
-			box = (x_offset2, y_offset_upper, whole_dimension[0], y_offset_lower)
-			im.paste(text_region, box)
+			if counter%2000 == 0:
+				#draw the frequency every 2000 genes
+				text_region = self.get_text_region(frequency, dataset_no_dimension, rotate=0)	#no rotate
+				box = (x_offset0, y_offset_upper, x_offset1, y_offset_upper+dataset_no_dimension[1])
+				im.paste(text_region, box)
 			counter += 1
 		del reader
 		im.save(output_fname)
