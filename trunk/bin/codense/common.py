@@ -744,3 +744,41 @@ def get_global_gene_id2gene_no(curs, organism, table='graph.gene_id_to_no'):
 		gene_id2gene_no[row[0]] = row[1]
 	sys.stderr.write("Done.\n")
 	return gene_id2gene_no
+	
+def get_mt_no2tf_name(hostname='zhoudb', dbname='graphdb', schema='transfac', table='matrix'):
+	"""
+	09-26-05
+	"""
+	sys.stderr.write("Getting mt_no2tf_name...")
+	mt_no2tf_name = {}
+	(conn, curs) =  db_connect(hostname, dbname, schema)
+	curs.execute("select id,tf_name from %s"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		mt_no2tf_name[row[0]] = row[1]
+	del conn, curs
+	sys.stderr.write("Done\n")
+	return mt_no2tf_name
+
+def get_mcl_id2tf_set(curs, table, mt_no2tf_name):
+	"""
+	09-26-05
+	"""
+	sys.stderr.write("Getting mcl_id2tf_set...")
+	mcl_id2tf_set = {}
+	curs.execute("select mcl_id, bs_no_list, gene_no_list from %s where bs_no_list is not null"%table)
+	rows = curs.fetchall()
+	for row in rows:
+		mcl_id, bs_no_list, gene_no_list = row
+		bs_no_list = bs_no_list[1:-1].split(',')
+		bs_no_list = map(int, bs_no_list)
+		if gene_no_list!='{}':
+			#gene_no_list = gene_no_list[1:-1].split(',')	#for future
+			#gene_no_list = map(int, gene_no_list)
+			tf_name_list = dict_map(mt_no2tf_name, bs_no_list)
+			if mcl_id not in mcl_id2tf_set:
+				mcl_id2tf_set[mcl_id] = Set([tuple(tf_name_list)])
+			else:
+				mcl_id2tf_set[mcl_id].add(tuple(tf_name_list))
+	sys.stderr.write("Done.\n")
+	return mcl_id2tf_set
