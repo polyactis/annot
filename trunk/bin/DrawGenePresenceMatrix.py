@@ -11,12 +11,13 @@ Option:
 	-h, --help              show this help
 
 Examples:
-	DrawGenePresenceMatrix.py -i ~/datasets/hs_fim_92/ -o /tmp/yuhuang/hs_fim_92.gim -p /tmp/yuhuang/test.jpg
+	DrawGenePresenceMatrix.py -i ~/datasets/hs_fim_92/
+		-o /tmp/yuhuang/hs_fim_92.gim -p /tmp/yuhuang/test.png
 
 Description:
 	Files in INPUTDIR are sorted by file_rename.py(datasets_sort).
 	Program to draw a picture to show how genes are located among datasets.
-
+	Hint: png is better than jpeg. jpeg has maximum 65500 pixels.
 """
 
 import os, sys, csv, getopt
@@ -38,6 +39,10 @@ class DrawGenePresenceMatrix:
 		self.report = int(report)
 	
 	def expand_gene_id2presence_vector(self, gene_id2presence_vector, filename, file_index):
+		"""
+		09-26-05
+			fix a bug, non-present genes' presence_vector should have a trailing 0
+		"""
 		reader = csv.reader(file(filename), delimiter='\t')
 		for row in reader:
 			gene_id = row[0]
@@ -45,6 +50,10 @@ class DrawGenePresenceMatrix:
 				gene_id2presence_vector[gene_id] = [0]*file_index + [1]
 			else:
 				gene_id2presence_vector[gene_id].append(1)
+		#add the trailing 0
+		for gene_id in gene_id2presence_vector:
+			if len(gene_id2presence_vector[gene_id])==file_index:
+				gene_id2presence_vector[gene_id].append(0)
 		del reader
 	
 	def write_gene_incidence_matrix(self, dir, output_fname):
@@ -68,6 +77,7 @@ class DrawGenePresenceMatrix:
 		
 		del gene_id2presence_vector
 		frequency_presence_vector_gene_id_ls.sort()	#sorted according to frequency
+		frequency_presence_vector_gene_id_ls.reverse()	#09-26-05 reverse it
 		
 		writer = csv.writer(open(output_fname, 'w'), delimiter='\t')
 		for row in frequency_presence_vector_gene_id_ls:
@@ -98,6 +108,8 @@ class DrawGenePresenceMatrix:
 		09-26-05
 			xlength is no of datasets
 			ylength is no of genes
+		09-26-05
+			fix sme bugs, frequency is already string, repr causes additional "'"
 		"""
 		sys.stderr.write("Drawing gene presence_vector...")
 		ylength_output = os.popen('wc %s'%input_fname)
@@ -141,12 +153,12 @@ class DrawGenePresenceMatrix:
 			y_offset_upper = y_offset1+counter*dataset_no_dimension[1]
 			y_offset_lower = y_offset1+(counter+1)*dataset_no_dimension[1]
 			#draw the frequency
-			text_region = self.get_text_region(repr(frequency), dataset_no_dimension, rotate=0)	#no rotate
+			text_region = self.get_text_region(frequency, dataset_no_dimension, rotate=0)	#no rotate
 			box = (x_offset0, y_offset_upper, x_offset1, y_offset_lower)
 			im.paste(text_region, box)
 			#draw the presence_vector
 			for i in range(len(presence_vector)):
-				if row[i]=='1':
+				if presence_vector[i]=='1':
 					draw.rectangle((x_offset1+i*dataset_no_dimension[1], y_offset_upper, \
 						x_offset1+(i+1)*dataset_no_dimension[1], y_offset_lower), fill=(0,255,0))
 			#draw the gene_id
