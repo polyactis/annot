@@ -9,7 +9,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-g ..., --organism=...	two letter organism abbreviation
 	-o ...,	output_table(gene, default)
-	-u, --union	takes the union of all genes in the datasets, default is intersection
+	-m ...,	minimum frequency(0, default, take all genes)
 	-c, --commit	commits the database transaction
 	-h, --help              show this help
 	
@@ -31,7 +31,7 @@ class gene_table:
 	Initialize the local gene_id:gene_no mapping in table schema.gene
 	'''
 	def __init__(self, dir=None, hostname='zhoudb', dbname='graphdb', schema=None, \
-		output_table='gene', orgn='', union=0, needcommit=0):
+		output_table='gene', orgn='', min_frequency=0, needcommit=0):
 		"""
 		08-30-05
 			add rn to org_short2long
@@ -42,13 +42,15 @@ class gene_table:
 		self.schema = schema
 		self.output_table = output_table
 		self.organism = org_short2long(orgn)
-		self.union = int(union)
+		self.min_frequency = int(min_frequency)
 		self.needcommit = int(needcommit)		
 	
-	def return_gene_id_set(self, dir, gene_id2gene_no, union):
+	def return_gene_id_set(self, dir, gene_id2gene_no, min_frequency):
 		"""
 		09-19-05
 			rewrite and split from run()
+		09-27-05
+			use min_frequency to select genes
 		"""
 		#iterate over all the datasets, find all the genes
 		files = os.listdir(dir)
@@ -71,15 +73,9 @@ class gene_table:
 						gene_id2freq[row[0]] = 1
 			del reader
 		
-		if union:
-		#take the union set
-			gene_id_set = Set(gene_id2freq.keys())
-		else:
-		#take the intersection set
-			for (gene_id, freq) in gene_id2freq.iteritems():
-				if freq == len(files):
-				#occur in all datasets
-					gene_id_set.add(gene_id)
+		for (gene_id, freq) in gene_id2freq.iteritems():
+			if freq >= min_frequency:
+				gene_id_set.add(gene_id)
 		sys.stderr.write("%d genes to be submitted\n"%len(gene_id_set))
 		return gene_id_set
 	
@@ -113,7 +109,7 @@ class gene_table:
 		gene_id2gene_no = get_global_gene_id2gene_no(curs, self.organism)
 		tax_id = org2tax_id(self.organism)
 		gene_id2mt_no_list = get_gene_id2mt_no_list(tax_id)
-		gene_id_set = self.return_gene_id_set(self.dir, gene_id2gene_no, self.union)
+		gene_id_set = self.return_gene_id_set(self.dir, gene_id2gene_no, self.min_frequency)
 		self.submit(curs, output_table, gene_id_set, gene_id2gene_no, gene_id2mt_no_list)
 		if self.needcommit:
 			conn.commit()
@@ -124,7 +120,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:o:g:uc", ["help", "hostname=", "dbname=", "schema=", "organism=", "union", "commit"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:o:g:m:c", ["help", "hostname=", "dbname=", "schema=", "organism=", "commit"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -134,7 +130,7 @@ if __name__ == '__main__':
 	schema = ''
 	output_table = 'gene'
 	organism = ''
-	union = 0
+	min_frequency = 0
 	commit = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -150,13 +146,13 @@ if __name__ == '__main__':
 			output_table = arg
 		elif opt in ("-g", "--organism"):
 			organism = arg
-		elif opt in ("-u", "--union"):
-			union = 1
+		elif opt in ("-m"):
+			min_frequency = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 			
 	if schema and organism and len(args) == 1 and output_table:
-		instance = gene_table(args[0], hostname, dbname, schema, output_table, organism, union, commit)
+		instance = gene_table(args[0], hostname, dbname, schema, output_table, organism, min_frequency, commit)
 		instance.run()
 	else:
 		print __doc__
