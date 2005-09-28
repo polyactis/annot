@@ -763,18 +763,21 @@ def get_mt_no2tf_name(hostname='zhoudb', dbname='graphdb', schema='transfac', ta
 def get_mcl_id2tf_set(curs, table, mt_no2tf_name):
 	"""
 	09-26-05
+	09-27-05
+		only score_type=1(hypergeometric), and take the score out
 	"""
 	sys.stderr.write("Getting mcl_id2tf_set...")
 	mcl_id2tf_set = {}
-	curs.execute("select mcl_id, bs_no_list, global_ratio, local_ratio, expected_ratio from %s where bs_no_list is not null"%table)
+	curs.execute("select mcl_id, bs_no_list, score, local_ratio from %s \
+		where bs_no_list is not null and score_type=1"%table)	#score_type==1 only hypergeometric
 	rows = curs.fetchall()
 	for row in rows:
-		mcl_id, bs_no_list, global_ratio, local_ratio, expected_ratio = row
+		mcl_id, bs_no_list, score, local_ratio = row
 		bs_no_list = bs_no_list[1:-1].split(',')
 		bs_no_list = map(int, bs_no_list)
 		if local_ratio>0:
 			tf_name_tuple = tuple(dict_map(mt_no2tf_name, bs_no_list))
-			ratio_tuple = tuple([global_ratio, local_ratio, expected_ratio])
+			ratio_tuple = tuple([score])
 			value_tuple = tuple([tf_name_tuple, ratio_tuple])
 			if mcl_id not in mcl_id2tf_set:
 				mcl_id2tf_set[mcl_id] = Set([value_tuple])

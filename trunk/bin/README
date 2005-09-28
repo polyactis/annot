@@ -46,15 +46,15 @@ shell/cluster_stat.sh
 	annot/bin/PredictionFilterByClusterSize.py
 	shell/cluster_stat2.sh
 
-shell/cluster_stat2.sh
-	annot/bin/p_gene_lm.py AND/OR annot/bin/p_gene_analysis.py
-	annot/bin/gene_p_map_redundancy.py
-	shell/filter.sh
-	#annot/bin/connectivity_original.py
+	shell/cluster_stat2.sh
+		annot/bin/p_gene_lm.py AND/OR annot/bin/p_gene_analysis.py
+		annot/bin/gene_p_map_redundancy.py
+		shell/filter.sh
+		#annot/bin/connectivity_original.py
 
-shell/filter.sh
-	annot/bin/filter_clusters.py
-	annot/bin/MpiClusterBsStat.py
+		shell/filter.sh
+			annot/bin/filter_clusters.py
+			annot/bin/MpiClusterBsStat.py
 
 II. Biclustering (05-14-05)
 	MpiBiclustering.py
