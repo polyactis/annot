@@ -27,7 +27,8 @@ Description:
 import sys, os, csv, getopt
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, get_gene_no2gene_id, get_mt_no2tf_name, \
-	get_mcl_id2tf_set, dict_map, get_go_no2name, org_short2long, org2tax_id, get_gene_id2gene_symbol, dict_transfer
+	get_mcl_id2tf_set, dict_map, get_go_no2name, org_short2long, org2tax_id, \
+	get_gene_id2gene_symbol, dict_transfer, form_schema_tables
 from threading import *
 
 class tf_darwin_format(Thread):
@@ -82,21 +83,14 @@ class tf_darwin_format(Thread):
 		
 	def run(self):
 		if self.ofname and self.acc_cut_off:
-			splat_table = 'splat_%s'%self.ofname
-			mcl_table = 'mcl_%s'%self.ofname
-			
-			p_gene_table = 'p_gene_%s_e5'%self.ofname
-			acc_int=int(self.acc_cut_off*100)
-			gene_p_table='gene_p_%s_e5_a%s'%(self.ofname, acc_int)
-			good_cluster_table = 'good_cl_%s_e5_a%s'%(self.ofname, acc_int)
-			cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(self.ofname, acc_int)
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
 			
 		else:
 			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
-		mcl_id2tf_set = get_mcl_id2tf_set(curs, cluster_bs_table, self.mt_no2tf_name)
-		self._tf_darwin_format(curs, good_cluster_table, self.output_fname, self.gene_no2id, mcl_id2tf_set)
+		mcl_id2tf_set = get_mcl_id2tf_set(curs, schema_instance.cluster_bs_table, self.mt_no2tf_name)
+		self._tf_darwin_format(curs, schema_instance.good_cluster_table, self.output_fname, self.gene_no2id, mcl_id2tf_set)
 		del conn, curs
 
 class cluster_darwin_format(Thread):
@@ -155,19 +149,12 @@ class cluster_darwin_format(Thread):
 		
 	def run(self):
 		if self.ofname and self.acc_cut_off:
-			splat_table = 'splat_%s'%self.ofname
-			mcl_table = 'mcl_%s'%self.ofname
-			
-			p_gene_table = 'p_gene_%s_e5'%self.ofname
-			acc_int=int(self.acc_cut_off*100)
-			gene_p_table='gene_p_%s_e5_a%s'%(self.ofname, acc_int)
-			good_cluster_table = 'good_cl_%s_e5_a%s'%(self.ofname, acc_int)
-			cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(self.ofname, acc_int)
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
 		else:
 			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
-		self._cluster_darwin_format(curs, good_cluster_table, self.gene_no2id, self.go_no2id, self.output_fname)
+		self._cluster_darwin_format(curs, schema_instance.good_cluster_table, self.gene_no2id, self.go_no2id, self.output_fname)
 		del conn, curs
 
 
@@ -187,7 +174,7 @@ class prediction_darwin_format(Thread):
 		self.debug = int(debug)
 		self.report = int(report)
 	
-	def _prediction_darwin_format(self, curs, p_gene_table, gene_p_table, new_p_gene_table, gene_no2id, go_no2id, output_fname):
+	def _prediction_darwin_format(self, curs, p_gene_table, gene_p_table, gene_no2id, go_no2id, output_fname):
 		"""
 		format:
 			r:=[
@@ -198,18 +185,20 @@ class prediction_darwin_format(Thread):
 		sys.stderr.write("prediction...\n")
 		of = open(output_fname, 'w')
 		of.write('r:=[\n')
-		curs.execute("select p.* into %s from %s p, %s  g where g.p_gene_id = p.p_gene_id"%\
-			(new_p_gene_table, p_gene_table, gene_p_table))
-		curs.execute("DECLARE crs CURSOR FOR select gene_no, go_no, is_correct_lca, avg_p_value, mcl_id, lca_list from %s"%new_p_gene_table)
+		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.is_correct_lca, p.avg_p_value, p.mcl_id, p.lca_list\
+			from %s p, %s g where g.p_gene_id = p.p_gene_id"%(p_gene_table, gene_p_table))
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		while rows:
 			for row in rows:
 				gene_no, go_no, is_correct_lca, p_value, mcl_id, lca_list = row
-				lca_list = lca_list[1:-1].split(',')
-				lca_list = map(int, lca_list)
-				lca_list = dict_map(go_no2id, lca_list)
-				of.write('[%s, %s, %s, %s, %s, %s],\n'%(gene_no2id[gene_no], go_no2id[go_no], is_correct_lca,\
+				if lca_list:
+					lca_list = lca_list[1:-1].split(',')
+					lca_list = map(int, lca_list)
+					lca_list = dict_map(go_no2id, lca_list)
+				else:
+					lca_list = []
+				of.write("['%s', '%s', %s, %s, %s, %s],\n"%(gene_no2id[gene_no], go_no2id[go_no], is_correct_lca,\
 					p_value, mcl_id, repr(lca_list)))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
@@ -219,22 +208,14 @@ class prediction_darwin_format(Thread):
 	
 	def run(self):
 		if self.ofname and self.acc_cut_off:
-			splat_table = 'splat_%s'%self.ofname
-			mcl_table = 'mcl_%s'%self.ofname
-			
-			p_gene_table = 'p_gene_%s_e5'%self.ofname
-			acc_int=int(self.acc_cut_off*100)
-			new_p_gene_table = 'p_gene_%s_e5_a%s'%(self.ofname, acc_int)	#different from the others
-			gene_p_table='gene_p_%s_e5_a%s'%(self.ofname, acc_int)
-			good_cluster_table = 'good_cl_%s_e5_a%s'%(self.ofname, acc_int)
-			cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(self.ofname, acc_int)
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
 			
 		else:
 			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
-		self._prediction_darwin_format(curs, p_gene_table, gene_p_table, new_p_gene_table, self.gene_no2id, self.go_no2id, self.output_fname)
-		conn.commit()	#for the new_p_gene_table
+		self._prediction_darwin_format(curs, schema_instance.p_gene_table, schema_instance.gene_p_table, \
+			self.gene_no2id, self.go_no2id, self.output_fname)
 		del conn, curs
 	
 class Schema2Darwin:
@@ -255,18 +236,11 @@ class Schema2Darwin:
 		09-28-05
 		"""
 		if self.ofname and self.acc_cut_off:
-			splat_table = 'splat_%s'%self.ofname
-			mcl_table = 'mcl_%s'%self.ofname
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
 			
-			p_gene_table = 'p_gene_%s_e5'%self.ofname
-			acc_int=int(self.acc_cut_off*100)
-			gene_p_table='gene_p_%s_e5_a%s'%(self.ofname, acc_int)
-			good_cluster_table = 'good_cl_%s_e5_a%s'%(self.ofname, acc_int)
-			cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(self.ofname, acc_int)
-			
-			tf_darwin_ofname = os.path.join(self.output_dir, '%s_e5_a%s.tf.darwin'%(self.ofname, acc_int))
-			cluster_darwin_ofname = os.path.join(self.output_dir, '%s_e5_a%s.cluster.darwin'%(self.ofname, acc_int))
-			prediction_darwin_ofname = os.path.join(self.output_dir, '%s_e5_a%s.prediction.darwin'%(self.ofname, acc_int))
+			tf_darwin_ofname = os.path.join(self.output_dir, '%s.tf.darwin'%schema_instance.lm_suffix)
+			cluster_darwin_ofname = os.path.join(self.output_dir, '%s.cluster.darwin'%schema_instance.lm_suffix)
+			prediction_darwin_ofname = os.path.join(self.output_dir, '%s.prediction.darwin'%schema_instance.lm_suffix)
 		else:
 			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
 			sys.exit(2)
@@ -288,15 +262,14 @@ class Schema2Darwin:
 			tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
 		instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
 			cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		#instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
-			#prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
+		instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
+			prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
 		instance1.start()
 		instance2.start()
-		#instance3.start()
+		instance3.start()
 		instance1.join()
 		instance2.join()
-		#instance3.join()
-
+		instance3.join()
 
 
 if __name__ == '__main__':
