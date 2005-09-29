@@ -429,12 +429,14 @@ class gene_stat:
 	def createGeneTable(self, curs, gene_table):
 		"""
 		08-14-05
+		09-29-05
+			make p_gene_id the primary key
 		"""
 		sys.stderr.write("Creating table %s..."%gene_table)
 		if gene_table!='p_gene':
 			#create the table if it's not 'p_gene'
 			curs.execute("create table %s(\
-				p_gene_id       serial,\
+				p_gene_id       serial primary key,\
 				gene_no integer,\
 				go_no   integer,\
 				is_correct      integer,\
