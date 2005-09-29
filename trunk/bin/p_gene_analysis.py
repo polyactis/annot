@@ -503,11 +503,13 @@ class p_gene_analysis:
 		"""
 		03-02-05
 			gene_p table enlarged, p_gene_id_src is for gene_p_map_redundancy.py
+		09-29-05
+			make p_gene_id primary key
 		"""
 		sys.stderr.write("Submiting gene_p_table...")
 		curs.execute("create table %s(\
-			gene_p_id	serial primary key,\
-			p_gene_id	integer,\
+			gene_p_id	serial,\
+			p_gene_id	integer primary key,\
 			p_value_cut_off	float,\
 			p_gene_id_src integer)"%gene_p_table)
 			
