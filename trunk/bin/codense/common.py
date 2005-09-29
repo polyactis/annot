@@ -785,3 +785,29 @@ def get_mcl_id2tf_set(curs, table, mt_no2tf_name):
 				mcl_id2tf_set[mcl_id].add(value_tuple)
 	sys.stderr.write("Done.\n")
 	return mcl_id2tf_set
+
+def get_gene_id2gene_symbol(curs, tax_id, table='gene.gene'):
+	"""
+	09-28-05
+		NCBI Gene id to Gene symbol
+	"""
+	sys.stderr.write("Getting gene_id2gene_symbol...")
+	gene_id2gene_symbol = {}
+	curs.execute("select gene_id, gene_symbol from %s where tax_id=%s"%(table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id = row[0]
+		gene_id2gene_symbol[gene_id] = row[1]
+	sys.stderr.write("Done.\n")
+	return gene_id2gene_symbol
+
+def dict_transfer(dict1, dict2):
+	"""
+	09-28-05
+		transfer the mapping between dict1 and dict2
+	"""
+	dict3 = {}
+	for key1, value1  in dict1.iteritems():
+		if value1 in dict2:
+			dict3[key1] = dict2[value1]
+	return dict3
