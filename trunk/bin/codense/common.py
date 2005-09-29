@@ -811,3 +811,39 @@ def dict_transfer(dict1, dict2):
 		if value1 in dict2:
 			dict3[key1] = dict2[value1]
 	return dict3
+
+"""
+09-29-05
+	class to represent tables related to a schema
+"""
+class schema:
+	def __init__(self):
+		self.splat_table = None
+		self.mcl_table = None
+		self.p_gene_table = None
+		self.lm_table = None
+		self.good_p_gene_table = None
+		self.gene_p_table = None
+		self.good_cluster_table = None
+		self.cluster_bs_table = None
+		self.prediction_suffix = None
+		self.lm_suffix = None
+
+"""
+09-29-05
+	function to form the table names of a schema given ofname and acc_cut_off
+"""
+def form_schema_tables(ofname, acc_cut_off=0.6):
+	schema_instance = schema()
+	schema_instance.splat_table = 'splat_%s'%ofname
+	schema_instance.mcl_table = 'mcl_%s'%ofname
+	schema_instance.prediction_suffix = '%s_e5'%ofname
+	schema_instance.p_gene_table = 'p_gene_%s_e5'%ofname
+	acc_int=int(acc_cut_off*100)
+	schema_instance.lm_suffix = '%s_e5_a%s'%(ofname, acc_int)
+	schema_instance.lm_table = 'lm_%s_e5_a%s'%(ofname, acc_int)
+	schema_instance.good_p_gene_table = 'p_gene_%s_e5_a%s'%(ofname, acc_int)
+	schema_instance.gene_p_table='gene_p_%s_e5_a%s'%(ofname, acc_int)
+	schema_instance.good_cluster_table = 'good_cl_%s_e5_a%s'%(ofname, acc_int)
+	schema_instance.cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(ofname, acc_int)
+	return schema_instance
