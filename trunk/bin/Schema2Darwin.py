@@ -7,8 +7,9 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-f ...,	the name of the initial cluster file(algorithm output)
-	-a ...,	accuracy cutoff used to prediction
+	-a ...,	accuracy cutoff used to prediction, 0.6(default)
 	-o ...,	output_dir
+	-g ...,	organism, (mm, default)
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
@@ -25,7 +26,8 @@ Description:
 
 import sys, os, csv, getopt
 sys.path += [os.path.expanduser('~/script/annot/bin')]
-from codense.common import db_connect, get_gene_no2gene_id, get_mt_no2tf_name, get_mcl_id2tf_set, dict_map, get_go_no2go_id
+from codense.common import db_connect, get_gene_no2gene_id, get_mt_no2tf_name, \
+	get_mcl_id2tf_set, dict_map, get_go_no2name, org_short2long, org2tax_id, get_gene_id2gene_symbol, dict_transfer
 from threading import *
 
 class tf_darwin_format(Thread):
@@ -237,18 +239,21 @@ class prediction_darwin_format(Thread):
 	
 class Schema2Darwin:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
-		output_dir=None, debug=0, report=0):
+		output_dir=None, organism='mm', debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.ofname = ofname
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_dir = output_dir
+		self.organism = org_short2long(organism)
 		self.debug = int(debug)
 		self.report = int(report)
-
 	
 	def run(self):
+		"""
+		09-28-05
+		"""
 		if self.ofname and self.acc_cut_off:
 			splat_table = 'splat_%s'%self.ofname
 			mcl_table = 'mcl_%s'%self.ofname
@@ -270,22 +275,27 @@ class Schema2Darwin:
 			os.makedirs(self.output_dir)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		
-		gene_no2id = get_gene_no2gene_id(curs)
-		go_no2id = get_go_no2go_id(curs)
+		tax_id = org2tax_id(self.organism)
+		#gene_no2id = get_gene_no2gene_id(curs)	#Watch, if unigene, should use this.
+		gene_id2symbol = get_gene_id2gene_symbol(curs, tax_id)
+		#gene_no2symbol = dict_transfer(gene_no2id, gene_id2symbol)
+			#Jasmine wants the gene symbol 09-28-05
+			#gene_id is integer in gene.gene table and same as gene_no, so just use it.
+		go_no2name = get_go_no2name(curs)	#09-28-05 Jasmine wants the go_name, not go_id
 		mt_no2tf_name = get_mt_no2tf_name()
 		
 		instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
-			tf_darwin_ofname, gene_no2id, go_no2id, mt_no2tf_name, debug, report)
+			tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
 		instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
-			cluster_darwin_ofname, gene_no2id, go_no2id, mt_no2tf_name, debug, report)
-		instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
-			prediction_darwin_ofname, gene_no2id, go_no2id, mt_no2tf_name, debug, report)
+			cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
+		#instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
+			#prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
 		instance1.start()
 		instance2.start()
-		instance3.start()
+		#instance3.start()
 		instance1.join()
 		instance2.join()
-		instance3.join()
+		#instance3.join()
 
 
 
@@ -295,7 +305,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:a:o:br", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:a:o:g:br", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -305,8 +315,9 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	ofname = None
-	acc_cut_off = None
+	acc_cut_off = 0.6
 	output_dir = None
+	organism = 'mm'
 	debug = 0
 	report = 0
 	for opt, arg in opts:
@@ -325,13 +336,15 @@ if __name__ == '__main__':
 			acc_cut_off = float(arg)
 		elif opt in ("-o"):
 			output_dir = arg
+		elif opt in ("-g"):
+			organism = arg
 		elif opt in ("-b"):
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
 	if schema and ofname and acc_cut_off and output_dir:
 		instance = Schema2Darwin(hostname, dbname, schema, ofname, acc_cut_off, output_dir,\
-			debug, report)
+			organism, debug, report)
 		instance.run()
 		
 	else:
