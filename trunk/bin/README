@@ -1,3 +1,9 @@
+09-28-05
+Schema2Darwin.py:
+	Program to convert results of one schema into darwin format.
+	Including TF, cluster, prediction from p_gene_table, gene_p_table, good_cluster_table
+	and cluster_bs_table.
+
 I. Annot pipeline(05-16-05, yh)
 
 shell/mdb_output.sh
