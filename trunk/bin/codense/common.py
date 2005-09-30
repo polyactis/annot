@@ -699,18 +699,18 @@ def org_short2long(organism):
 		long_organism = org_short2long[organism]
 	return long_organism
 
-def get_mt_id2no(hostname='zhoudb', dbname='graphdb', schema='transfac', table='matrix'):
+def get_mt_id2no(curs, table='transfac.matrix'):
 	"""
 	09-19-05
+	09-30-05
+		modify it to fit for tables in different schema
 	"""
 	sys.stderr.write("Getting mt_id2no...")
 	mt_id2no = {}
-	(conn, curs) =  db_connect(hostname, dbname, schema)
 	curs.execute("select mt_id, id from %s"%table)
 	rows = curs.fetchall()
 	for row in rows:
 		mt_id2no[row[0]] = row[1]
-	del conn, curs
 	sys.stderr.write("Done\n")
 	return mt_id2no
 	
