@@ -847,3 +847,37 @@ def form_schema_tables(ofname, acc_cut_off=0.6):
 	schema_instance.good_cluster_table = 'good_cl_%s_e5_a%s'%(ofname, acc_int)
 	schema_instance.cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(ofname, acc_int)
 	return schema_instance
+
+"""
+09-30-05
+	mapping tax_id to unigene_prefix,
+		like 9606(human) to Hs
+"""
+def tax_id2unigene_prefix(tax_id):
+	tax_id2unigene_prefix = {3702:'At',
+		6239:'Cel',
+		7227:'Dm',
+		9606:'Hs',
+		10090:'Mm',
+		10116:'Rn'}
+	return tax_id2unigene_prefix.get(tax_id)
+
+"""
+09-30-05
+	contruct unigene2gene_list mapping dict from gene2unigene file
+"""
+def get_unigene2gene_list(inputfile, tax_id):
+	sys.stderr.write("Starting to get unigene2gene_list...")
+	import csv
+	unigene2gene_list = {}
+	unigene_prefix = tax_id2unigene_prefix(tax_id)
+	reader = csv.reader(open(inputfile,'r'), delimiter='\t')
+	for row in reader:
+		unigene_id = row[1]
+		gene_id = row[0]
+		if unigene_id.find(unigene_prefix)==0:
+			if unigene_id not in unigene2gene_list:
+				unigene2gene_list[unigene_id] = []
+			unigene2gene_list[unigene_id].append(gene_id)
+	sys.stderr.write("End to get unigene2gene_list.\n")
+	return unigene2gene_list
