@@ -1,3 +1,26 @@
+09-30-05
+binding_site2gene_id2mt_no.py:
+	Construct gene_id2mt_no from binding_site. It translates prom_acc into
+	gene_id(NCBI Gene) via gene2accession file. Also mt_no is the id of
+	transfac.matrix. top_number is used to filter random hits, specific for
+	one organism(learnt from Rhodes2005a). Perfect matrices are matrices
+	of all top_number hits with 1.0 score and will be discarded.
+	
+
+DrawGenepresenceMatrix.py:
+	Files in INPUTDIR are sorted by file_rename.py(datasets_sort).
+        Program to draw a picture to show how genes are located among datasets.
+        Hint: png is better than jpeg. jpeg has maximum 65500 pixels.
+	Based on the figure,
+	  1st. throw away datasets with too few genes
+	  2nd. select a min gene_frequency for gene_table.py to filter genes
+	The purpose is to keep the gene basis intact and complete so that the
+	derived graph pattern's recurrence array is not an artifact of missing
+	data.(missing could be misunderstood as unrelated)
+
+DatasetsIdExchange.py:
+	Program to exchange gene ids in datasets.
+
 09-28-05
 Schema2Darwin.py:
 	Program to convert results of one schema into darwin format.
