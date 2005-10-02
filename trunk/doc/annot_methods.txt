@@ -1,0 +1,52 @@
+I. GeneOntology preparation
+	1. download gene2go from NCBI Gene ftp(NOT from GeneOntology.org). follow procedures in proj200407.text to dump it into database
+	2. calculate distances(shorted graph distance, depth distance, lowest-common-ancestor(lca) distance) between two GO terms, the result is in a database table. In fact only lca distance is used to judge correctness of predicted functions and merge redundant predictions.
+
+II. Transfactor-regulatory information
+	1. sequence fetch UCSC(known genes track, using gene accession number), upstream 2000 and 5UTR and 3UTR. Each gene(saying each acession number) could have multiple locations in the genome based on UCSC's alignment program so multiple upstream, 5UTR and 3UTR.
+	2. get the TRANSFAC database, 355 vertebrate high quality matrices, matrix similarity cutoff and core similarity cutoff is choosen via minimum SUM(FP+FN), which is done by TRANSFAC team(their paper talks about how to derive FP and FN).
+	3. Run TRANSFAC's match on human, mouse and rat UCSC sequences. Each hit comprises of position, strand, matrix similarity score, core similarity score. Filter the hit list to retain only the top 2000 genes per matrix sorted by matrix similarity score. The number of hits is >= 2000 because multiple hits are about one gene. Matrices having all filtered hits with 1.0-score(perfect score) are thrown away. human has 20 such perfect matrices. mouse has 16. rat has 8. 
+	4. for arabidopsis, download the atcisdb and attfdb from http://arabidopsis.med.ohio-state.edu/AtTFDB/Binding_Site_Table.jsp. and dump it into database.
+	5. yeast, from Richard Young's 2004 Nature paper's website.(not dumped into database yet)
+	6. the last step is link all the gene accession numbers to NCBI Gene ID, and collect them into a central table
+
+
+III. Raw Datasets
+	1. collect datasets from SMD and GEO(only affymetrix) into mdb
+	2. link probe id to gene id(or unigene id) based on the informaiton files from NCBI Gene and Unigene database
+	3. output datasets from mdb (one gene id could have >2 rows from different probe ids)
+
+IV. filter genes and graph construction
+	1. filter genes by variance: GEO(affymetrix, values<=10 round to 10, log2-transform, std/mean>=0.05); SMD(already logged, std>=0.5, not std/mean because mean is around 0)
+	2. merge rows with same gene id, normalized(1, each row with same gene id divided by that row's maximum; 2, get the column-wise average for these rows; 3, multiply each value by the maximum of the original row values).
+	3. construct correlation graphs; each row has >=8 non-NA values; leave-one-out pearson correlation; after leave-one-out, there're >=7 non-NA values;  top 1%(computed by 1%*no_of_genes*no_of_genes, actually it's 2%) edges are retained,
+
+V. datasets preparation
+	1. select datasets >= mini_number of genes, the min_number varies from organism to organism, human and mouse is 2000, yeast and rat is around 1000. Furthermore, a gene-presence-matrix is drawn to show how genes are located in all datasets. Datasets with sparse gene-distribution are discarded.
+	2. select a minimum gene frequency to discard genes appearing too few in all datasets.
+	3. based on the final selected gene set, construct basic database schema, like functions of genes, transfac relationship of genes
+	4. in each dataset graph, retain the edges with both genes in the choosen gene set
+	5. construct summary graph from graphs above given a minimum support
+	6. for all the edges appearing in summary graph, calculate their correlations, this is necessary because some edges are not significant in some graphs and need to be computed.
+	7. put all the edge correlation data and its significance flag into database
+
+VI. clustering
+	1. output the edges given minimum support and maximum support in fim input format
+	2. run fim (the output is dataset-signature and its occurrence(no of edges, at least 4))
+	3. trace the edges of each dataset-signature, and decompose them into connected components, which are the final clusters
+
+VII. statistics
+	1. dump all clusters into database, compute its recurrence array, connectivity. The recurrence of the cluster in a dataset is (no of edges significant in the dataset)/(total no of edges of the cluster). The cluster is a sub-summary-graph.
+	2. GO hypergeometric p-value calculation of each gene for each GO function present in its cluster. If one function's number of associated genes in this cluster is less than(<) 3, this function is ignored(no p-value calculation). This avoids some small functions to be statistically significant in the cluster.
+	3. For each gene, retain the GO with lowest p-value and depth >=5(this is the final prediction for a gene), judge its correctness by lca approach(for known genes only). lca is the lowest common ancestor between the predicted function and the gene's known functions. If this lca's depth >=5, the predicted function is correct.
+	4. linear regression model, score~p-value+recurrence+connectivity,(if too many predictions, get a sample of it, memory limit is 1e7 predictions), choose a score cutoff to meet ~60% accuracy.
+	5. based on the model and score cutoff, retain predictions with score >= cutoff, and get overview statistics(how many known/unknown, accuracy, number of predictions, gene_no-go_no pair-accuracy)
+	6. merge redundant predictions. For all predicted functions related to one gene, regard functions which have inter-parent-child relationship based on the GO tree as one prediction.
+	7. pull all prediction-producing clusters out into another table and do transfac binding-site enrichment analysis. 1. filter, each type of binding-site has >= 1/3 associated genes in the cluster; 2. one-element analysis, hypergeometric p-value, retain top 5; 3. two-element analysis, hypergeometric and log likelihood-ratio, each retain top 5.
+
+VIII size<=40
+	1. choose IV's size<=40 clusters and run V
+
+VIV. dense
+	1. apply dense clustering (density cutoff=0.5) to IV's clusters and run V
+	2. run VI on dense clusters
