@@ -30,9 +30,9 @@ V. datasets preparation
 	6. for all the edges appearing in summary graph, calculate their correlations, this is necessary because some edges are not significant in some graphs and need to be computed.
 	7. put all the edge correlation data and its significance flag into database
 
-VI. clustering
-	1. output the edges given minimum support and maximum support in fim input format
-	2. run fim (the output is dataset-signature and its occurrence(no of edges, at least 4))
+VI. clustering(frequent itemset mining)
+	1. output the edges given minimum support and maximum support in fim input format. Each edge's recurrence array(list of the dataset id in which the edge is significant) is regarded as a transaction or record. So the frequent itemset is the frequent dataset-id set(dataset-signature) which has >= min-support edges.
+	2. run fim (the output is dataset-signature and its occurrence(no of edges, at least 4)). fim is a frequent itemset mining program, which is from http://www.cs.concordia.ca/db/dbdm/dm.html. We use its closed version. It uses a very compact data structure, FP-tree(Frequent-Pattern tree) to recursively mine the frequent itemsets. The advantage of FP-tree is its compactness and speed, the disadvantage is it compresses information so much that it's unable to keep track of which transactions(sources) give the final frequent itemset, which forces us to write the following program.
 	3. trace the edges of each dataset-signature, and decompose them into connected components, which are the final clusters
 
 VII. statistics
