@@ -76,7 +76,8 @@ shell/cluster_stat.sh
 	shell/cluster_stat2.sh
 
 	shell/cluster_stat2.sh
-		annot/bin/p_gene_lm.py AND/OR annot/bin/p_gene_analysis.py
+		annot/bin/p_gene_lm.py
+		annot/bin/p_gene_analysis.py
 		annot/bin/gene_p_map_redundancy.py
 		shell/filter.sh
 		#annot/bin/connectivity_original.py
