@@ -63,28 +63,28 @@ shell/annot.sh
 		shell/cluster_stat.sh
 	[shell/fim_wrapper.sh (08-20-05)]
 		annot/PreFimInput.py
-		fim_closed
+		fim_closed(big memory node, node29)
 		annot/MpiFromDatasetSignatureToPattern.py
 		shell/cluster_stat.sh
 
-shell/cluster_stat.sh
+shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py)
 	annot/bin/codense/codense2db.py
-	annot/bin/cluster_stat.py
+	annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py
 	annot/bin/gene_stat.py
 	shell/cluster_stat2.sh
 	annot/bin/PredictionFilterByClusterSize.py
 	shell/cluster_stat2.sh
 
-	shell/cluster_stat2.sh
-		annot/bin/p_gene_lm.py
+	shell/cluster_stat2.sh (big mem node due to p_gene_lm.py)
+		shell/p_gene_lm.sh(p_gene_lm.py 1. needs R library(lapack.so) exported in .bash_profile 2. R thread not allowed, ssh itself to run p_gene_lm.sh)
 		annot/bin/p_gene_analysis.py
 		annot/bin/gene_p_map_redundancy.py
 		shell/filter.sh
 		#annot/bin/connectivity_original.py
 
-		shell/filter.sh
-			annot/bin/filter_clusters.py
-			annot/bin/MpiClusterBsStat.py
+		shell/filter.sh (no need to specify parallel)
+			annot/bin/filter_clusters.py(threaded, not supported in qsub, ssh itself)
+			annot/bin/MpiClusterBsStat.py (non-qsub parallel) or shell/mpibs_stat.sh(only for qsub, parallel embedded, 5 nodes, no need to specify in qsub; R thread, so ssh itself in mpibs_stat.sh)
 
 II. Biclustering (05-14-05)
 	MpiBiclustering.py
