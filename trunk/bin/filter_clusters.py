@@ -109,7 +109,6 @@ class submit_clusters(Thread):
 			mcl_id, splat_id, vertex_set, recurrence_array, connectivity = row
 			if mcl_id in mcl_id2unknown_ratio:
 				unknown_ratio, prediction_tuple_set = mcl_id2unknown_ratio[mcl_id]
-				vertex_set_string = vertex_set[1:-1]	#this is a string easy to submit to database
 				vertex_list = vertex_set[1:-1].split(',')	#10-03-05 this is a list, to calculate the correct cluster size, len(vertex_list)
 				recurrence_array = recurrence_array[1:-1].split(',')
 				recurrence_array = map(float, recurrence_array)
@@ -127,7 +126,7 @@ class submit_clusters(Thread):
 				curs.execute("insert into %s(mcl_id, splat_id, vertex_set, recurrence_array, recurrence,\
 					connectivity, unknown_ratio, size, go_no_list, p_value_list) values(\
 					%s, %s, '%s', '{%s}', %s, %s, %s, %s, '{%s}', '{%s}')"%\
-					(good_cluster_table, mcl_id, splat_id, vertex_set_string, repr(recurrence_array)[1:-1], recurrence,\
+					(good_cluster_table, mcl_id, splat_id, vertex_set, repr(recurrence_array)[1:-1], recurrence,\
 					connectivity, unknown_ratio, len(vertex_list), repr(go_no_list)[1:-1], repr(p_value_list)[1:-1]))
 			row = cluster_queue.get()
 		
