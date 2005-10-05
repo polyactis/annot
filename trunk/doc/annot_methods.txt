@@ -45,8 +45,8 @@ VII. statistics
 	7. pull all prediction-producing clusters out into another table and do transfac binding-site enrichment analysis. 1. filter, each type of binding-site has >= 1/3 associated genes in the cluster; 2. one-element analysis, hypergeometric p-value, retain top 5; 3. two-element analysis, hypergeometric and log likelihood-ratio, each retain top 5.
 
 VIII size<=40
-	1. choose IV's size<=40 clusters and run V
+	1. choose VI's size<=40 clusters and run VII
 
 VIV. dense
-	1. apply dense clustering (density cutoff=0.5) to IV's clusters and run V
-	2. run VI on dense clusters
+	1. apply dense clustering (density cutoff=0.5) to VI's clusters and run VII
+	2. run VIII on dense clusters
