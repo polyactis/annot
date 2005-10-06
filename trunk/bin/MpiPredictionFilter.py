@@ -10,8 +10,8 @@ Option:
 	-i ...,	the old input_fname
 	-j ...,	the new input_fname
 	-e ...,	max cluster size, 40 (default)
-	-u ...,	unknown_gene_ratio, 1(default)
-	-p ...,	p_value_cut_off, 0(default)
+	-u ...,	unknown_gene_ratio, 1(default, no cut)
+	-p ...,	p_value_cut_off, 1(default, no cut)
 	-y ...,	is_correct type (2 lca, default)
 	-m,	merge redundant clusters, retain the cluster with highest accuracy
 	-c,	commit the database transaction
@@ -125,7 +125,7 @@ class PredictionFilterByClusterSize:
 		for mcl_id, is_correct_ls in mcl_id2accuracy.iteritems():
 			accuracy = sum(is_correct_ls)/float(len(is_correct_ls))
 			mcl_id2accuracy[mcl_id] = accuracy
-		sys.stderr.write("%s clusters. Done.\n"%len(mcl_id2accuracy))
+		sys.stderr.write(" %s clusters. Done.\n"%len(mcl_id2accuracy))
 		return mcl_id2accuracy
 	
 	def submit_to_p_gene_table(self, curs, p_gene_table, p_attr_instance):
@@ -199,7 +199,7 @@ class PredictionFilterByClusterSize:
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		curs.execute("close crs")
-		sys.stderr.write("%s good predictions. Done.\n"%(no_of_good_predictions))
+		sys.stderr.write(" %s good predictions. Done.\n"%(no_of_good_predictions))
 		return gene_no2go2prediction_dict
 	
 	def distinct_predictions_set(self, gene_no2go2prediction_dict):
@@ -236,7 +236,7 @@ class PredictionFilterByClusterSize:
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		curs.execute("close crs")
-		sys.stderr.write("%s distinct predictions. Done.\n"%no_of_distinct_p_gene_ids)
+		sys.stderr.write(" %s distinct predictions. Done.\n"%no_of_distinct_p_gene_ids)
 		
 	def run(self):
 		"""
@@ -305,7 +305,7 @@ if __name__ == '__main__':
 	jnput_fname = None
 	max_size = 40
 	unknown_gene_ratio = 1
-	p_value_cut_off = 0
+	p_value_cut_off = 1
 	is_correct_type = 2
 	merge = 0
 	commit = 0
