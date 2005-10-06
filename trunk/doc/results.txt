@@ -1,0 +1,68 @@
+(10-05-05)
+Notation illustraion:
+	-e: max_size, 'inf' means no cutoff
+	-d: density cutoff 
+	-u: unknown_cut_off, 1 = no cutoff
+	-p: p_value_cut_off, 1 = no cutoff
+	-m: merge redundant clusters, 1=enable, 0=disable
+	result: accuracy/known_predictions/unknown_predictions/
+		accuracy_pair/known-predictions-pair/unknown-predictions-pair/known-genes/unknown-genes
+			xxx-pair is the non-redundant counter of xxx.
+			redundancy means same prediction(gene_no:go_no) is counted >1.
+
+
+1. schema: hs_fim_40
+
+1.1. edge recurrence >=4 and <=40
+
+No.	-e	-d	-u	-p	-m	result
+1	inf	0	1	1	0	0.7004/14094/1190/0.6010/1208/118/539/64
+2	40	0	1	1	0	0.7263/20211/1989/0.5995/1508/151/604/74
+3	inf	0.5	1	1	0	0.7730/27431/2365/0.6010/1812/194/549/69
+4	40	0.5	1	1	0	0.7738/25701/2256/0.6007/1763/185/533/66
+5	20	0	1	1	0	0.7203/13298/1221/0.6001/1478/145/642/77
+6	60	0	1	1	0	0.7254/19649/1775/0.6007/1212/133/548/73
+7	40	0	0.2	0.01	0	0.7456/24956/2698/0.5998/1112/119/450/47
+8	40	0	0.2	0.01	1	0.6000/165/9/0.6000/165/9/139/8
+9	40	0	1	1	1	0.5985/274/23/0.5985/274/23/222/19
+10	inf	0	0.2	0.01	0	0.6964/9784/1168/0.6000/780/72/355/35
+11	inf	0	0.2	0.01	1	0.5966/238/7/0.5966/238/7/186/6
+12	inf	0	1	1	1	0.6008/263/25/0.6008/263/25/212/21
+13	40	0	1	0.01	0	0.7450/24365/2522/0.5998/1107/121/451/51
+14	inf	0	1	0.01	0	0.6815/8144/834/0.5997/702/66/353/34
+15	40	0	0.2	1	0	0.7309/17520/1844/0.5993/1093/114/470/50
+16	inf	0	0.2	1	0	0.7146/9038/809/0.6021/862/81/387/41
+
+Conclusion:
+	. size has effect. It's still right that smaller clusters are better. See No. 1 vs 2,5,6, 13 vs 14.
+	. density's effect is less strong than size. See No 1 vs 3, 2 vs 4.
+	. Using size and density cutoff alone has effect. But combining them together is as obivous as alone, which indicate they are dependent. See No. 1 vs 3, 2 vs 4, 1 vs 4.
+	. p-value cutoff is not good. See No. 2 vs 13, 1 vs 14.
+	. unknown cutoff is not good as well. See No. 2 vs 15, 1 vs 16, 7 vs 13, 10 vs 14.
+	. unknown cutoff + p-value cutoff is a bad idea. It reduces the prediction pool(both good and bad predictions) too much. See No.2 vs 7, 1 vs 10.
+	. merge is also a bad idea. It reduces the prediction pool even further. See No 7 vs 8, 2 vs 9, 10 vs 11, 1 vs 12.
+
+
+Suggestion:
+	. Our model considers p-value, recurrence, density, but NO size. So it's no wonder that size has some effect. Unknown gene ratio having bad effect is also understandable. The model already selects the predictions to meet the accuracy cutoff and known genes contribute to the accuracy.
+	. So we could consider size into model to see something. Previously i dropped it because of its strong association with density. So maybe size is stronger than density and we should substitute density with size or keep them both.
+
+
+
+2. schema: mm_fim_97
+
+2.1 edge recurrence >=4 and <= 200
+
+Notation illustration:
+	-a: accuracy cutoff
+
+No	-a	result
+1	0.4	0.7224/12525618/2365702/0.3686/4865/1440/1008/339
+2	0.5	0.7298/1822797/323591/0.4685/1808/469/424/132
+3	0.6	0.7656/142556/22972/0.5661/613/141/149/44
+
+Conclusion:
+	. accuracy is the most strong influencer of coverage. (They conflict)
+	
+Suggestion:
+	. If we want to adjust any parameter(size, density, p-value, unknown), we are hoping that it has a strong positive relationship with accuracy. But some are true, some are partially true, some are wrong. Linear model helps us to balance the equation. However, another route is that we just use the accuracy of the each cluster to cut. In this way, we can keep the large pool(coverage) and sound accuracy.
