@@ -12,6 +12,9 @@ Notation illustraion:
 
 
 1. schema: hs_fim_40
+	40 datasets
+	7277/9237 (known/all genes)
+	154194 edges(min support=4)
 
 1.1. edge recurrence >=4 and <=40
 
@@ -50,6 +53,9 @@ Suggestion:
 
 
 2. schema: mm_fim_97
+	97 datasets
+	9131/18803 (known/all genes)
+	805253 edges (min support=4)
 
 2.1 edge recurrence >=4 and <= 200
 
