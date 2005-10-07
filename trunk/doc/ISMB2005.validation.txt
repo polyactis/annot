@@ -1,0 +1,5 @@
+We predicted YPR143W to participate in 'ribosome biogenesis'. In a personal communication of Fatica to SGD in 2004, it's involved in pre-rRNA processing. We assigned the function 'protein biosynthesis' to YMR116C. There're two papers showing it's involved in translation regulation(PMID 9504906) and control(PMID 15340087).
+
+We predicted YLR204W(QRI5) to have 'protein biosynthesis' function. One paper indicates it's submitted to a common 	regulatory process with MSS51(PMID 1523888) and the GO annotation of MSS51 is positive regulation of translation and protein biosynthesis.
+
+Another gene 'YER007C-A' is also predicted to have 'protein biosynthesis' and one paper(PMID 10093218) showed it's associated with translation machinery.
