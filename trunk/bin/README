@@ -66,6 +66,8 @@ shell/annot.sh
 		fim_closed(big memory node, node29)
 		annot/MpiFromDatasetSignatureToPattern.py
 		shell/cluster_stat.sh
+		annot/bin/MpiCrackSplat.py
+		shell/cluster_stat.sh
 
 shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py)
 	annot/bin/codense/codense2db.py
