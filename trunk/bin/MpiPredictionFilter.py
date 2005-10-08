@@ -9,22 +9,24 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-i ...,	the old input_fname
 	-j ...,	the new input_fname
-	-e ...,	max cluster size, 40 (default)
+	-m ...,	max cluster size, 100000 (default, no cut)
 	-u ...,	unknown_gene_ratio, 1(default, no cut)
 	-p ...,	p_value_cut_off, 1(default, no cut)
 	-y ...,	is_correct type (2 lca, default)
-	-m,	merge redundant clusters, retain the cluster with highest accuracy
+	-a ...,	cluster accuracy cutoff, (0 default, no cut)
 	-c,	commit the database transaction
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
-	PredictionFilterByClusterSize.py -k mm_fim_97 
+	PredictionFilterByClusterSize.py -k hs_fim_40 -i
+		hs_fim_40m4x40 -j hs_fim_40m4x40ms12000m -c -m 12000
 	
 Description:
 	Program to filter clusters by max_size. Database transaction
 	is done by creating views.
+	10-06-05, not just size cut. 
 
 """
 
@@ -64,8 +66,8 @@ class PredictionFilterByClusterSize:
 			because runtime select cluster_size_cut_off<=max_size blows the memory
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
-		jnput_fname=None, max_size=40, unknown_gene_ratio=1, p_value_cut_off=0.01,\
-		is_correct_type=2, merge=0, commit=0, debug=0, report=0):
+		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
+		is_correct_type=2, acc_cut_off=0, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -75,7 +77,7 @@ class PredictionFilterByClusterSize:
 		self.unknown_gene_ratio = float(unknown_gene_ratio)
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.is_correct_type = int(is_correct_type)
-		self.merge = int(merge)
+		self.acc_cut_off = float(acc_cut_off)
 		self.commit = int(commit)
 		self.debug = int(debug)
 		self.report = int(report)
@@ -84,17 +86,25 @@ class PredictionFilterByClusterSize:
 	def view_from_table(self, curs, table, view):
 		curs.execute("CREATE OR REPLACE VIEW %s AS SELECT * FROM %s"%(view, table))
 	
-	def is_good_prediction(self, prediction_attr_instance):
+	def is_good_prediction(self, prediction_attr_instance, mcl_id2accuracy=None):
 		"""
 		10-05-05
 			judge whether this prediction should be taken into consideration
+		10-06-05
+			add judgement by acc_cut_off
 		"""
 		if prediction_attr_instance.p_value_cut_off>self.p_value_cut_off or \
 			prediction_attr_instance.cluster_size_cut_off>self.max_size or \
 			prediction_attr_instance.unknown_cut_off>self.unknown_gene_ratio:
 			return 0
 		else:
-			return 1
+			if mcl_id2accuracy:
+				if mcl_id2accuracy[prediction_attr_instance.mcl_id]>=self.acc_cut_off:
+					return 1
+				else:
+					return 0
+			else:
+				return 1
 
 	
 	def get_mcl_id2accuracy(self, curs, p_gene_table, crs_sentence, is_correct_type):
@@ -155,16 +165,11 @@ class PredictionFilterByClusterSize:
 			p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
 			p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id))
 		
-	def setup_new_p_gene_table(self, curs, p_gene_table, p_gene_view, crs_sentence, mcl_id2accuracy=None):
+	def setup_new_p_gene_table(self, curs, p_gene_table, p_gene_view, crs_sentence, mcl_id2accuracy=None, acc_cut_off=0):
 		"""
 		10-05-05
-			first the prediction should pass the condition
-			
-			second,
-			if merge redundant predictions(mcl_id2accuracy is not None), then retain the most accurate cluster
-				among all the supporting clusters
-			else
-				just submit it to database
+		10-06-05	(use acc_cut_off, not keep the most accurate one
+			simple, just use is_good_prediction() to judge if it's good or not
 		"""
 		sys.stderr.write("Starting to setup new p_gene_table...\n")
 		curs.execute("%s"%(crs_sentence))
@@ -176,23 +181,22 @@ class PredictionFilterByClusterSize:
 		while rows:
 			for row in rows:
 				p_attr_instance = prediction_attributes(row)
-				if self.is_good_prediction(p_attr_instance):
+				if self.is_good_prediction(p_attr_instance, mcl_id2accuracy):
 					no_of_good_predictions += 1
-					if mcl_id2accuracy:
+					"""
+					if acc_cut_off:
 						if p_attr_instance.gene_no not in gene_no2go2prediction_dict:
 							gene_no2go2prediction_dict[p_attr_instance.gene_no] = {}
 						unit = gene_no2go2prediction_dict[p_attr_instance.gene_no]
 						go_no = p_attr_instance.go_no
 						if go_no not in unit:
-							unit[go_no] = [mcl_id2accuracy[p_attr_instance.mcl_id], p_attr_instance.cluster_size_cut_off, p_attr_instance.p_gene_id]
+							unit[go_no] = []
 						current_mcl_id_accuracy = mcl_id2accuracy[p_attr_instance.mcl_id]
-						if current_mcl_id_accuracy>unit[go_no][0]:	#current cluster has better accuracy
-							unit[go_no] = [current_mcl_id_accuracy, p_attr_instance.cluster_size_cut_off, p_attr_instance.p_gene_id]
-						elif current_mcl_id_accuracy==unit[go_no][0]:	#equal accuracy
-							if p_attr_instance.cluster_size_cut_off>unit[go_no][1]:	#equal accuracy and bigger size
-								unit[go_no] = [current_mcl_id_accuracy, p_attr_instance.cluster_size_cut_off, p_attr_instance.p_gene_id]
+						if current_mcl_id_accuracy>=acc_cut_off:	#current cluster's accuracy >= cutoff
+							unit[go_no].append(p_attr_instance.p_gene_id)
 					else:
-						self.submit_to_p_gene_table(curs, p_gene_view, p_attr_instance)
+					"""
+					self.submit_to_p_gene_table(curs, p_gene_view, p_attr_instance)
 				counter += 1
 			if self.report:
 				sys.stderr.write("%s%s:%s"%('\x08'*20, counter, no_of_good_predictions))
@@ -205,12 +209,14 @@ class PredictionFilterByClusterSize:
 	def distinct_predictions_set(self, gene_no2go2prediction_dict):
 		"""
 		10-05-05
+		10-06-05
+			the value of go2prediction_dict is just a list of p_gene_ids
 		"""
 		sys.stderr.write("Getting distinct predictions...\n")
 		p_gene_id_set = Set()
 		for gene_no, go2prediction_dict in gene_no2go2prediction_dict.iteritems():
 			for go_no, ls in go2prediction_dict.iteritems():
-				p_gene_id_set.add(ls[2])
+				p_gene_id_set |= Set(ls)
 		sys.stderr.write("Done.\n")
 		return p_gene_id_set
 	
@@ -249,15 +255,16 @@ class PredictionFilterByClusterSize:
 			--view_from_table()
 			
 			--createGeneTable()
-			if merge:
+			if acc_cut_off:
 				--get_mcl_id2accuracy()
 					--is_good_prediction()
 			
 			--setup_new_p_gene_table()
 				--is_good_prediction()
-				if not merge
+				if acc_cut_off
 					--submit_to_p_gene_table()
-			if merge:
+		10-06-05(below is not called anymore)
+			if acc_cut_off
 				--distinct_predictions_set()
 				--submit_distinct_predictions()
 		"""
@@ -274,15 +281,12 @@ class PredictionFilterByClusterSize:
 		
 		gene_stat_instance = gene_stat()
 		gene_stat_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
-		if self.merge:
+		if self.acc_cut_off:
 			mcl_id2accuracy = self.get_mcl_id2accuracy(curs, old_schema_instance.p_gene_table, crs_sentence, self.is_correct_type)
 		else:
 			mcl_id2accuracy = None
 		gene_no2go2prediction_dict = self.setup_new_p_gene_table(curs, old_schema_instance.p_gene_table, \
-			new_schema_instance.p_gene_table, crs_sentence, mcl_id2accuracy)
-		if self.merge:
-			p_gene_id_set= self.distinct_predictions_set(gene_no2go2prediction_dict)
-			self.submit_distinct_predictions(curs, new_schema_instance.p_gene_table, crs_sentence, p_gene_id_set)
+			new_schema_instance.p_gene_table, crs_sentence, mcl_id2accuracy, self.acc_cut_off)
 		if commit:
 			curs.execute("End")
 
@@ -292,7 +296,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:e:u:p:y:mcbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:m:u:p:y:a:cbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -303,11 +307,11 @@ if __name__ == '__main__':
 	schema = ''
 	input_fname = None
 	jnput_fname = None
-	max_size = 40
+	max_size = 100000
 	unknown_gene_ratio = 1
 	p_value_cut_off = 1
 	is_correct_type = 2
-	merge = 0
+	acc_cut_off = 0
 	commit = 0
 	debug = 0
 	report = 0
@@ -325,7 +329,7 @@ if __name__ == '__main__':
 			input_fname = arg
 		elif opt in ("-j"):
 			jnput_fname = arg
-		elif opt in ("-e"):
+		elif opt in ("-m"):
 			max_size = int(arg)
 		elif opt in ("-u"):
 			unknown_gene_ratio = float(arg)
@@ -333,8 +337,8 @@ if __name__ == '__main__':
 			p_value_cut_off = float(arg)
 		elif opt in ("-y"):
 			is_correct_type = int(arg)
-		elif opt in ("-m"):
-			merge = 1
+		elif opt in ("-a"):
+			acc_cut_off = float(arg)
 		elif opt in ("-c"):
 			commit = 1
 		elif opt in ("-b"):
@@ -343,7 +347,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and input_fname and jnput_fname:
 		instance = PredictionFilterByClusterSize(hostname, dbname, schema, input_fname, jnput_fname, max_size, \
-			unknown_gene_ratio, p_value_cut_off, is_correct_type, merge, commit, debug, report)
+			unknown_gene_ratio, p_value_cut_off, is_correct_type, acc_cut_off, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
