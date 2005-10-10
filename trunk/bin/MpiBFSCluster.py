@@ -1,12 +1,13 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiBFSCluster.py -k SCHEMA -i SPLAT_TABLE -o D_MATRIX_TABLE [OPTIONS]
+Usage: MpiBFSCluster.py -k SCHEMA -i SPLAT_TABLE -j MCL_TABLE -o D_MATRIX_TABLE [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-i ...,	SPLAT_TABLE, input_table
+	-j ...,	MCL_TABLE, input_table 2
 	-o ...,	D_MATRIX_TABLE, output_table
 	-s ...,	no of clusters per transmission, 2000(default)
 	-n,	D_MATRIX_TABLE is new
@@ -17,7 +18,7 @@ Option:
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiBFSCluster.py
-	-k mm_fim_97 -i -o -n -r -c
+	-k mm_fim_97 -i -j -o -n -r -c
 	
 Description:
 	Program to do BFS search for each vertex and record down the layer.
@@ -27,13 +28,19 @@ Description:
 """
 
 import sys, os, getopt, csv, math, Numeric
-sys.path += [os.path.expanduser('~/script/annot/bin'), os.path.expanduser('~/lib/boost/lib')]
+sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect
 from sets import Set
-import bgl
+from graph.johnson_sp import johnson_sp
 
+"""
 class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
+	'''
+	10-09-05
+		code call this function has been deleted from bfs_cluster()
+		see 1.1 version
+	'''
 	def __init__(self, name_map, vertex_no2index):
 		bgl.Graph.BFSVisitor.__init__(self)
 		self.name_map = name_map
@@ -53,19 +60,21 @@ class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
 		vertex_no = int(self.name_map[u])
 		vertex_index = self.vertex_no2index[vertex_no]
 		self.source = vertex_index
+"""
 
 class MpiBFSCluster:
 	"""
 	09-19-05
 	"""
-	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, input_table=None,\
-		output_table=None,  size=2000, new_table=0, commit=0, debug=0, report=0):
+	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, input_table=None, \
+		mcl_table=None, output_table=None,  size=2000, new_table=0, commit=0, debug=0, report=0):
 		"""
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.input_table = input_table
+		self.mcl_table = mcl_table
 		self.output_table = output_table
 		self.size = int(size)
 		self.new_table = int(new_table)
@@ -76,14 +85,23 @@ class MpiBFSCluster:
 	def fetch_cluster_block(self, curs, size):
 		"""
 		10-07-05
+		10-09-05
+			add vertex_set
+			
 			format:
 				[
 				[splat_id1, 0],
+				[v1, -1],
+				[v2, -1],
+				...
 				[g1,g2],
 				[g3,g4],
 				[-1, -1]
 				...
 				[splat_id2, 0],
+				[v1, -1],
+				[v2, -1],
+				...
 				[g1, g2],
 				...
 				[-1, -1]
@@ -95,8 +113,11 @@ class MpiBFSCluster:
 		rows = curs.fetchall()
 		cluster_block = []
 		for row in rows:
-			splat_id, edge_set = row
+			splat_id, vertex_set, edge_set = row
 			cluster_block.append([splat_id, 0])
+			vertex_set = vertex_set[1:-1].split(',')
+			for vertex in vertex_set:
+				cluster_block.append([int(vertex), -1])
 			edge_set = edge_set[2:-2].split('},{')
 			for edge in edge_set:
 				edge = edge.split(',')
@@ -106,11 +127,15 @@ class MpiBFSCluster:
 		cluster_block = Numeric.array(cluster_block, Numeric.Int)
 		return cluster_block
 	
-	def input_node(self, communicator, curs, input_table, size):
+	def input_node(self, communicator, curs, input_table, mcl_table, size):
+		"""
+		10-09-05
+			add mcl_table to get vertex_set
+		"""
 		sys.stderr.write("Reading clusters from tables...\n")
 		node_rank = communicator.rank
-		curs.execute("DECLARE crs CURSOR FOR select splat_id, edge_set\
-			from %s "%(input_table))
+		curs.execute("DECLARE crs CURSOR FOR select s.splat_id, m.vertex_set, s.edge_set\
+			from %s s, %s m where m.mcl_id=s.splat_id"%(input_table, mcl_table))
 		cluster_block = self.fetch_cluster_block(curs, size)
 		which_node = 0
 		while cluster_block:
@@ -131,6 +156,8 @@ class MpiBFSCluster:
 	def bfs_cluster(self, splat_id_edge_block, communicator):
 		"""
 		10-07-05
+		10-09-05 change to use johnson_sp
+		
 			result_block format:
 				[
 				[no_of_genes, splat_id, 0, 0,...]
@@ -140,29 +167,23 @@ class MpiBFSCluster:
 				[gn-g1, gn-g2, ..., gn-gn]
 				]
 		"""
-		edge_set = splat_id_edge_block[1:]
-		g = bgl.Graph(edge_set, "nm")
-		name_map = g.get_vertex_string_map("nm")	#WATCH: bgl transforms the integers in edge_set into strings, so int() later
 		vertex_set = []
-		vertex_no2index = {}
-		#construct vertex_no2index
-		for v in g.vertices:
-			vertex_set.append(int(name_map[v]))
-		vertex_set.sort()
-		for i in range(len(vertex_set)):
-			vertex_no2index[vertex_set[i]] = i
+		for i in range(1, len(splat_id_edge_block)):
+			if splat_id_edge_block[i][1]==-1:	#-1 is mark of the vertex_set
+				vertex_set.append(splat_id_edge_block[i][0])
+			else:
+				break
+		edge_set = splat_id_edge_block[i:]
 		
 		#result
 		try:
 			result_block = Numeric.zeros((len(vertex_set)+2, len(vertex_set)), Numeric.Int)
 			result_block[0][0] = len(vertex_set)
-			result_block[0][1] = splat_id_edge_block[0][0]
+			result_block[0][1] = splat_id_edge_block[0][0]	#splat_id
 			result_block[1] = vertex_set
-			for v in g.vertices:
-				bfs_visitor_instance = cal_distance_bfs_visitor(name_map, vertex_no2index)
-				bgl.breadth_first_search(g, v, visitor=bfs_visitor_instance)
-				vertex_index = vertex_no2index[int(name_map[v])]
-				result_block[vertex_index+2] = bfs_visitor_instance.distance_list
+			j_instance = johnson_sp()
+			j_instance.run(vertex_set, edge_set)
+			result_block[2:] = j_instance.D
 		except:
 			common_string = "Node %s error"%communicator.rank
 			print common_string, sys.exc_info()
@@ -255,7 +276,7 @@ class MpiBFSCluster:
 	def run(self):
 		"""
 		10-07-05
-			
+		10-09-05 input_node() add mcl_table
 			--db_connect()
 			
 			--input_node()
@@ -276,7 +297,7 @@ class MpiBFSCluster:
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			self.input_node(communicator, curs, self.input_table, self.size)
+			self.input_node(communicator, curs, self.input_table, self.mcl_table, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator)
 		elif node_rank==communicator.size-1:
@@ -292,7 +313,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:o:s:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -302,6 +323,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	input_table = None
+	mcl_table = None
 	output_table = None
 	size = 2000
 	new_table = 0
@@ -320,6 +342,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-i"):
 			input_table = arg
+		elif opt in ("-j"):
+			mcl_table = arg
 		elif opt in ("-o"):
 			output_table = arg
 		elif opt in ("-s"):
@@ -332,8 +356,8 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and input_table and output_table:
-		instance = MpiBFSCluster(hostname, dbname, schema, input_table,\
+	if schema and input_table and mcl_table and output_table:
+		instance = MpiBFSCluster(hostname, dbname, schema, input_table, mcl_table,\
 			output_table, size, new_table, commit, debug, report)
 		instance.run()
 	else:
