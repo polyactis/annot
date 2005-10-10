@@ -9,7 +9,7 @@ FORTRAN_LIB	= ~/script/hhu_clustering/lib/libg2c.a
 
 
 
-BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so
+BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so johnson_sp.so
 BoostPythonBinary	= clustering cc_from_edge_list
 BoostPythonLib  = -lboost_python
 
@@ -42,16 +42,16 @@ all:	$(GslCxxTargets) $(GslCTargets) $(BoostPythonTarget) $(CxxSwigTargets) $(Bo
 swig:	$(CxxSwigTargets)
 
 $(GslCxxTargets):	%:	%.o
-	$(CxxCompiler) $(CxxFlags) $(GslLib) $< -o $@
+	-$(CxxCompiler) $(CxxFlags) $(GslLib) $< -o $@
 
 .cc.o:
-	$(CxxCompiler) $(CxxFlags) $(IncludeDirs) -c $< -o $@
+	-$(CxxCompiler) $(CxxFlags) $(IncludeDirs) -c $< -o $@
 
 $(GslCTargets):	%:	%.o
-	$(CCompiler) $(CFlags) $(GslLib) $< -o $@
+	-$(CCompiler) $(CFlags) $(GslLib) $< -o $@
 
 .c.o:
-	$(CCompiler) $(CFlags) $(IncludeDirs) -c $< -o $@
+	-$(CCompiler) $(CFlags) $(IncludeDirs) -c $< -o $@
 
 
 #for swig
@@ -59,19 +59,19 @@ $(CxxWrap):	%_wrap.cc:	%.i %.cc
 	swig -c++ -python -o $@ $<
 
 %_wrap.o:	%_wrap.cc
-	$(CxxCompiler) $(IncludeDirs) $(CxxFlags) -c $< -o $@
+	-$(CxxCompiler) $(IncludeDirs) $(CxxFlags) -c $< -o $@
 
 $(CxxSwigTargets):	_%.so:	%.o %_wrap.o
-	$(CxxCompiler)  $(GslLib) $(SharedLibFlags) $^ -o $@
+	-$(CxxCompiler)  $(GslLib) $(SharedLibFlags) $^ -o $@
 
 
 #for boost.python target(shared libraries)
 $(BoostPythonTarget):	%.so:	%.o
-	$(CxxCompiler) $(GslLib) $(BoostPythonLib) $(SharedLibFlags) $< -o $@
+	-$(CxxCompiler) $(GslLib) $(BoostPythonLib) $(SharedLibFlags) $< -o $@
 
 #for boost python binary 
 $(BoostPythonBinary):	%:	%.o
-	$(CxxCompiler) $(CxxFlags) $(BoostPythonLib) $< $(Libs) -o $@
+	-$(CxxCompiler) $(CxxFlags) $(BoostPythonLib) $< $(Libs) -o $@
 
 
 
