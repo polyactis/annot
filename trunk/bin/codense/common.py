@@ -199,6 +199,27 @@ def get_gene_no2go_no(curs, schema=None, gene_table='gene'):
 			gene_no2go_no[row[0]].append(int(go_no))
 	sys.stderr.write("Done\n")
 	return gene_no2go_no
+	
+def get_gene_no2go_no_set(curs, schema=None, gene_table='gene'):
+	"""
+	03-09-05
+		get the gene_no2go_no
+	"""
+	sys.stderr.write("Getting gene_no2go_no...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	
+	gene_no2go_no = {}
+	
+	curs.execute("select gene_no,go_functions from %s"%gene_table)
+	rows = curs.fetchall()
+	for row in rows:
+		gene_no2go_no[row[0]] = Set()
+		go_functions_list = row[1][1:-1].split(',')
+		for go_no in go_functions_list:
+			gene_no2go_no[row[0]].add(int(go_no))
+	sys.stderr.write("Done\n")
+	return gene_no2go_no
 
 def get_known_genes_dict(curs, schema=None, gene_table='gene'):
 	"""
@@ -832,11 +853,14 @@ class schema:
 """
 09-29-05
 	function to form the table names of a schema given ofname and acc_cut_off
+10-10-05
+	add d_matrix_table
 """
 def form_schema_tables(ofname, acc_cut_off=0.6):
 	schema_instance = schema()
 	schema_instance.splat_table = 'splat_%s'%ofname
 	schema_instance.mcl_table = 'mcl_%s'%ofname
+	schema_instance.d_matrix_table = 'd_matrix_%s'%ofname
 	schema_instance.prediction_suffix = '%s_e5'%ofname
 	schema_instance.p_gene_table = 'p_gene_%s_e5'%ofname
 	acc_int=int(acc_cut_off*100)
