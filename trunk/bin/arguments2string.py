@@ -28,7 +28,10 @@ def arguments2string(arguments_list):
 		else:	#this is argument
 			if argument[:2] == '0.':	#digit
 				argument = argument[2:]
-			string += argument.replace(',','_')	#replace ,
+			argument = argument.replace('-','n')	#replace '-' with 'n'
+			argument = argument.replace('.','_')	#replace '.' with '_'
+			string += argument.replace(',','_')	#replace ',' with '_'
+			
 	return string
 
 if __name__ == '__main__':
