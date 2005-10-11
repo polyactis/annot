@@ -20,15 +20,15 @@ def arguments2string(arguments_list):
 	"""
 	string = ''
 	for argument in arguments_list:
-		if argument[0] == '-':
+		if argument[0] == '-':	#this is option
 			if argument[1] == '-':	#long option
 				string += argument[2:]
-			else:
+			else:	#short option
 				string += argument[1:]
-		else:
-			if argument[:2] == '0.':
-					argument = argument[2:]
-			string += argument
+		else:	#this is argument
+			if argument[:2] == '0.':	#digit
+				argument = argument[2:]
+			string += argument.replace(',','_')	#replace ,
 	return string
 
 if __name__ == '__main__':
