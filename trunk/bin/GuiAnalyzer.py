@@ -327,6 +327,8 @@ class GuiAnalyzer:
 		
 		06-14-05
 			use graphDotOutput() and insert it into the textbuffer
+		10-11-05
+			add cluster_id and go_no for each graph
 		"""
 		if self.cluster == None:
 			print "Cluster not loaded in"
@@ -364,6 +366,8 @@ class GuiAnalyzer:
 				pixbuf = gtk.gdk.pixbuf_new_from_array(ar, gtk.gdk.COLORSPACE_RGB, 8)
 				startiter = textbuffer.get_start_iter()
 				textbuffer.insert_pixbuf(startiter, pixbuf)
+				startiter = textbuffer.get_start_iter()
+				textbuffer.insert(startiter, "cluster_id:%s go_no:%s"%(self.cluster.cluster_id, go_no))
 				#cleanup the temporary files and others
 				del im
 				del ar
