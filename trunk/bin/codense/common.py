@@ -648,10 +648,14 @@ def mpi_schedule_jobs(communicator, job_list, node_function, node_parameter_list
 	
 	return node_returned_value_list
 
-def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=1, function=0, functioncolor='green', plot_type='dot', weighted=1):
+def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=-1, function=0, functioncolor='green', \
+	plot_type='dot', weighted=1, unknown_color='red'):
 	'''
 	06-14-05
 		output graph in graphviz dot language.(similar to subgraph_output() of subgraph_visualize.py)
+	10-12-05
+		default centralnode=-1(no gene_no is -1)
+		default unknown_color=red
 	'''
 	sys.stderr.write("Outputing graph...")
 	output_f.write('graph G  {\n')
@@ -665,6 +669,8 @@ def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=1, fu
 		if vertex in gene_no2go_no:
 			if function in gene_no2go_no[vertex]:
 				color = functioncolor
+			if gene_no2go_no[vertex]==[0]:
+				color = unknown_color
 		if vertex==centralnode:
 			shape = 'box'
 			color = 'yellow'
