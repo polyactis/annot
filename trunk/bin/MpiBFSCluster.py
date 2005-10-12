@@ -227,10 +227,14 @@ class MpiBFSCluster:
 		communicator.send(stop_signal, communicator.size-1, 1)
 	
 	def create_output_table(self, curs, output_table):
+		"""
+		10-10-05
+			splat_id becomes the primary key
+		"""
 		sys.stderr.write("Creating %s...\n"%output_table)
 		curs.execute("create table %s(\
-			id	serial primary key,\
-			splat_id	integer,\
+			id	serial,\
+			splat_id	integer primary key,\
 			vertex_set	integer[],\
 			d_matrix	integer[][])"%(output_table))
 		sys.stderr.write("%s created.\n"%output_table)
