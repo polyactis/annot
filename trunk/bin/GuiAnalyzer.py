@@ -360,6 +360,11 @@ class GuiAnalyzer:
 				
 				system_call(commandline)
 				
+				#10-11-05 temporary adding this block to draw pictures in png format
+				outputfname = '/tmp/%s_%s.png'%(self.cluster.cluster_id, go_no)
+				commandline = '%s -Tpng %s -o %s'%(plot_type_command, graphSrcFname, outputfname)
+				system_call(commandline)
+				
 				textbuffer = self.textview_subgraph.get_buffer()
 				im = Image.open(graphFname)
 				ar = fromimage(im)
