@@ -82,7 +82,7 @@ class gradient_class:
 		self.edge_set_string = edge_set_string
 		self.d_matrix_string = d_matrix_string
 		self.gene_no2go = gene_no2go
-		self.exponent = int(exponent)
+		self.exponent = float(exponent)
 		self.score_list = score_list
 		self.max_layer = int(max_layer)
 		self.debug = int(debug)
@@ -130,6 +130,10 @@ class gradient_class:
 		return vertex_gradient
 	
 	def cal_edge_gradient(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, score_list, max_layer):
+		"""
+		10-12-05
+		edge score changed from multiply to plus, like score1+score2
+		"""
 		edge_gradient = 0.0
 		edge_set = edge_set_string[2:-2].split('},{')
 		if self.debug:
@@ -146,9 +150,7 @@ class gradient_class:
 				v2_go_no_set = gene_no2go[edge[1]]
 				score1 = self.return_score(go_no, v1_go_no_set, score_list)
 				score2 = self.return_score(go_no, v2_go_no_set, score_list)
-				if score1<0 and score2<0:	#punish failure
-					score1 = -score1
-				edge_gradient += 1/(math.pow(v1_layer, exponent)*math.pow(v2_layer, exponent))*score1*score2
+				edge_gradient += 1/(math.pow(v1_layer, exponent)*math.pow(v2_layer, exponent))*(score1+score2)
 				if self.debug:
 					print "edge,v1_go_no, v2_go_no, score1, score2, edge_gradient:",edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_gradient
 		edge_gradient /= float(len(vertex2no))*(len(vertex2no)-1)/2
@@ -185,7 +187,7 @@ class PredictionFilterByClusterSize:
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.is_correct_type = int(is_correct_type)
 		self.acc_cut_off = float(acc_cut_off)
-		self.exponent = int(exponent)
+		self.exponent = float(exponent)
 		score_list = score_list.split(',')
 		self.score_list = map(float, score_list)
 		self.max_layer = int(max_layer)
@@ -467,7 +469,7 @@ if __name__ == '__main__':
 		elif opt in ("-a"):
 			acc_cut_off = float(arg)
 		elif opt in ("-e"):
-			exponent = int(arg)
+			exponent = float(arg)
 		elif opt in ("-s"):
 			score_list = arg
 		elif opt in ("-l"):
