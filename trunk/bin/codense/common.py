@@ -46,12 +46,18 @@ def get_haiyan_no2gene_id(table_file):
 	return haiyan_no2gene_id
 
 
-def dict_map(dict, ls):
+def dict_map(dict, ls, type=1):
+	"""
+	10-13-05
+		add type 2 to return item itself if mapping is not available
+	"""
 	new_list = []
 	for item in ls:
 		value = dict.get(item)
 		if value:
 			new_list.append(value)
+		elif type==2:
+			new_list.append(item)
 	return new_list
 
 def db_connect(hostname, dbname, schema=None):
@@ -873,15 +879,13 @@ def form_schema_tables(ofname, acc_cut_off=0.6, lm_bit='111'):
 	schema_instance.p_gene_table = 'p_gene_%s_e5'%ofname
 	acc_int=int(acc_cut_off*100)
 	if lm_bit=='111':
-		lm_bit = '_'	#backward compatibility
-	else:
-		lm_bit = 'b'+lm_bit
-	schema_instance.lm_suffix = '%s_e5%sa%s'%(ofname, lm_bit, acc_int)
-	schema_instance.lm_table = 'lm_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
-	schema_instance.good_p_gene_table = 'p_gene_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
-	schema_instance.gene_p_table='gene_p_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
-	schema_instance.good_cluster_table = 'good_cl_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
-	schema_instance.cluster_bs_table = 'cluster_bs_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+		lm_bit = ''	#backward compatibility
+	schema_instance.lm_suffix = '%s_e5_%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.lm_table = 'lm_' + schema_instance.lm_suffix
+	schema_instance.good_p_gene_table = 'p_gene_' + schema_instance.lm_suffix
+	schema_instance.gene_p_table='gene_p_'  + schema_instance.lm_suffix
+	schema_instance.good_cluster_table = 'good_cl_' + schema_instance.lm_suffix
+	schema_instance.cluster_bs_table = 'cluster_bs_' + schema_instance.lm_suffix
 	return schema_instance
 
 """
