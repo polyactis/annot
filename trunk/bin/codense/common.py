@@ -861,8 +861,10 @@ class schema:
 	function to form the table names of a schema given ofname and acc_cut_off
 10-10-05
 	add d_matrix_table
+10-12-05
+	add lm_bit
 """
-def form_schema_tables(ofname, acc_cut_off=0.6):
+def form_schema_tables(ofname, acc_cut_off=0.6, lm_bit='111'):
 	schema_instance = schema()
 	schema_instance.splat_table = 'splat_%s'%ofname
 	schema_instance.mcl_table = 'mcl_%s'%ofname
@@ -870,12 +872,16 @@ def form_schema_tables(ofname, acc_cut_off=0.6):
 	schema_instance.prediction_suffix = '%s_e5'%ofname
 	schema_instance.p_gene_table = 'p_gene_%s_e5'%ofname
 	acc_int=int(acc_cut_off*100)
-	schema_instance.lm_suffix = '%s_e5_a%s'%(ofname, acc_int)
-	schema_instance.lm_table = 'lm_%s_e5_a%s'%(ofname, acc_int)
-	schema_instance.good_p_gene_table = 'p_gene_%s_e5_a%s'%(ofname, acc_int)
-	schema_instance.gene_p_table='gene_p_%s_e5_a%s'%(ofname, acc_int)
-	schema_instance.good_cluster_table = 'good_cl_%s_e5_a%s'%(ofname, acc_int)
-	schema_instance.cluster_bs_table = 'cluster_bs_%s_e5_a%s'%(ofname, acc_int)
+	if lm_bit=='111':
+		lm_bit = '_'	#backward compatibility
+	else:
+		lm_bit = 'b'+lm_bit
+	schema_instance.lm_suffix = '%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.lm_table = 'lm_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.good_p_gene_table = 'p_gene_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.gene_p_table='gene_p_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.good_cluster_table = 'good_cl_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
+	schema_instance.cluster_bs_table = 'cluster_bs_%s_e5%sa%s'%(ofname, lm_bit, acc_int)
 	return schema_instance
 
 """
