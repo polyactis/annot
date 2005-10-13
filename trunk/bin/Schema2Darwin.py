@@ -9,18 +9,20 @@ Option:
 	-f ...,	the name of the initial cluster file(algorithm output)
 	-a ...,	accuracy cutoff used to prediction, 0.6(default)
 	-o ...,	output_dir
-	-g ...,	organism, (mm, default)
+	-g ...,	organism
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
-	Schema2Darwin.py -k mm_fim_97 -f mm_fim_97m4x200 -a 0.6 -o /tmp/yuhuang/
+	ssh $HOSTNAME Schema2Darwin.py -k mm_fim_97 -f mm_fim_97m4x200 -a 0.6 -o /tmp/yuhuang/ -g mm
 	
 Description:
 	Program to convert results of one schema into darwin format.
 	Including TF, cluster, prediction from p_gene_table, gene_p_table, good_cluster_table
 	and cluster_bs_table.
+
+	ssh $HOSTNAME is used for qsub system because it doesn't allow thread.
 
 """
 
@@ -220,7 +222,7 @@ class prediction_darwin_format(Thread):
 	
 class Schema2Darwin:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
-		output_dir=None, organism='mm', debug=0, report=0):
+		output_dir=None, organism=None, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -290,7 +292,7 @@ if __name__ == '__main__':
 	ofname = None
 	acc_cut_off = 0.6
 	output_dir = None
-	organism = 'mm'
+	organism = None
 	debug = 0
 	report = 0
 	for opt, arg in opts:
@@ -315,7 +317,7 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and ofname and acc_cut_off and output_dir:
+	if schema and ofname and acc_cut_off and output_dir and organism:
 		instance = Schema2Darwin(hostname, dbname, schema, ofname, acc_cut_off, output_dir,\
 			organism, debug, report)
 		instance.run()
