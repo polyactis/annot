@@ -15,7 +15,7 @@ Option:
 	-a ...,	cluster accuracy cutoff, (0 default, no cut)
 	-e ...,	exponent of the layer, 1(default)
 	-s ...,	score for genes, 1,-1,0(default)
-	-l ...,	maximum layer, 10(default)
+	-l ...,	maximum layer, 0(default, no gradient stuff, -e, -s, -l no effect)
 	-c,	commit the database transaction
 	-b,	debug version.
 	-r,	enable report flag
@@ -64,8 +64,8 @@ class prediction_attributes:
 		self.edge_set = row[18]
 		self.d_matrix = row[19]
 		
-		self.vertex_gradient = None
-		self.edge_gradient = None
+		self.vertex_gradient = 0.0
+		self.edge_gradient = 0.0
 		
 		self.is_correct_dict = {0:self.is_correct, 1:self.is_correct_l1, 2:self.is_correct_lca}
 
@@ -176,7 +176,7 @@ class PredictionFilterByClusterSize:
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
 		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
-		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=10, commit=0, debug=0, report=0):
+		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -256,7 +256,8 @@ class PredictionFilterByClusterSize:
 	def get_mcl_id2accuracy(self, curs, p_gene_table, crs_sentence, is_correct_type):
 		"""
 		10-05-05
-			
+		10-12-05
+			correct a bug in accuracy calculation
 		"""
 		sys.stderr.write("Getting mcl_id2accuracy...\n")
 		mcl_id2accuracy = {}
@@ -279,7 +280,9 @@ class PredictionFilterByClusterSize:
 			rows = curs.fetchall()
 		curs.execute("close crs")
 		for mcl_id, is_correct_ls in mcl_id2accuracy.iteritems():
-			accuracy = sum(is_correct_ls)/float(len(is_correct_ls))
+			only_one_ls = map((lambda x: int(x>=1)), is_correct_ls)	#10-12-05 only correct(1) predictions are counted as 1
+			one_or_zero_ls = map((lambda x: int(x>=0)), is_correct_ls)	#10-12-05 only correct(1) or wrong(0) are counted as 1, -1 is discarded
+			accuracy = sum(only_one_ls)/float(sum(one_or_zero_ls))	#10-12-05 sum the one_or_zero_ls
 			mcl_id2accuracy[mcl_id] = accuracy
 		sys.stderr.write(" %s clusters. Done.\n"%len(mcl_id2accuracy))
 		return mcl_id2accuracy
@@ -325,6 +328,8 @@ class PredictionFilterByClusterSize:
 		10-05-05
 		10-06-05	(use acc_cut_off, not keep the most accurate one
 			simple, just use is_good_prediction() to judge if it's good or not
+		10-12-05
+			if max_layer is not 0 ,then do gradient stuff
 		"""
 		sys.stderr.write("Starting to setup new p_gene_table...\n")
 		curs.execute("%s"%(crs_sentence))
@@ -351,12 +356,14 @@ class PredictionFilterByClusterSize:
 							unit[go_no].append(p_attr_instance.p_gene_id)
 					else:
 					"""
-					gradient_class_instance = gradient_class(p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.vertex_set,\
-						p_attr_instance.edge_set, p_attr_instance.d_matrix, gene_no2go, exponent, score_list, max_layer, self.debug)
-					gradient_class_instance.run()
-					p_attr_instance.vertex_gradient = gradient_class_instance.vertex_gradient
-					p_attr_instance.edge_gradient = gradient_class_instance.edge_gradient
-					del gradient_class_instance
+					if max_layer:	#not 0
+						gradient_class_instance = gradient_class(p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.vertex_set,\
+							p_attr_instance.edge_set, p_attr_instance.d_matrix, gene_no2go, exponent, score_list, max_layer, self.debug)
+						gradient_class_instance.run()
+						p_attr_instance.vertex_gradient = gradient_class_instance.vertex_gradient
+						p_attr_instance.edge_gradient = gradient_class_instance.edge_gradient
+						del gradient_class_instance
+					
 					self.submit_to_p_gene_table(curs, p_gene_view, p_attr_instance)
 				counter += 1
 			if self.report:
@@ -370,7 +377,9 @@ class PredictionFilterByClusterSize:
 	def run(self):
 		"""
 		10-05-05
-			
+		10-12-05
+			use max_layer to control whether to turn on the gradient or not
+		
 			--db_connect()
 			--form_schema_tables()
 			--form_schema_tables()
@@ -397,12 +406,19 @@ class PredictionFilterByClusterSize:
 		self.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
 		self.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
 		
-		crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+		if self.max_layer:	#not 0
+			crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 			p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 			p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
 			d.vertex_set, s.edge_set, d.d_matrix from %s p, %s s, %s d where \
 			p.mcl_id=s.splat_id and p.mcl_id=d.splat_id'%(old_schema_instance.p_gene_table, old_schema_instance.splat_table, \
 			old_schema_instance.d_matrix_table)
+		else:
+			crs_sentence = "DECLARE crs CURSOR FOR SELECT p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
+			is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
+			connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list, 'vertex_set',\
+			'edge_set', 'd_matrix'\
+			from %s"%(old_schema_instance.p_gene_table)	#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
 		
 		self.createGeneTable(curs, new_schema_instance.p_gene_table)
 		if self.acc_cut_off:
@@ -440,7 +456,7 @@ if __name__ == '__main__':
 	acc_cut_off = 0
 	exponent = 1
 	score_list = '1,-1,0'
-	max_layer = 10
+	max_layer = 0
 	commit = 0
 	debug = 0
 	report = 0
