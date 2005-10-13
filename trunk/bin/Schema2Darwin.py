@@ -7,6 +7,7 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-f ...,	the name of the initial cluster file(algorithm output)
+	-l ...,	lm_bit, 111(default)
 	-a ...,	accuracy cutoff used to prediction, 0.6(default)
 	-o ...,	output_dir
 	-g ...,	organism
@@ -15,7 +16,8 @@ Option:
 	-h,	Display the usage infomation.
 	
 Examples:
-	ssh $HOSTNAME Schema2Darwin.py -k mm_fim_97 -f mm_fim_97m4x200 -a 0.6 -o /tmp/yuhuang/ -g mm
+	ssh $HOSTNAME Schema2Darwin.py -k mm_fim_97 -f mm_fim_97m4x200 -a 0.6 -l 111 
+		-o /tmp/yuhuang/ -g mm
 	
 Description:
 	Program to convert results of one schema into darwin format.
@@ -34,13 +36,14 @@ from codense.common import db_connect, get_gene_no2gene_id, get_mt_no2tf_name, \
 from threading import *
 
 class tf_darwin_format(Thread):
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
 		output_fname=None, gene_no2id=None, go_no2id=None, mt_no2tf_name=None, debug=0, report=0):
 		Thread.__init__(self)
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.ofname = ofname
+		self.lm_bit = lm_bit
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_fname = output_fname
 		self.gene_no2id = gene_no2id
@@ -69,7 +72,7 @@ class tf_darwin_format(Thread):
 				if mcl_id in mcl_id2tf_set:
 					vertex_set = vertex_set[1:-1].split(',')
 					vertex_set = map(int, vertex_set)
-					vertex_set = dict_map(gene_no2id, vertex_set)
+					vertex_set = dict_map(gene_no2id, vertex_set, type=2)
 					tf_list = list(mcl_id2tf_set[mcl_id])
 					tf_list = map(list, tf_list)	#first transform to list, so will have []
 					for i in range(len(tf_list)):
@@ -84,11 +87,11 @@ class tf_darwin_format(Thread):
 		sys.stderr.write("TF darwin format done.\n")
 		
 	def run(self):
-		if self.ofname and self.acc_cut_off:
-			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
+		if self.ofname and self.acc_cut_off and self.lm_bit:
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
 			
 		else:
-			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
+			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		mcl_id2tf_set = get_mcl_id2tf_set(curs, schema_instance.cluster_bs_table, self.mt_no2tf_name)
@@ -96,13 +99,14 @@ class tf_darwin_format(Thread):
 		del conn, curs
 
 class cluster_darwin_format(Thread):
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
 		output_fname=None, gene_no2id=None, go_no2id=None, mt_no2tf_name=None, debug=0, report=0):
 		Thread.__init__(self)
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.ofname = ofname
+		self.lm_bit = lm_bit
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_fname = output_fname
 		self.gene_no2id = gene_no2id
@@ -135,11 +139,11 @@ class cluster_darwin_format(Thread):
 					size, go_no_list, p_value_list = row
 				vertex_set = vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
-				vertex_set = dict_map(gene_no2id, vertex_set)
+				vertex_set = dict_map(gene_no2id, vertex_set, type=2)
 				recurrence_array = '[' + recurrence_array[1:-1] + ']'
 				go_no_list = go_no_list[1:-1].split(',')
 				go_no_list = map(int, go_no_list)
-				go_id_list = dict_map(go_no2id, go_no_list)
+				go_id_list = dict_map(go_no2id, go_no_list, type=2)
 				p_value_list = '[' + p_value_list[1:-1] + ']'
 				of.write('[%s, %s, %s, %s, %s, %s, %s, %s, %s],\n'%(mcl_id, repr(vertex_set), recurrence_array,\
 					recurrence, connectivity, unknown_ratio, size, repr(go_id_list), p_value_list))
@@ -150,10 +154,11 @@ class cluster_darwin_format(Thread):
 		sys.stderr.write("cluster darwin format done.\n")
 		
 	def run(self):
-		if self.ofname and self.acc_cut_off:
-			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
+		if self.ofname and self.acc_cut_off and self.lm_bit:
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
+			
 		else:
-			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
+			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		self._cluster_darwin_format(curs, schema_instance.good_cluster_table, self.gene_no2id, self.go_no2id, self.output_fname)
@@ -161,13 +166,14 @@ class cluster_darwin_format(Thread):
 
 
 class prediction_darwin_format(Thread):
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
 		output_fname=None, gene_no2id=None, go_no2id=None, mt_no2tf_name=None, debug=0, report=0):
 		Thread.__init__(self)
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.ofname = ofname
+		self.lm_bit = lm_bit
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_fname = output_fname
 		self.gene_no2id = gene_no2id
@@ -197,10 +203,10 @@ class prediction_darwin_format(Thread):
 				if lca_list:
 					lca_list = lca_list[1:-1].split(',')
 					lca_list = map(int, lca_list)
-					lca_list = dict_map(go_no2id, lca_list)
+					lca_list = dict_map(go_no2id, lca_list, type=2)
 				else:
 					lca_list = []
-				of.write("['%s', '%s', %s, %s, %s, %s],\n"%(gene_no2id[gene_no], go_no2id[go_no], is_correct_lca,\
+				of.write("['%s', '%s', %s, %s, %s, %s],\n"%(gene_no2id.get(gene_no) or gene_no, go_no2id[go_no], is_correct_lca,\
 					p_value, mcl_id, repr(lca_list)))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
@@ -209,11 +215,11 @@ class prediction_darwin_format(Thread):
 		sys.stderr.write("prediction darwin format done.\n")
 	
 	def run(self):
-		if self.ofname and self.acc_cut_off:
-			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
+		if self.ofname and self.acc_cut_off and self.lm_bit:
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
 			
 		else:
-			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
+			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		self._prediction_darwin_format(curs, schema_instance.p_gene_table, schema_instance.gene_p_table, \
@@ -221,12 +227,13 @@ class prediction_darwin_format(Thread):
 		del conn, curs
 	
 class Schema2Darwin:
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, acc_cut_off=None, \
-		output_dir=None, organism=None, debug=0, report=0):
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111',\
+		acc_cut_off=None, output_dir=None, organism=None, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.ofname = ofname
+		self.lm_bit = lm_bit
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_dir = output_dir
 		self.organism = org_short2long(organism)
@@ -237,14 +244,14 @@ class Schema2Darwin:
 		"""
 		09-28-05
 		"""
-		if self.ofname and self.acc_cut_off:
-			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off)
+		if self.ofname and self.acc_cut_off and self.lm_bit:
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
 			
 			tf_darwin_ofname = os.path.join(self.output_dir, '%s.tf.darwin'%schema_instance.lm_suffix)
 			cluster_darwin_ofname = os.path.join(self.output_dir, '%s.cluster.darwin'%schema_instance.lm_suffix)
 			prediction_darwin_ofname = os.path.join(self.output_dir, '%s.prediction.darwin'%schema_instance.lm_suffix)
 		else:
-			sys.stderr.write("ofname: %s and acc_cut_off: %s, NOT VALID\n"%(self.ofname, self.acc_cut_off))
+			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
 		
 		if not os.path.isdir(self.output_dir):
@@ -260,11 +267,11 @@ class Schema2Darwin:
 		go_no2name = get_go_no2name(curs)	#09-28-05 Jasmine wants the go_name, not go_id
 		mt_no2tf_name = get_mt_no2tf_name()
 		
-		instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
+		instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
 			tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
+		instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
 			cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.acc_cut_off, \
+		instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
 			prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
 		instance1.start()
 		instance2.start()
@@ -280,7 +287,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:a:o:g:br", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:l:a:o:g:br", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -290,6 +297,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	ofname = None
+	lm_bit = '111'
 	acc_cut_off = 0.6
 	output_dir = None
 	organism = None
@@ -307,6 +315,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-f"):
 			ofname = arg
+		elif opt in ("-l"):
+			lm_bit = float(arg)
 		elif opt in ("-a"):
 			acc_cut_off = float(arg)
 		elif opt in ("-o"):
@@ -317,8 +327,8 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and ofname and acc_cut_off and output_dir and organism:
-		instance = Schema2Darwin(hostname, dbname, schema, ofname, acc_cut_off, output_dir,\
+	if schema and ofname and lm_bit and acc_cut_off and output_dir and organism:
+		instance = Schema2Darwin(hostname, dbname, schema, ofname, lm_bit, acc_cut_off, output_dir,\
 			organism, debug, report)
 		instance.run()
 		
