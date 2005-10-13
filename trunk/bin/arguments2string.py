@@ -2,6 +2,8 @@
 """
 Usage: arguments2string.py ARGUMENTS
 
+	arguments2string.py -h
+		gives help
 	
 Examples:
 	arguments2string.py -s 100 -m -t 0.58 -u 0,2 -i da-s
@@ -37,7 +39,7 @@ def arguments2string(arguments_list):
 	return string
 
 if __name__ == '__main__':
-	if len(sys.argv)==1:
+	if len(sys.argv)==2 and sys.argv[1] == '-h':
 		print __doc__
 		sys.exit(0)
 	else:
