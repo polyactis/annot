@@ -128,6 +128,201 @@ No.	-a	lm	results
 1.1->1	0	1	0.7004/14094/1190/0.6010/1208/118/539/64
 
 
+Conclusion:
+	. a lot potential there. We are doing it in a right way. The coverage vs
+		acc_cut_off curve is far below the optimism.
+
+
+1.4 vertex_gradient and edge_gradient added to the model to see effect (10-10-05)
+
+Notation:
+	lm_bit: p-value, recurrence, connectivity, cluster_size, vertex_gradient, edge_gradient
+
+Default setting:
+	-e: inf
+	-d: 0
+	-u: 1
+	-p: 1
+	-m: 0
+
+No.	-a(lm)	lm_bit	results
+1.	0.6	110010	0.7424/20713/2393/0.6166/973/83/387/37
+2.	0.6	110001	0.7401/19136/2253/0.6187/889/73/360/31
+3.	0.59	110101	0.7323/20022/2363/0.6065/859/73/377/34
+4.	0.59	111001	0.7061/17933/1498/0.5864/1400/135/609/69
+5.	0.59	111101	0.7080/19310/1644/0.5813/1538/154/641/75
+1.1.1->6	0.6	111100	0.7039/13628/1145/0.6002/1208/120/536/64
+6.	0.5	110001	0.7344/67043/6044/0.4996/2452/283/872/118
+7.	0.4	110001	0.6762/114766/11448/0.4003/6205/887/1491/254
+8.	0.5	111000	0.7188/80493/7141/0.5006/4748/554/1344/198
+9.	0.4	111000	0.6292/183995/19868/0.4000/15342/2200/2273/410
+10.	0.4	111000	0.5085/367656/53037/0.3007/41214/7206/3613/704
+11.	0.6	110000	0.7452/30917/3208/0.5899/1251/109/483/49
+1.1->1	0.6	111000	0.7004/14094/1190/0.6010/1208/118/539/64
+1.3->1	0.6(cl)	000000	0.7853/74078/3368/0.6293/7020/328/1866/156
+
+
+Table to compare average parameters between different settings:
+
+No.\param	rec	conn	size	unknown	p_value
+1		7.689	0.336	11.366	0.211	0.00356
+2		7.79	0.312	12.497	0.205	0.00287
+11		7.47	0.324	12.579	0.199	0.00353
+1.1->1		7.09	0.47	8.608	0.220	0.00569
+3		7.82	0.30	14.125	0.206	0.00290
+4		7.03	0.453	9.16	0.215	0.00525
+5		6.97	0.447	8.98	0.217	0.00544
+1.3->6		5.72	0.33	10.958	0.163	0.00979
+
+
+Conclusion:
+	. The problem is that coverage vs acc_cut_off curve of 1.1->1 and
+		No. 2 is lower than 1.1.1->6. Under similar p-value, similar
+		recurrence, similar connectivity, different clusters are
+		still quite different in terms of accuracy.
+	. 1st over-penalizing parameter is p-value(hypergeometric). 1.3->6
+		has such a high average p-value(the higher, lower its
+		contribution because it's -log(p-value)). The p-value doesn't
+		distinguish good and bad clusters in the middle range and
+		makes the linear model to choose very low cutoff.
+		[SUGGESTION]
+		Redefine it.
+	. 2nd over-penalizing focuses on recurrence, which means recurrence's
+		idea is not clear and not distinguish good and bad clusters
+		well enough, we need to	redefine it.
+		[SUGGESTION]
+		The current recurrence is got by summing individual occurrence,
+		no power/exponent, each occurrence is got by divide no_of_edges
+		in individual dataset by no_of_edges of the summary cluster.
+		If we power individual occurrence, we can distinguish mixed
+		recurrence and clear(close to 0/1) recurrence.
+	. The 3rd differing parameter is unknown_gene_ratio. It's rather lower
+		in the no-linear-model case.
+		[SUGGESTION]
+		Maybe we should add this to linear model.
+	. gradient model is lower than the connectivity model (No 1,2 vs 1.1->1)
+		So gradient model even penalizes more than connectivity model.
+		It flats the differences between good and bad clusters. Edge-
+		gradient even flats more than vertex-gradient.
+		[SUGGESTION]
+		We should reduce the penalizing for genes with other function, and
+		increase the genes with same function. Currently, it's -1 and
+		1 respectively, which is disadvantageous to latter.
+		
+		This over-penalizing makes clusters similar in the gradient
+		measure and makes the model rely more on recurrence and p-value,
+		which cuts the results really big. This can be seen by their
+		similarities(No 1,2) to No.11.
+
+
+1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
+(10-12-05)
+
+Compare Clusters from Three Running Settings and the Total Cluster Repositary:
+
+Schema: hs_fim_40
+	40 datasets
+	7277/9237 (known/all genes)
+	154194 edges(min support=4) 
+	edge recurrence >=4 and <=40 
+
+Notation
+lm_bit: p-value, recurrence, connectivity, cluster_size, vertex_gradient, edge_gradient 
+-a(lm):	linear model accuracy cutoff
+-a(cl): cluster accuracy cutoff
+
+Default setting:
+        -e: inf
+        -d: 0
+        -u: 1
+        -p: 1
+        -m: 0
+
+Setting No.	-a(lm)	lm_bit		results
+0		0	000000	(no result) total 27108 clusters
+1.4->2		0.6	110001	0.7401/19136/2253/0.6187/889/73/360/31
+1.1->1		0.6	111000	0.7004/14094/1190/0.6010/1208/118/539/64
+1.3->1		0.6(cl)	000000	0.7853/74078/3368/0.6293/7020/328/1866/156
+
+No 0 refers to the total cluster repertoire. Others refer to results in results.txt.
+
+
+1.5.1 cluster classification:
+category\No.	1.1->1	1.3->1	0	1.4->2	#clusters
+I		0	1	1	NA	5826
+II		1	1	1	NA	1195
+III		1	0	1	NA	802
+IV		0	0	1	NA	19285
+#clusters	1997	7021	27108	1867
+
+. For the sake of conciseness, i omit 1.4->2. It's almost a subset of 1.1->1.
+. 1 or 0 means present or not.
+. Category I is the clusters with prediction accuracy above 0.6 (good clusters)  but our model fails to capture. 
+. Category II is good clusters captured by our model.
+. Category III is bad clusters captured by our model.
+. Category IV is bad clusters successfully discarded by our model.
+
+Illustration: 
+	. following stuff is cluster-centered, one by one
+	. first give a table-form information about a cluster. mcl_id is cluster id. recurrence is the sum of recurrence_array with 0.8 cutoff. ... go_no_list is the predicted function list based on the cluster. p_value_list is a list of p-values corresponding to go-nos in go_no_list.
+	. each figure is a separate file to show how genes are wired. The filename is $mcl_id_$go_no.png, i.e. 33_89.png. The genes with green circle have the go-no(function) in go_no_list.
+	. any category-specific notification is embedded.
+	
+
+
+1.5.2 Category I. select 30 out of total 5826 clusters. Good cluster but missed(False negative).
+
+Linear model failed to pick them because of following:
+	. recurrence is rather low, like No. 33, 1789, etc. with only recurrence 4(w/ 0.8 cutoff).
+	. some have rather good network topology but high p-value(insignificant) and low-density, i.e. No.22529.
+	. some have good topology and low p-value, but unfortunately , low recurrence and connectivity. i.e. No.19383,21525.
+	. some path structures. i.e. No. 24898,33.
+
+
+1.5.3 Category II. select 20 out of total 1195 clusters.
+	These clusters are good clusters picked by our algorithm. Why do we pick them?
+	. some clusters have high p-value(insignificant), but recurrence_array has lots of low stuff causing the sum to be big. i.e. No.27.
+	. some clusters have high density to compensate their other disadvantages(high p-value, low recurrence). i.e. No. 6551, 7170, 27.
+	. some have real high recurrence even with 0.8 cutoff. i.e. No. 19876,16659.
+	. some clusters are very big resulting very low p-value(10e-25). i.e. No. 21287, 23816.
+	. one function competing example: No. 16659
+
+
+1.5.4 Category III. select 20 out of 802 clusters.
+	These are bad clusters but we picked them because of complicated reasons. What are these complicated reasons?
+	. fake high recurrence. Look at the recurrence_array, those low recurrences cause the sum to be big(but recurrence sum with 0.8 cutoff is not high). No. 4888, 14163, 26683, 14240, 14447.
+	. function competing makes some clusters have low accuracy. i.e. No. 20079, 16, 9512.
+	. some are just because of high connectivity(0.8,0.9). i.e. No. 14391, 20530, 22026.
+	. some have very high recurrence(not fake, with 0.8 cutoff). i.e. No. 14489, 17042, 26835.
+
+
+1.5.5 Category IV. select 30 out of 19285 clusters.
+
+NOTE: this category's information is a little bit different because they are not used in final(good) predictions. So the go_no_list and p_value_list are replaced with go_no and p_value which comes from individual intermediate prediction. And "diff_recur" is different from previous recurrence. "diff_recur" is the just the summation of whole recurrence_array, no 0.8 cutoff.
+
+	These are bad clusters our model avoided. Are there some good stuff in it?
+	. separate function region(non-overlapping) within one cluster. i.e. No. 679, 1448.
+	. there's a center in it, other area is like desert. i.e. No. 23153, 16520, 14951, 3923, 20101, 13855, 9822, 13152, 24135. The desert could be other function or unknown gene. The latter see No. 9822.
+	. Path structures i.e. No. 7363, 18995.
+	. really bad i.e. No 8700, 12456.
+
+
+Conclusion:
+	. function competing means in one cluster, >=2 functions share large regions of genes, which makes the leave-one-out very sensitive.
+	[SUGGESTION]
+	We can create a measure about this function-competing phenoma, more competing(overlapping regions but not parent-child under depth 5), harder to do prediction. One leave-one-out could totally change the prediction. But we first need to see if this new measure correlates to the prediction.
+	Another thing is that we should think about function prediction for known genes in these clusters. Their neighbors are double-faced. One face has same function as this gene. Another face has (very) different function.
+
+	. we should second-think recurrence. 1. some recurrence arrays are pretty vague between 0 and 1. Those half numbers in the array can cause the sum to be exceptionally big. Shall we discard these bits or penalize them? 2. Some datasets' graphs are very similar, it's no wonder to see some pattern appearing frequently in these datasets. The actual recurrence(I call it degeneracy recurrence) is lower than this. 
+	[SUGGESTION]
+	For 1, i already asked a question above.
+	For 2, construct a graph similarity matrix to show how similar two arbitrary graphs are. And rank the similarity. Given a high recurrence we see if those reponsible underlying graphs are among the high ranks.
+
+	. gradient idea should be carefully tested. Based on clusters from category IV which have centers in them, we should think about it. But the scoring should be really careful.
+
+
+	. About linear model. We might think that linear model could compensate some disadvantages for a good prediction. But we( at least I) forgot that it could equally compensate for bad predictions. If one bad prediction has one big advantage, it could also be picked by the model. So linear model is just a mathematical theory. How coherently each variable in the model reflects the quality of a prediction is of utmost importance. We should keep the linear-model variables few and of high quality. But sometimes, it's hard(maybe not present) to find some variables to accurately reflect the nature. Then we are doomed.
+
 2. schema: mm_fim_97
 	97 datasets
 	9131/18803 (known/all genes)
