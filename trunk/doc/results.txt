@@ -132,11 +132,21 @@ Conclusion:
 	. a lot potential there. We are doing it in a right way. The coverage vs
 		acc_cut_off curve is far below the optimism.
 
+1.3.1 (10-13-05, update) the above result is based on the wrong formula to
+	calculate the accuracy. The wrong formula is (#correct-#unknown)/#total.
+	The correct one is #correct/(#correct+#wrong).
+
+No.	-a	lm	results
+1	0.6	0	0.7444/136195/14864/0.5765/11555/1942/2343/430
 
 1.4 vertex_gradient and edge_gradient added to the model to see effect (10-10-05)
 
 Notation:
 	lm_bit: p-value, recurrence, connectivity, cluster_size, vertex_gradient, edge_gradient
+	(different from other places)
+
+vertex_gradient and edge_gradient are using exponent 1; score 1,-1,0; layer 10.
+edge_gradient's score is the multiplication of score of vertex 1 and vertex 2.(if both -1, reverse the sign).
 
 Default setting:
 	-e: inf
@@ -144,6 +154,20 @@ Default setting:
 	-u: 1
 	-p: 1
 	-m: 0
+
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40vg_e5_a60
+2.	hs_fim_40m4x40eg_e5_a60
+3.	hs_fim_40m4x40eg_e5_a59
+4.	hs_fim_40m4x40g_e5_a59
+5.	hs_fim_40m4x40vg_e5_a59
+6.	hs_fim_40m4x40eg_e5_a50
+7.	hs_fim_40m4x40eg_e5_a40
+8.	hs_fim_40m4x40_e5_a50
+9.	hs_fim_40m4x40_e5_a40
+10.	hs_fim_40m4x40_e5_a30
+11.	hs_fim_40m4x40_e5_a59
 
 No.	-a(lm)	lm_bit	results
 1.	0.6	110010	0.7424/20713/2393/0.6166/973/83/387/37
@@ -156,10 +180,12 @@ No.	-a(lm)	lm_bit	results
 7.	0.4	110001	0.6762/114766/11448/0.4003/6205/887/1491/254
 8.	0.5	111000	0.7188/80493/7141/0.5006/4748/554/1344/198
 9.	0.4	111000	0.6292/183995/19868/0.4000/15342/2200/2273/410
-10.	0.4	111000	0.5085/367656/53037/0.3007/41214/7206/3613/704
-11.	0.6	110000	0.7452/30917/3208/0.5899/1251/109/483/49
+10.	0.3	111000	0.5085/367656/53037/0.3007/41214/7206/3613/704
+11.	0.59	110000	0.7452/30917/3208/0.5899/1251/109/483/49
 1.1->1	0.6	111000	0.7004/14094/1190/0.6010/1208/118/539/64
 1.3->1	0.6(cl)	000000	0.7853/74078/3368/0.6293/7020/328/1866/156
+(10-13-05)
+1.3.1->1	0.6(cl)	000000	0.7444/136195/14864/0.5765/11555/1942/2343/430
 
 
 Table to compare average parameters between different settings:
@@ -173,7 +199,8 @@ No.\param	rec	conn	size	unknown	p_value
 4		7.03	0.453	9.16	0.215	0.00525
 5		6.97	0.447	8.98	0.217	0.00544
 1.3->6		5.72	0.33	10.958	0.163	0.00979
-
+(10-13-05)
+1.3.1->1	5.649	0.314	12.064	0.220	0.02146
 
 Conclusion:
 	. The problem is that coverage vs acc_cut_off curve of 1.1->1 and
@@ -213,6 +240,9 @@ Conclusion:
 		measure and makes the model rely more on recurrence and p-value,
 		which cuts the results really big. This can be seen by their
 		similarities(No 1,2) to No.11.
+
+1.4.1 (10-13-05 correctin and update) the above gradient results were wrong.
+
 
 
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
@@ -322,6 +352,103 @@ Conclusion:
 
 
 	. About linear model. We might think that linear model could compensate some disadvantages for a good prediction. But we( at least I) forgot that it could equally compensate for bad predictions. If one bad prediction has one big advantage, it could also be picked by the model. So linear model is just a mathematical theory. How coherently each variable in the model reflects the quality of a prediction is of utmost importance. We should keep the linear-model variables few and of high quality. But sometimes, it's hard(maybe not present) to find some variables to accurately reflect the nature. Then we are doomed.
+
+
+1.6 (10-13-05) redefine recurrence
+
+Notation:
+	lm_bit: p-value, recurrence, connectivity, cluster_size, edge_gradient
+	(different from other places)
+	exp: expoenent of each entry in recurrence_array
+
+
+Default setting:
+	-e: inf
+	-d: 0
+	-u: 1
+	-p: 1
+	-m: 0
+	lm_bit: 111(p-value + recurrence + connectivity)
+
+The no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40rece0_1_e5_11100a60
+2.	hs_fim_40m4x40rece0_3_e5_11100a60
+3.	hs_fim_40m4x40rece0_7_e5_11100a60
+4.	hs_fim_40m4x40rece2_e5_11100a60
+5.	hs_fim_40m4x40rece3_e5_11100a60
+6.	hs_fim_40m4x40rece4_e5_11100a60
+7.	hs_fim_40m4x40rece5_e5_11100a60
+8.	hs_fim_40m4x40rece6_e5_11100a60
+9.	hs_fim_40m4x40rec0_8_e5_11100a60
+
+No.		exp	results
+1.		0.1	0.6977/5786/429/0.6020/1010/99/595/70
+2.		0.3	0.6952/8446/650/0.5998/1252/124/659/79
+3.		0.7	0.7000/12612/991/0.5995/1311/126/602/70
+4.		2	0.7431/33789/3199/0.6000/1750/188/672/84
+5.		3	0.7454/34865/3303/0.6005/1880/206/707/93
+6.		4	0.7454/35405/3344/0.5998/2034/217/760/100
+7.		5	0.7469/34182/3146/0.5994/2067/220/767/101
+8.		6	0.7452/33067/3031/0.5998/2114/230/777/102
+9.		0.8/cut	0.7382/34520/3234/0.5994/2164/222/818/100
+1.1->1		1	0.7004/14094/1190/0.6010/1208/118/539/64
+1.3.1->1	NA	0.7444/136195/14864/0.5765/11555/1942/2343/430
+
+
+Table to compare average parameters between different settings:
+
+No.\param	rec	conn	size	unknown	p_value
+1.		6.423	0.609	10.884	0.218	0.009647
+2.		6.584	0.567	9.692	0.219	0.008422
+3.		6.831	0.503	8.612	0.223	0.006923
+4.		7.270	0.387	11.484	0.207	0.004696
+5.		7.300	0.388	11.783	0.208	0.005265
+6.		7.270	0.391	11.858	0.208	0.005726
+7.		7.252	0.397	11.673	0.208	0.006032
+8.		7.214	0.402	11.510	0.209	0.006343
+9.		7.366	0.397	12.179	0.208	0.006901
+1.1->1		7.09	0.47	8.608	0.220	0.00569
+1.3.1->1	5.649	0.314	12.064	0.220	0.02146
+
+Conclusion:
+	. The new definition of recurrence pays off. See No.1 to 9 vs 1.1->1
+	  Highest one, no.8 outputed 102 unknown genes, 48 more. No 1 to 8 are
+	  of the same type, just exponent from 0.1 to 6. No 9 uses 0.8 as
+	  cutoff for recurrence_array.
+	  1. We should look at the last four numbers in a result, which
+	     correspond to known-predictions-pair,unknown-predictions-pair,
+	     #known genes, #unknown genes.
+	     A strong trend is observed in  #unknown genes as the exponent
+	     goes higher.(There's a minor oscillation from No.2 to 3. But
+	     the predictions-pair numbers are still consistent which is a
+	     better index.)
+	     1.1->1 might look like an exception. But most data in section
+	     1.1 shows #unknown-predictions-pair is around 130 to 140. still
+	     consistent.
+	  2. No. 6,7,8 look like stationary in terms of #unknown_genes,
+	     but #unknown-predictions-pair still shows it's increasing.
+	  3. No. 9, the one with simple 0.8 cutoff is still so far the top.
+	     Only No. 8 could be paralleled to it.
+	     
+	     [SUGGESTION]
+	     we still need to test more to see whether higher exponent
+	     or 0.8 cutoff is a rule.
+
+	. The average parameters table shows that
+	  1. size and unknown ratio are almost same to those of the Simple
+	     Cluster Accuracy Cutoff(SCAC) approach.
+	  2. In No. 4-9, connectivity is close to SCAC. But No. 1,2,3 (low
+	     exponenets) heavily relied on connectivity with relatively low
+	     avg recurrence because recurrence's effect was flattened in
+	     these settings.
+	  3. recurrence is a little bit away from SCAC without considering
+	     the difference between these definitions. SCAC's number is got
+	     by averaging after 0.8 cutoff, so a little bit low.
+	  4. most importantly, p-value is still the problem. It's too far
+	     away SCAC!!!
+	     [SUGGESTION]
+	     p-value is now the center of reform.
 
 2. schema: mm_fim_97
 	97 datasets
