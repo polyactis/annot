@@ -135,6 +135,8 @@ class p_gene_lm:
 			fetch m.connectivity(2nd-order density)
 		08-15-05
 			regard 1e7 as the memory threshold, use step to select entries
+		10-10-05
+			temporarily modify something
 			
 			--prediction_space_setup()
 		"""
@@ -148,9 +150,9 @@ class p_gene_lm:
 		sys.stderr.write("\tstep is %s.\n"%step)
 		
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off,m.connectivity from %s p, %s s, %s m where \
-			p.mcl_id=s.splat_id and p.mcl_id=m.mcl_id"\
-			%(self.is_correct_dict[self.judger_type], table, self.splat_table, self.mcl_table))
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off,p.edge_gradient from %s p, %s s\
+			where p.mcl_id=s.splat_id"\
+			%(self.is_correct_dict[self.judger_type], table, self.splat_table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
