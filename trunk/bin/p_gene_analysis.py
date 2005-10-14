@@ -175,18 +175,20 @@ class p_gene_analysis:
 			p_gene_lm.py changed the lm_table format.(logistic regression)
 		07-01-05
 			add coeff4
+		10-13-05
+			add coeff5
 		"""
 		sys.stderr.write("Getting linear model parameters...")
 		go_no2lm_results = {}
 		lm_results_2d_list = []
-		curs.execute("select go_no, intercept, coeff1, coeff2, coeff3, coeff4, score_cut_off from %s"%lm_table)
+		curs.execute("select go_no, intercept, coeff1, coeff2, coeff3, coeff4, coeff5, score_cut_off from %s"%lm_table)
 		rows = curs.fetchall()
 		for row in rows:
 			go_no = row[0]
-			coeff_list = row[1:]		#intercept coeff1 coeff2 coeff3 coeff4 score_cut_off
+			coeff_list = row[1:]		#intercept coeff1 coeff2 coeff3 coeff4 coeff5 score_cut_off
 			go_no2lm_results[go_no] = coeff_list
 			lm_results_2d_list.append(coeff_list)
-		sys.stderr.write("Done\n")		
+		sys.stderr.write("Done\n")
 		return (go_no2lm_results, lm_results_2d_list)
 		
 	def get_general_lm_results(self, lm_results_2d_list):
@@ -197,6 +199,8 @@ class p_gene_analysis:
 			p_gene_lm.py changed the lm_table format.(logistic regression)
 		07-01-05
 			add coeff4
+		10-13-05
+			add coeff5
 		"""
 		no_of_models = len(lm_results_2d_list)
 		lm_results_array = array(lm_results_2d_list)
@@ -205,8 +209,9 @@ class p_gene_analysis:
 		coeff2 = sum(lm_results_array[:,2])/no_of_models
 		coeff3 = sum(lm_results_array[:,3])/no_of_models
 		coeff4 = sum(lm_results_array[:,4])/no_of_models
+		coeff5 = sum(lm_results_array[:,5])/no_of_models
 		score_cut_off = sum(lm_results_array[:,-1])/no_of_models
-		return (intercept, coeff1, coeff2, coeff3, coeff4, score_cut_off)
+		return (intercept, coeff1, coeff2, coeff3, coeff4, coeff5, score_cut_off)
 	
 	def prediction_accepted(self, go_no, property_list):
 		"""
@@ -217,17 +222,19 @@ class p_gene_analysis:
 			change to return (is_accepted, score)
 		07-01-05
 			add coeff4
+		10-13-05
+			add coeff5
 		"""
 		if go_no in self.go_no2lm_results:
 			lm_results = self.go_no2lm_results[go_no]
 			#intercept + coeff1*(-lg(p_value)) + coeff2*recurrence + coeff3*connectivity
 			score = lm_results[0] + lm_results[1]*property_list[0] + lm_results[2]*property_list[1] +\
-				lm_results[3]*property_list[2] + lm_results[4]*property_list[3]
+				lm_results[3]*property_list[2] + lm_results[4]*property_list[3] + lm_results[5]*property_list[4]
 			is_accepted = (score>=lm_results[-1])
 		else:
 			score = self.general_lm_results[0] + self.general_lm_results[1]*property_list[0]+\
 				self.general_lm_results[2]*property_list[1]+self.general_lm_results[3]*property_list[2] +\
-				self.general_lm_results[4]*property_list[3]
+				self.general_lm_results[4]*property_list[3] + self.general_lm_results[5]*property_list[4]
 			is_accepted = (score>=self.general_lm_results[-1])
 		return (is_accepted, score)
 		
@@ -239,10 +246,12 @@ class p_gene_analysis:
 			--_p_gene_analysis()
 		07-01-05
 			add cluster_size_cut_off in fetch
+		10-13-05
+			add p.edge_gradient
 		"""
 		sys.stderr.write("Setting up prediction_space and prediction_pair...\n")
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.p_gene_id, p.cluster_size_cut_off \
+			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.p_gene_id, p.cluster_size_cut_off, p.edge_gradient \
 			from %s p, %s s where p.mcl_id=s.splat_id"\
 			%(self.is_correct_dict[self.judger_type], gene_table, table))
 		
@@ -275,6 +284,8 @@ class p_gene_analysis:
 			is_accepted is used to judge whether the prediction is good or not.
 		07-01-05
 			add cluster_size
+		10-13-05
+			add edge_gradient
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -286,12 +297,13 @@ class p_gene_analysis:
 		depth_cut_off = row[7]
 		p_gene_id = row[8]
 		cluster_size = row[9]
+		edge_gradient = row[10]
 		
 		if self.p_value_cut_off == 0:
 			#the model is based on -log(p_value).
 			if p_value ==0:
 				p_value = 1e-8
-			(is_accepted, score) = self.prediction_accepted(go_no, [-math.log(p_value), recurrence, connectivity, cluster_size])
+			(is_accepted, score) = self.prediction_accepted(go_no, [-math.log(p_value), recurrence, connectivity, cluster_size, edge_gradient])
 		else:
 			is_accepted = (p_value <= self.p_value_cut_off)
 			score = p_value
@@ -681,11 +693,13 @@ class p_gene_analysis:
 		
 		--data_fetch()
 			--_p_gene_analysis()
+				--prediction_accepted()
 		--IF self.stat_table_fname
 			--overview_stats()
 				--return_known_unknown_gene_sets()
 			--go_no_accuracy()
 			--table_output()
+				--return_known_unknown_gene_sets()
 		--IF self.gene_p_table
 			--gene_p_table_submit()
 		"""
