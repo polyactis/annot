@@ -31,7 +31,9 @@ Description:
 	Category 3: only in setting2
 	Category 4: neither
 	
-	10-15-05 prediction information, score and is_accepted are all based on setting2.
+	prediction information, score2 and is_accepted2 are all based on setting2.
+	score1 and is_accepted1 are got by applying setting1's linear model coeffs
+	to setting2's prediction infomation.
 
 """
 
@@ -85,7 +87,10 @@ class SettingCmp:
 	
 	def output_p_gene_id_list(self, curs, schema_instance, p_gene_id_list, writer, pic_output_dir,\
 		pga_instance1, pga_instance2, cluster_info_instance):
-		
+		"""
+		10-15-05
+			add score1 and is_accepted1
+		"""
 		#10-15-05 following sentence slightly different from PredictionFilterByClusterSize.py in the trailing edge_gradient
 			#and d_matrix is a placeholder
 		sql_sentence = "SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
@@ -95,21 +100,24 @@ class SettingCmp:
 			p.mcl_id=s.splat_id and p.mcl_id=m.mcl_id"%(schema_instance.p_gene_table, \
 			schema_instance.splat_table, schema_instance.mcl_table)
 		writer.writerow(['p_gene_id', 'gene_no', 'go_no', 'is_correct_lca', 'p_value', 'recurrence', 'connectivity',\
-			'cluster_size', 'unknown_ratio', 'mcl_id', 'lca_list', 'edge_gradient', 'score2', 'is_accepted'])
+			'cluster_size', 'unknown_ratio', 'mcl_id', 'lca_list', 'edge_gradient', 'score1', 'is_accepted1', 'score2', 'is_accepted2'])
 		for p_gene_id in p_gene_id_list:
 			curs.execute("%s and p.p_gene_id=%s"%(sql_sentence, p_gene_id))
 			rows = curs.fetchall()
 			for row in rows:
 				p_attr_instance = prediction_attributes(row)
 				edge_gradient = row[-1]
-				(is_accepted, score) = pga_instance2.prediction_accepted(p_attr_instance.go_no, \
+				(is_accepted1, score1) = pga_instance1.prediction_accepted(p_attr_instance.go_no, \
+					[-math.log(p_attr_instance.p_value_cut_off), p_attr_instance.recurrence_cut_off, \
+					p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, edge_gradient])
+				(is_accepted2, score2) = pga_instance2.prediction_accepted(p_attr_instance.go_no, \
 					[-math.log(p_attr_instance.p_value_cut_off), p_attr_instance.recurrence_cut_off, \
 					p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, edge_gradient])
 				writer.writerow([p_attr_instance.p_gene_id, p_attr_instance.gene_no, p_attr_instance.go_no, \
 					p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.recurrence_cut_off,\
 					p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off,\
-					p_attr_instance.mcl_id, p_attr_instance.lca_list, edge_gradient, score, is_accepted])
-				
+					p_attr_instance.mcl_id, p_attr_instance.lca_list, edge_gradient, score1, is_accepted1, score2, is_accepted2])
+				#prepare vertex_set and edge_set to draw graphs
 				vertex_set = p_attr_instance.vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
 				edge_set = p_attr_instance.edge_set[2:-2].split('},{')
