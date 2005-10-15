@@ -142,7 +142,7 @@ No.	-a	lm	results
 1.4 vertex_gradient and edge_gradient added to the model to see effect (10-10-05)
 
 Notation:
-	lm_bit: p-value, recurrence, connectivity, cluster_size, vertex_gradient, edge_gradient
+	lm_bit: p-value, recurrence, connectivity, cluster_size, edge_gradient, vertex_gradient
 	(different from other places)
 
 vertex_gradient and edge_gradient are using exponent 1; score 1,-1,0; layer 10.
@@ -157,33 +157,33 @@ Default setting:
 
 the no2lm_suffix mapping for each setting (used to track database tables)
 No.	lm_suffix
-1.	hs_fim_40m4x40vg_e5_a60
-2.	hs_fim_40m4x40eg_e5_a60
-3.	hs_fim_40m4x40eg_e5_a59
-4.	hs_fim_40m4x40g_e5_a59
-5.	hs_fim_40m4x40vg_e5_a59
-6.	hs_fim_40m4x40eg_e5_a50
-7.	hs_fim_40m4x40eg_e5_a40
+1.	hs_fim_40m4x40vg_e5_110001a60 (this is different, and never used)
+2.	hs_fim_40m4x40eg_e5_11001a60
+3.	hs_fim_40m4x40eg_e5_11011a59
+4.	hs_fim_40m4x40g_e5_11101a59
+5.	hs_fim_40m4x40vg_e5_11111a59
+6.	hs_fim_40m4x40eg_e5_11001a50
+7.	hs_fim_40m4x40eg_e5_11001a40
 8.	hs_fim_40m4x40_e5_a50
 9.	hs_fim_40m4x40_e5_a40
 10.	hs_fim_40m4x40_e5_a30
 11.	hs_fim_40m4x40_e5_a59
 
 No.	-a(lm)	lm_bit	results
-1.	0.6	110010	0.7424/20713/2393/0.6166/973/83/387/37
-2.	0.6	110001	0.7401/19136/2253/0.6187/889/73/360/31
-3.	0.59	110101	0.7323/20022/2363/0.6065/859/73/377/34
-4.	0.59	111001	0.7061/17933/1498/0.5864/1400/135/609/69
-5.	0.59	111101	0.7080/19310/1644/0.5813/1538/154/641/75
+1.	0.6	110001	0.7424/20713/2393/0.6166/973/83/387/37
+2.	0.6	11001	0.7401/19136/2253/0.6187/889/73/360/31
+3.	0.59	11011	0.7323/20022/2363/0.6065/859/73/377/34
+4.	0.59	11101	0.7061/17933/1498/0.5864/1400/135/609/69
+5.	0.59	11111	0.7080/19310/1644/0.5813/1538/154/641/75
 1.1.1->6	0.6	111100	0.7039/13628/1145/0.6002/1208/120/536/64
-6.	0.5	110001	0.7344/67043/6044/0.4996/2452/283/872/118
-7.	0.4	110001	0.6762/114766/11448/0.4003/6205/887/1491/254
-8.	0.5	111000	0.7188/80493/7141/0.5006/4748/554/1344/198
-9.	0.4	111000	0.6292/183995/19868/0.4000/15342/2200/2273/410
-10.	0.3	111000	0.5085/367656/53037/0.3007/41214/7206/3613/704
-11.	0.59	110000	0.7452/30917/3208/0.5899/1251/109/483/49
-1.1->1	0.6	111000	0.7004/14094/1190/0.6010/1208/118/539/64
-1.3->1	0.6(cl)	000000	0.7853/74078/3368/0.6293/7020/328/1866/156
+6.	0.5	11001	0.7344/67043/6044/0.4996/2452/283/872/118
+7.	0.4	11001	0.6762/114766/11448/0.4003/6205/887/1491/254
+8.	0.5	11100	0.7188/80493/7141/0.5006/4748/554/1344/198
+9.	0.4	11100	0.6292/183995/19868/0.4000/15342/2200/2273/410
+10.	0.3	11100	0.5085/367656/53037/0.3007/41214/7206/3613/704
+11.	0.59	11000	0.7452/30917/3208/0.5899/1251/109/483/49
+1.1->1	0.6	11100	0.7004/14094/1190/0.6010/1208/118/539/64
+1.3->1	0.6(cl)	00000	0.7853/74078/3368/0.6293/7020/328/1866/156
 (10-13-05)
 1.3.1->1	0.6(cl)	000000	0.7444/136195/14864/0.5765/11555/1942/2343/430
 
@@ -241,9 +241,27 @@ Conclusion:
 		which cuts the results really big. This can be seen by their
 		similarities(No 1,2) to No.11.
 
-1.4.1 (10-13-05 correctin and update) the above gradient results were wrong.
+1.4.1 (10-13-05) correction and update, the above gradient results were wrong.
+	(one bug was p_gene_analysis.py omitted edge_gradient and coeff5, it
+	caused chimeric effects.)
 
+(meta-info ditto. The ones No. doesn't change are same as 1.4)
 
+No.	-a(lm)	lm_bit	results
+1.	0.6	110001	0.7589/47441/4397/0.6003/1226/109/499/51
+2.	0.6	11001	0.7419/27138/2936/0.5998/1177/97/446/43
+3.	0.59	11011	0.7330/26597/2923/0.5905/1072/91/448/42
+4.	0.59	11101	0.7072/17256/1440/0.5902/1430/140/618/68
+5.	0.59	11111	
+1.1.1->6	0.6	111100	0.7039/13628/1145/0.6002/1208/120/536/64
+6.	0.5	11001	
+7.	0.4	11001	
+1.4->8	0.5	11100	0.7188/80493/7141/0.5006/4748/554/1344/198
+1.4->9	0.4	11100	0.6292/183995/19868/0.4000/15342/2200/2273/410
+1.4->10	0.3	11100	0.5085/367656/53037/0.3007/41214/7206/3613/704
+1.4->11	0.59	11000	0.7452/30917/3208/0.5899/1251/109/483/49
+
+1.4.2 (10-13-05) more exploring with gradient
 
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
 (10-12-05)
@@ -381,6 +399,10 @@ No.	lm_suffix
 7.	hs_fim_40m4x40rece5_e5_11100a60
 8.	hs_fim_40m4x40rece6_e5_11100a60
 9.	hs_fim_40m4x40rec0_8_e5_11100a60
+10.	hs_fim_40m4x40rece7_e5_11100a60
+11.	hs_fim_40m4x40rece8_e5_11100a60
+12.	hs_fim_40m4x40rece10_e5_11100a60
+13.	hs_fim_40m4x40rece12_e5_11100a60
 
 No.		exp	results
 1.		0.1	0.6977/5786/429/0.6020/1010/99/595/70
@@ -392,6 +414,10 @@ No.		exp	results
 7.		5	0.7469/34182/3146/0.5994/2067/220/767/101
 8.		6	0.7452/33067/3031/0.5998/2114/230/777/102
 9.		0.8/cut	0.7382/34520/3234/0.5994/2164/222/818/100
+10.		7	0.7390/29756/2744/0.5950/2032/228/772/107
+11.		8	0.7380/28387/2595/0.6000/2035/224/774/105
+12.		10	0.7379/26961/2395/0.6007/2036/218/774/103
+13.		12	0.7365/25462/2241/0.5995/2025/217/775/99
 1.1->1		1	0.7004/14094/1190/0.6010/1208/118/539/64
 1.3.1->1	NA	0.7444/136195/14864/0.5765/11555/1942/2343/430
 
@@ -408,14 +434,18 @@ No.\param	rec	conn	size	unknown	p_value
 7.		7.252	0.397	11.673	0.208	0.006032
 8.		7.214	0.402	11.510	0.209	0.006343
 9.		7.366	0.397	12.179	0.208	0.006901
+10.		7.241	0.410	11.454	0.210	0.005942
+11.		7.230	0.415	11.285	0.211	0.005985
+12.		7.190	0.422	11.067	0.212	0.006109
+13.		7.164	0.429	10.89	0.213	0.006211
 1.1->1		7.09	0.47	8.608	0.220	0.00569
 1.3.1->1	5.649	0.314	12.064	0.220	0.02146
 
 Conclusion:
-	. The new definition of recurrence pays off. See No.1 to 9 vs 1.1->1
-	  Highest one, no.8 outputed 102 unknown genes, 48 more. No 1 to 8 are
-	  of the same type, just exponent from 0.1 to 6. No 9 uses 0.8 as
-	  cutoff for recurrence_array.
+	. The new definition of recurrence pays off. See No.1 to 13 vs 1.1->1
+	  The best one, no.8 outputed 102 unknown genes, 48 more. No 1 to 8,
+	  10 to 13 are of the same type, just exponent from 0.1 to 12. No 9
+	  uses 0.8 as cutoff for recurrence_array.
 	  1. We should look at the last four numbers in a result, which
 	     correspond to known-predictions-pair,unknown-predictions-pair,
 	     #known genes, #unknown genes.
@@ -428,12 +458,10 @@ Conclusion:
 	     consistent.
 	  2. No. 6,7,8 look like stationary in terms of #unknown_genes,
 	     but #unknown-predictions-pair still shows it's increasing.
-	  3. No. 9, the one with simple 0.8 cutoff is still so far the top.
-	     Only No. 8 could be paralleled to it.
-	     
-	     [SUGGESTION]
-	     we still need to test more to see whether higher exponent
-	     or 0.8 cutoff is a rule.
+	     No.8, 10,11 really goes into stationary, and No 12, 13 goes
+	     down.
+	  3. No. 9, the one with simple 0.8 cutoff is still so far among the
+	     top. Only No. 8,10,11 could be paralleled to it.
 
 	. The average parameters table shows that
 	  1. size and unknown ratio are almost same to those of the Simple
@@ -441,10 +469,21 @@ Conclusion:
 	  2. In No. 4-9, connectivity is close to SCAC. But No. 1,2,3 (low
 	     exponenets) heavily relied on connectivity with relatively low
 	     avg recurrence because recurrence's effect was flattened in
-	     these settings.
+	     these settings. This heavy dependence on connectivity became
+	     obvious for No. 11,12,13.
+	     Among No.1-8,10-13, No. 5 is the turning point of connectivity
+	     trend.
 	  3. recurrence is a little bit away from SCAC without considering
 	     the difference between these definitions. SCAC's number is got
 	     by averaging after 0.8 cutoff, so a little bit low.
+	     Among No.1-8,10-13, No. 5 is also the turning point of
+	     recurrence trend.
+	     
+	     [SUGGESTION]
+	     Based on comment 2,3 above plus the result coverage, exponent
+	     4 is probably the best exponent to reward high recurrence and
+	     penalize the low recurrence.
+	     
 	  4. most importantly, p-value is still the problem. It's too far
 	     away SCAC!!!
 	     [SUGGESTION]
