@@ -869,9 +869,12 @@ class schema:
 	add d_matrix_table
 10-12-05
 	add lm_bit
+10-14-05
+	add  pattern_table
 """
 def form_schema_tables(ofname, acc_cut_off=0.6, lm_bit='111'):
 	schema_instance = schema()
+	schema_instance.pattern_table = 'pattern_%s'%ofname
 	schema_instance.splat_table = 'splat_%s'%ofname
 	schema_instance.mcl_table = 'mcl_%s'%ofname
 	schema_instance.d_matrix_table = 'd_matrix_%s'%ofname
@@ -921,3 +924,18 @@ def get_unigene2gene_list(inputfile, tax_id):
 			unigene2gene_list[unigene_id].append(gene_id)
 	sys.stderr.write("End to get unigene2gene_list.\n")
 	return unigene2gene_list
+
+"""
+10-15-05
+"""
+def p_gene_id_set_from_gene_p_table(curs, gene_p_table):
+	sys.stderr.write("Starting to get p_gene_id_set...")
+	from sets import Set
+	p_gene_id_set = Set()
+	curs.execute("select p_gene_id from %s"%gene_p_table)
+	rows = curs.fetchall()
+	for row in rows:
+		p_gene_id = row[0]
+		p_gene_id_set.add(p_gene_id)
+	sys.stderr.write("End to get p_gene_id_set.\n")
+	return p_gene_id_set
