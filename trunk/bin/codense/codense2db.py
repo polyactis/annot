@@ -7,11 +7,12 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-t ..., --table=...	the splat_result table (edge_set)
-	-m ..., --mcl_table=...	the mcl_result table (vertex_set)
+	-t ..., --table=...	the splat_result table (edge_set) (a view links to pattern_table)
+	-m ..., --mcl_table=...	the mcl_result table (vertex_set) (a view links to pattern_table)
+	-o ...,	the output table, pattern_table(both vertex_set and edge_set)
 	-p ..., --mapping_file=...	the file to get the mapping between haiyan's index and my gene_no
 		(02-19-05)if not given, regard the input graph uses gene_no instead of haiyan's index
-	-o ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
+	-f ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
@@ -35,7 +36,7 @@ Description:
 
 
 import sys, os, psycopg, getopt, csv, numarray, re
-from common import *
+from common import db_connect, get_haiyan_no2gene_no, get_known_genes_dict	#10-14-05	used to get unknown_gene_ratio
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	graph is visible in upper directory
 from graph import graph_modeling
 from graph.cc_from_edge_list import cc_from_edge_list
@@ -53,6 +54,7 @@ class cluster_dstructure:
 		self.recurrence_array = None
 		self.splat_connectivity = None	#03-03-05 this is the connectivity of the summary subgraph
 		self.connectivity = None	#03-03-05 this is by averaging connectivities of the summary subgraph in each individual dataset
+		self.unknown_gene_ratio=0.0	#10-14-05 to submit to pattern_table
 		
 		#04-06-05 more structures for cluster_info.py
 		self.edge_cor_2d_list = None
@@ -68,7 +70,7 @@ class codense2db:
 
 	'''
 	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, \
-			table=None, mcl_table=None, mapping_file=None, cor_cut_off=0,\
+			table=None, mcl_table=None, pattern_table=None, mapping_file=None, cor_cut_off=0,\
 			parser_type=1, min_cluster_size=5, delimiter='\t', debug=0, needcommit=0, report=0):
 		"""
 		02-25-05
@@ -81,6 +83,7 @@ class codense2db:
 		self.schema = schema
 		self.table = table
 		self.mcl_table = mcl_table
+		self.pattern_table = pattern_table
 		self.mapping_file = mapping_file
 		self.cor_cut_off = float(cor_cut_off)
 		self.parser_type = int(parser_type)
@@ -371,50 +374,60 @@ class codense2db:
 			vertex_set.add(edge[1])
 		return list(vertex_set)
 		
-	def create_tables(self, curs, table, mcl_table):
+	def create_tables(self, curs, table, mcl_table, pattern_table):
 		"""
 		04-11-05
 			remove the 'try...except' clause
+		10-10-05
+			table and mcl_table becomes view
+			and pattern_table is the real table
+		10-14-05
+			add no_of_vertices, recurrence
 		"""
-		#create tables if necessary
-		if table != 'splat_result':
+		if pattern_table!='pattern':
 			curs.execute("create table %s(\
-				splat_id		serial primary key,\
-				no_of_edges	integer,\
-				recurrence_pattern	bit varying(200),\
-				recurrence_array	float[],\
-				edge_set	integer[][],\
-				connectivity	float)"%table)
-
-		if mcl_table != 'mcl_result':
-			curs.execute("create table %s(\
-				mcl_id	serial primary key,\
-				splat_id	integer,\
+				id	serial primary key,\
 				vertex_set	integer[],\
-				parameter	varchar,\
+				edge_set	integer[][],\
+				no_of_vertices	integer,\
+				no_of_edges	integer,\
+				repr_p_value	float[],\
+				repr_go_no	integer[],\
 				connectivity	float,\
-				p_value_min	float,\
-				go_no_vector	integer[],\
 				unknown_gene_ratio	float,\
 				recurrence_array	float[],\
-				cooccurrent_cluster_id	varchar)"%mcl_table)	
+				recurrence	float,\
+				comment	varchar)"%pattern_table)
+		
+		#create tables if necessary
+		if table != 'splat_result':
+			curs.execute("CREATE OR REPLACE VIEW %s AS SELECT id as splat_id, no_of_edges, \
+			recurrence_array as recurrence_pattern, recurrence_array, edge_set, connectivity from %s"\
+			%(table, pattern_table))
 
-	def db_submit(self, curs, cluster, table, mcl_table):
+		if mcl_table != 'mcl_result':
+			curs.execute("CREATE OR REPLACE VIEW %s AS SELECT id as mcl_id, id as splat_id, \
+				vertex_set, comment as parameter, connectivity, repr_p_value as p_value_min,\
+				repr_go_no as go_no_vector, unknown_gene_ratio, recurrence_array, \
+				cast(id as varchar) as cooccurrent_cluster_id from %s"%(mcl_table, pattern_table))
+				
+
+	def db_submit(self, curs, cluster, pattern_table):
 		"""
 		03-03-05
 			splat table's connectivity is the splat_connectivity, see doc above
+		10-10-05
+			submit directly to pattern_table, omit splat_table and mcl_table
+		10-14-05
+			add no_of_vertices, unknown_gene_ratio and recurrence to pattern_table
 		"""
 		#try:
-		#inserting into the splat_table
-		curs.execute("insert into %s(splat_id, no_of_edges, \
-					recurrence_array, edge_set, connectivity) values (%d, %d, ARRAY%s, ARRAY%s, %f)"%\
-					(table, cluster.cluster_id, cluster.no_of_edges, repr(cluster.recurrence_array),\
-					repr(cluster.edge_set), cluster.splat_connectivity))
-		#inserting into the mcl_table
-		curs.execute("insert into %s(mcl_id, splat_id, vertex_set, connectivity, recurrence_array, cooccurrent_cluster_id)\
-						values (%d, %d, ARRAY%s, %f, ARRAY%s,'%s')"%\
-						(mcl_table, cluster.cluster_id, cluster.cluster_id, repr(cluster.vertex_set),\
-						cluster.connectivity, repr(cluster.recurrence_array), cluster.cooccurrent_cluster_id) )
+		#inserting into the pattern_table
+		curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
+			connectivity, unknown_gene_ratio, recurrence_array, recurrence) values (ARRAY%s, \
+			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s)"%\
+			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
+			cluster.splat_connectivity, cluster.unknown_gene_ratio, repr(cluster.recurrence_array), sum(cluster.recurrence_array)))
 		"""
 		except:
 			sys.stderr.write('Error occurred when inserting pattern. Aborted.\n')
@@ -431,7 +444,18 @@ class codense2db:
 		rows = curs.fetchall()
 		no_of_datasets = int(rows[0][0])
 		return no_of_datasets
-		
+	
+	def calculate_unknown_gene_ratio(self, vertex_set, known_gene_no2go_no_set):
+		"""
+		10-14-05
+		"""
+		no_of_known_genes = 0.0
+		for vertex in vertex_set:
+			if vertex in known_gene_no2go_no_set:
+				no_of_known_genes += 1
+		unknown_gene_ratio = no_of_known_genes/len(vertex_set)
+		return unknown_gene_ratio
+	
 	def run(self):
 		"""
 		03-18-05
@@ -440,17 +464,21 @@ class codense2db:
 			use min_cluster_size to cut off some small clusters
 		07-03-05
 			construct graph_modeling's cor_cut_off vector first
-		
+		10-14-05
+			add calculate_unknown_gene_ratio()
+			
 			--db_connect()
 			--get_haiyan_no2gene_no()
-			--get_gene_id2gene_no()
+			--get_known_genes_dict()
 			--create_tables()
 			--graph_modeling.cor_cut_off_vector_construct()
-			--parser_dict[parser_type]() (codense_parser(), copath_parser() )
-				--get_combined_cor_vector
-				--parse_recurrence
-				--parse_connectivity
-			--db_submit()
+			(loop over inf)
+				--parser_dict[parser_type]() (codense_parser(), copath_parser() )
+					--get_combined_cor_vector
+					--parse_recurrence
+					--parse_connectivity
+				--calculate_unknown_gene_ratio()
+				--db_submit()
 		"""
 		
 		inf = csv.reader(open(self.infname, 'r'), delimiter=self.delimiter)
@@ -461,11 +489,11 @@ class codense2db:
 			haiyan_no2gene_no = get_haiyan_no2gene_no(self.mapping_file)
 		else:
 			haiyan_no2gene_no = {}	#a blank dictionary, 
-		gene_id2gene_no = get_gene_id2gene_no(curs)
+		known_gene_no2go_no_set = get_known_genes_dict(curs)	#10-14-05	used to get unknown_gene_ratio
 		mapping_dict = {1:haiyan_no2gene_no,
 			2:haiyan_no2gene_no,
 			3:None}
-		self.create_tables(curs, self.table, self.mcl_table)
+		self.create_tables(curs, self.table, self.mcl_table, self.pattern_table)
 		no = 0
 		
 		graph_modeling.cor_cut_off_vector_construct(0, 0.8)	#07-03-05 compute the cor cutoff vector for graph_modeling, use 0.8 as cutoff
@@ -477,7 +505,9 @@ class codense2db:
 				if len(cluster.vertex_set)<self.min_cluster_size:
 					#too small, ignore
 					continue
-				self.db_submit(curs, cluster, self.table, self.mcl_table)
+				#10-14-05 unknown_gene_ratio to submit to pattern_table
+				cluster.unknown_gene_ratio = self.calculate_unknown_gene_ratio(cluster.vertex_set, known_gene_no2go_no_set)
+				self.db_submit(curs, cluster, self.pattern_table)
 				no+=1
 				if self.report and no%1000==0:
 					sys.stderr.write('%s%d'%('\x08'*20, no))
@@ -493,7 +523,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:p:o:y:s:l:bcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:o:p:f:y:s:l:bcr", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
 			"parser_type=", "min_cluster_size=", "delimiter=", "debug", "commit", "report"])
 	except:
@@ -505,6 +535,7 @@ if __name__ == '__main__':
 	schema = ''
 	table = 'splat_result'
 	mcl_table = 'mcl_result'
+	pattern_table = None
 	mapping_file = None
 	cor_cut_off = 0
 	parser_type = 1
@@ -527,9 +558,11 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
+		elif opt in ("-o"):
+			pattern_table = arg
 		elif opt in ("-p", "--mapping_file"):
 			mapping_file = arg
-		elif opt in ("-o", "--cor_cut_off"):
+		elif opt in ("-f", "--cor_cut_off"):
 			cor_cut_off = float(arg)
 		elif opt in ("-y", "--parser_type"):
 			parser_type = int(arg)
@@ -543,8 +576,8 @@ if __name__ == '__main__':
 			commit = 1
 		elif opt in ("-r", "--report"):
 			report = 1
-	if schema and len(args)==1:
-		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, mapping_file, \
+	if schema and pattern_table and len(args)==1:
+		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, pattern_table, mapping_file, \
 			cor_cut_off, parser_type, min_cluster_size, delimiter, debug, commit, report)
 		instance.run()
 	else:
