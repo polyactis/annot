@@ -18,6 +18,25 @@ Notation illustraion:
 
 1.1. edge recurrence >=4 and <=40
 
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40_e5_a60
+2.	hs_fim_40m4x40ms40_e5_a60
+3.	hs_fim_40m4x40d50_e5_a60
+4.	hs_fim_40m4x40d50ms40_e5_a60
+5.	hs_fim_40m4x40ms20_e5_a60
+6.	hs_fim_40m4x40ms60_e5_a60
+7.	hs_fim_40m4x40ms40u2p01_e5_a60
+8.	hs_fim_40m4x40ms40u2p01m_e5_a60
+9.	hs_fim_40m4x40ms40m_e5_a60
+10.	hs_fim_40m4x40ms12000p01u2_e5_a60
+11.	hs_fim_40m4x40ms12000p01u2m_e5_a60
+12.	hs_fim_40m4x40ms12000m_e5_a60
+13.	hs_fim_40m4x40ms40p01_e5_a60
+14.	hs_fim_40m4x40ms12000p01_e5_a60
+15.	hs_fim_40m4x40ms40u2_e5_a60
+16.	hs_fim_40m4x40ms12000u2_e5_a60
+
 No.	-e	-d	-u	-p	-m	result
 1	inf	0	1	1	0	0.7004/14094/1190/0.6010/1208/118/539/64
 2	40	0	1	1	0	0.7263/20211/1989/0.5995/1508/151/604/74
@@ -123,6 +142,10 @@ Default setting:
 	-p: 1
 	-m: 0
 
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40mca6_e5_a60
+
 No.	-a	lm	results
 1	0.6	0	0.7853/74078/3368/0.6293/7020/328/1866/156
 1.1->1	0	1	0.7004/14094/1190/0.6010/1208/118/539/64
@@ -146,7 +169,8 @@ Notation:
 	(different from other places)
 
 vertex_gradient and edge_gradient are using exponent 1; score 1,-1,0; layer 10.
-edge_gradient's score is the multiplication of score of vertex 1 and vertex 2.(if both -1, reverse the sign).
+edge_gradient's score is the multiplication of score of vertex 1 and vertex 2.
+	(if both -1, reverse the sign).
 
 Default setting:
 	-e: inf
@@ -261,10 +285,39 @@ No.	-a(lm)	lm_bit	results
 1.4->10	0.3	11100	0.5085/367656/53037/0.3007/41214/7206/3613/704
 1.4->11	0.59	11000	0.7452/30917/3208/0.5899/1251/109/483/49
 
-1.4.2 (10-13-05) more exploring with gradient
+1.4.2 (10-15-05) more exploring with gradient
+
+Notation:
+	exp: exponent of layer
+	l: maximum layer considered to compute edge_gradient
+	score: three numbers corresponding to same-function,other-function
+		unknown
+
+(in the middle, there're some wrong settings with lm_suffix like
+	...m4x40e1...., no 2 before e. They use exponent as recurrence
+	cutoff.)
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x402e1s0_5__1_0l10_e5_11001a60
+2.	hs_fim_40m4x402e1s1__1_0l10_e5_11001a60
+3.	hs_fim_40m4x402e1s2__1_0l10_e5_11001a60
+4.	hs_fim_40m4x402e1s3__1_0l10_e5_11001a60
+5.	hs_fim_40m4x402e2s1__1_0l10_e5_11001a60
+6.	hs_fim_40m4x402e3s1__1_0l10_e5_11001a60
+
+No.	exp	l	score	results
+1.	1	10	.5,-1,0	0.7582/33786/3365/0.5998/1197/135/438/54
+2.	1	10	1,-1,0	0.7607/34143/3348/0.6001/1438/161/589/72
+3.	1	10	2,-1,0	0.7583/31627/3251/0.6007/1643/180/688/82
+4.	1	10	3,-1,0	0.7564/30191/3166/0.5995/1658/183/699/86
+5.	2	10	1,-1,0	0.7599/41331/3954/0.6006/1690/192/651/82
+6.	3	10	1,-1,0	0.7617/44925/4210/0.5991/1786/195/670/85
+
+
 
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
 (10-12-05)
+(10-15-05, all the pictures and tables are in ./1.3_1vs1.1_1/)
 
 Compare Clusters from Three Running Settings and the Total Cluster Repositary:
 
@@ -403,6 +456,11 @@ No.	lm_suffix
 11.	hs_fim_40m4x40rece8_e5_11100a60
 12.	hs_fim_40m4x40rece10_e5_11100a60
 13.	hs_fim_40m4x40rece12_e5_11100a60
+(10-15-05)
+14.	hs_fim_40m4x40ree0_2_e5_11100a60
+15.	hs_fim_40m4x40ree0_4_e5_11100a60
+16.	hs_fim_40m4x40ree0_6_e5_11100a60
+17.	hs_fim_40m4x40ree0_9_e5_11100a60
 
 No.		exp	results
 1.		0.1	0.6977/5786/429/0.6020/1010/99/595/70
@@ -420,9 +478,15 @@ No.		exp	results
 13.		12	0.7365/25462/2241/0.5995/2025/217/775/99
 1.1->1		1	0.7004/14094/1190/0.6010/1208/118/539/64
 1.3.1->1	NA	0.7444/136195/14864/0.5765/11555/1942/2343/430
-
+(10-15-05)
+14.		0.2/cut	0.6880/5754/489/0.5980/908/89/490/54
+15.		0.4/cut	0.7066/14917/1186/0.6000/1620/160/683/85
+16.		0.6/cut	0.7233/18689/1664/0.5996/1496/160/639/81
+17.		0.9/cut	0.7437/27312/2415/0.6005/2065/225/793/105
 
 Table to compare average parameters between different settings:
+(SELECT avg(recurrence),avg(connectivity),avg(size),
+	avg(unknown_ratio),avg(p_value_list[1]) from good_cl_table)
 
 No.\param	rec	conn	size	unknown	p_value
 1.		6.423	0.609	10.884	0.218	0.009647
@@ -440,6 +504,12 @@ No.\param	rec	conn	size	unknown	p_value
 13.		7.164	0.429	10.89	0.213	0.006211
 1.1->1		7.09	0.47	8.608	0.220	0.00569
 1.3.1->1	5.649	0.314	12.064	0.220	0.02146
+(10-15-05)
+14.		6.742	0.539	7.990	0.240	0.010479
+15.		6.748	0.455	7.735	0.226	0.007010
+16.		7.175	0.441	9.647	0.216	0.005389
+17.		7.172	0.423	11.178	0.211	0.006329
+
 
 Conclusion:
 	. The new definition of recurrence pays off. See No.1 to 13 vs 1.1->1
@@ -474,8 +544,8 @@ Conclusion:
 	     Among No.1-8,10-13, No. 5 is the turning point of connectivity
 	     trend.
 	  3. recurrence is a little bit away from SCAC without considering
-	     the difference between these definitions. SCAC's number is got
-	     by averaging after 0.8 cutoff, so a little bit low.
+	     the difference between these definitions. All recurrence is got
+	     by averaging after 0.8 cutoff as it's from good_cl_table.
 	     Among No.1-8,10-13, No. 5 is also the turning point of
 	     recurrence trend.
 	     
@@ -488,6 +558,76 @@ Conclusion:
 	     away SCAC!!!
 	     [SUGGESTION]
 	     p-value is now the center of reform.
+
+
+1.7 (10-15-05)
+Categorical comparison between 1.6-9 and 1.4.2-4.
+All the pictures and tables are in ./1.6_9vs1.4.2_4/
+
+Comment to below's quote:
+	setting 2 she's referring is not 1.4.2-4,
+that's a similar setting with 1 as recurrence cutoff. But the
+examples she talked about could be found counterparts.
+
+<quote from Jasmine>
+I looked over your file, and in fact, most genes in Cat(III)
+(false-positives) are correct predictions. So our problem is actually the
+Cat I (false-negatives).
+
+In the Execl file of cat.table, if I sort using "edge-gradient" (1st
+variable) and "p-value" (2nd variable), I can see that your prediction is
+heavily relied on these two variables, especially the edge-gradient. So I
+think the scheme we discussed yesterday afternoon makes sense, since we
+focus on these two variable in a two-step procedure in order to maximize
+the discriminative power of each variable.
+
+Now I have two suggestions regarding to the formula:
+
+(1) we should not use a clustering-coefficient-alike approach. In fact,
+the edges dircetly connecting to the vertex under investigation are
+important (layer 0), especially for small graphs. In small graphs, many
+genes do not have 2nd neighbor but only 1st neighbrs, e.g. only layer 0
+and no more layers. This is one of the reasons why we can not catch
+Pattern 87886_2207_383.png and pattern 75803_2207_815. Since L(0) is 0,
+you should sum up (Le1^a+Le2^a) instead of multiplying them (the
+denominator in the weighting factors).
+
+(2) the denominator n(n-1)/2 is too big, and if you sort the cluster size,
+you will find that big clusters generally get very small edge-gradient,
+e.g. pattern 34482_332_724.png. You should use the number of real edges in
+the pattern instead of all POssible edges n(n-1)/2 in a complete graph.
+
+So, now let's try the following scheme: (1) get all clusters with 50%
+genes falling into a functionla category, and global p-value less than
+0.005. (2) use above modified edge-gradient to make prediction. There are
+still many parameters, but I believe after some adjustment, this method
+could be more sensitive, certainly this is not gauranteed. Let's see.
+</quote from Jasmine>
+
+Observation and conclusion:
+	. Aside from Jasmine's claim that prediction heavily relied on
+	  p-value and edge-gradient. But the truth is that magnitude of
+	  recurrence still counts. i.e.
+	  In setting 1.4-2,
+	  recurrence's coeff: 0.280. One recurrence-unit's change could
+	  affect the score by 0.28.
+	  p-value's coeff: 0.00784. One e-9 magnitude change of p-value
+	  could affect the score by ~0.16.
+	  edge-gradient's coeff: 1.487. One 0.25 change of edge-gradient
+	  could affect the score by 0.37.
+
+	  The reason why i choose those units is based on the data
+	  distribution. Roughly, recurrence is from 4 to 8; p-value is
+	  from 0 to e-35; edge-gradient is from 0 to 1.
+
+	  Furthermore, category 4's recurrence is much about 4,5. In
+	  contrast, in other 3 categories, we see lots of 6,7,8.
+	  So does edge-gradient and p-value(but p-value is more mixing).
+	  
+	  Rank three parameters.
+	  1. edge-gradient.
+	  2. recurrence
+	  3. p-value
 
 2. schema: mm_fim_97
 	97 datasets
