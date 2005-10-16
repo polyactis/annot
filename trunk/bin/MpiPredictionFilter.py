@@ -231,6 +231,8 @@ class MpiPredictionFilter:
 		10-05-05
 		10-12-05
 			correct a bug in accuracy calculation
+		10-16-05
+			handle the condition that sum(one_or_zero_ls) =0
 		"""
 		sys.stderr.write("Getting mcl_id2accuracy...\n")
 		mcl_id2accuracy = {}
@@ -255,8 +257,11 @@ class MpiPredictionFilter:
 		for mcl_id, is_correct_ls in mcl_id2accuracy.iteritems():
 			only_one_ls = map((lambda x: int(x>=1)), is_correct_ls)	#10-12-05 only correct(1) predictions are counted as 1
 			one_or_zero_ls = map((lambda x: int(x>=0)), is_correct_ls)	#10-12-05 only correct(1) or wrong(0) are counted as 1, -1 is discarded
-			accuracy = sum(only_one_ls)/float(sum(one_or_zero_ls))	#10-12-05 sum the one_or_zero_ls
-			mcl_id2accuracy[mcl_id] = accuracy
+			if sum(one_or_zero_ls)==0:	#10-16-05	avoid the sum to be zero
+				mcl_id2accuracy[mcl_id]=0
+			else:
+				accuracy = sum(only_one_ls)/float(sum(one_or_zero_ls))	#10-12-05 sum the one_or_zero_ls
+				mcl_id2accuracy[mcl_id] = accuracy
 		sys.stderr.write(" %s clusters. Done.\n"%len(mcl_id2accuracy))
 		return mcl_id2accuracy
 	
@@ -337,6 +342,7 @@ class MpiPredictionFilter:
 		"""
 		10-15-05
 			passing row  should be faster than a p_attr_instance
+		#10-16-05 already got vertex_gradient and edge_gradient from old p_gene_table
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -359,8 +365,8 @@ class MpiPredictionFilter:
 					row[17], row[18] = gradient_class_instance.cal_gradient(\
 						p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.vertex_set,\
 						p_attr_instance.edge_set, p_attr_instance.d_matrix)
-				else:
-					row[17], row[18] = 0,0	#vertex_gradient and edge_gradient equal to 0
+				#else:	#10-16-05 already got vertex_gradient and edge_gradient from old p_gene_table
+				#	row[17], row[18] = 0,0	#vertex_gradient and edge_gradient equal to 0
 				good_prediction_ls.append(row)
 			counter += 1
 			if self.report:
@@ -541,6 +547,20 @@ class MpiPredictionFilter:
 			new_schema_instance = form_schema_tables(self.jnput_fname)
 			gene_no2go = get_gene_no2go_no_set(curs)
 			gene_no2go_pickle = cPickle.dumps(gene_no2go, -1)	#-1 means use the highest protocol
+			if self.max_layer:	#not 0
+				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
+				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
+				p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
+				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
+			else:
+				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
+				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, p.vertex_gradient,\
+				p.edge_gradient, 'd_matrix', 'recurrence_array'\
+				from %s p"%(old_schema_instance.p_gene_table)	#10-16-05 vertex_gradient, and edge_gradient
+				
+				#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
 			if self.acc_cut_off:
 				mcl_id2accuracy = self.get_mcl_id2accuracy(curs, old_schema_instance.p_gene_table, crs_sentence, self.is_correct_type)
 			else:
@@ -572,20 +592,6 @@ class MpiPredictionFilter:
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			if self.max_layer:	#not 0
-				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
-				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
-				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
-				p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
-				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
-			else:
-				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
-				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
-				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, 'vertex_set',\
-				'edge_set', 'd_matrix', m.recurrence_array\
-				from %s p, %s m where p.mcl_id=m.mcl_id"%(old_schema_instance.p_gene_table, old_schema_instance.mcl_table)
-				
-				#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
 			self.input_node(communicator, curs, old_schema_instance, crs_sentence, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator, gene_no2go, self.exponent, self.score_list, \
