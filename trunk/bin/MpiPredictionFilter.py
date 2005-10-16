@@ -18,7 +18,7 @@ Option:
 	-l ...,	maximum layer, 0(default, no gradient stuff, -e, -s, -l no effect)
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
-	-v ...,	the size of message(by string_length of each prediction), 1000000(default)
+	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
 	-t ...,	edge_gradient denominator type, 1(n(n-1)/2,default), 2(n), 3(#edges)
 	-c,	commit the database transaction
 	-b,	debug version.
@@ -202,7 +202,7 @@ class MpiPredictionFilter:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
 		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
 		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, recurrence_x=0.8,\
-		recurrence_x_type=0, size=1000000, eg_d_type=1, commit=0, debug=0, report=0):
+		recurrence_x_type=0, size=10000000, eg_d_type=1, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -623,7 +623,7 @@ if __name__ == '__main__':
 	max_layer = 0
 	recurrence_x = 0.8
 	recurrence_x_type = 0
-	size = 1000000
+	size = 10000000
 	eg_d_type = 1
 	commit = 0
 	debug = 0
