@@ -576,9 +576,8 @@ class MpiPredictionFilter:
 				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
-				d.vertex_set, s.edge_set, d.d_matrix, m.recurrence_array from %s p, %s s, %s d, %s m where \
-				p.mcl_id=s.splat_id and p.mcl_id=d.splat_id and p.mcl_id=m.mcl_id'%(old_schema_instance.p_gene_table, \
-				old_schema_instance.splat_table, old_schema_instance.d_matrix_table, old_schema_instance.mcl_table)
+				p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
+				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
 			else:
 				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
