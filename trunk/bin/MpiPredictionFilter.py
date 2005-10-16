@@ -338,9 +338,17 @@ class PredictionFilterByClusterSize:
 		counter = 0
 		no_of_good_predictions = 0
 		gene_no2go2prediction_dict = {}
+		functor = lambda x: math.pow(x, exponent)
+		functor2 = lambda x: int(x>=0.8)
 		while rows:
 			for row in rows:
 				p_attr_instance = prediction_attributes(row)
+				#10-13-05 temp
+				recurrence_array = row[-1][1:-1].split(',')
+				recurrence_array = map(float, recurrence_array)
+				recurrence_array = map (functor2, recurrence_array)
+				p_attr_instance.recurrence_cut_off = sum(recurrence_array)
+				
 				if self.is_good_prediction(p_attr_instance, mcl_id2accuracy):
 					no_of_good_predictions += 1
 					"""
@@ -395,13 +403,10 @@ class PredictionFilterByClusterSize:
 				--is_good_prediction()
 				if acc_cut_off
 					--submit_to_p_gene_table()
-		10-06-05(below is not called anymore)
-			if acc_cut_off
-				--distinct_predictions_set()
-				--submit_distinct_predictions()
 		"""
 		(conn, curs) =  db_connect(hostname, dbname, schema)
 		old_schema_instance = form_schema_tables(self.input_fname)
+			#10-12-05 acc_cut_off and lm_bit are not necessary, only tables before lm model
 		new_schema_instance = form_schema_tables(self.jnput_fname)
 		self.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
 		self.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
@@ -410,15 +415,17 @@ class PredictionFilterByClusterSize:
 			crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 			p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 			p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
-			d.vertex_set, s.edge_set, d.d_matrix from %s p, %s s, %s d where \
-			p.mcl_id=s.splat_id and p.mcl_id=d.splat_id'%(old_schema_instance.p_gene_table, old_schema_instance.splat_table, \
-			old_schema_instance.d_matrix_table)
+			d.vertex_set, s.edge_set, d.d_matrix, m.recurrence_array from %s p, %s s, %s d, %s m where \
+			p.mcl_id=s.splat_id and p.mcl_id=d.splat_id and p.mcl_id=m.mcl_id'%(old_schema_instance.p_gene_table, \
+			old_schema_instance.splat_table, old_schema_instance.d_matrix_table, old_schema_instance.mcl_table)
 		else:
-			crs_sentence = "DECLARE crs CURSOR FOR SELECT p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
-			is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
-			connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list, 'vertex_set',\
-			'edge_set', 'd_matrix'\
-			from %s"%(old_schema_instance.p_gene_table)	#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
+			crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+			p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
+			p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, 'vertex_set',\
+			'edge_set', 'd_matrix', m.recurrence_array\
+			from %s p, %s m where p.mcl_id=m.mcl_id"%(old_schema_instance.p_gene_table, old_schema_instance.mcl_table)
+			
+			#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
 		
 		self.createGeneTable(curs, new_schema_instance.p_gene_table)
 		if self.acc_cut_off:
