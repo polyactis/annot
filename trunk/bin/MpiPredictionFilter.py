@@ -259,6 +259,8 @@ class MpiPredictionFilter:
 	def input_node(self, communicator, curs, schema_instance, crs_sentence, size):
 		"""
 		10-15-05
+		10-16-05
+			ask output_node for a free_computing_node
 		"""
 		sys.stderr.write("Reading predictions...\n")
 		node_rank = communicator.rank
@@ -266,10 +268,11 @@ class MpiPredictionFilter:
 		prediction_ls = self.fetch_predictions(curs, size)
 		counter = 0
 		while prediction_ls:
-			node_to_receive_block = counter%(communicator.size-2)+1	#it's -2, work like this. 
-				#"which_node%(communicator.size-2)" is in range (0,size-3). Regard node 1 to size-2 as 0 to size-3. So need +1.
+			communicator.send("1", communicator.size-1, 1)	#WATCH: tag is 1, to the output_node.
+			free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)
+				#WATCH: tag is 2, from the output_node
 			prediction_ls_pickle = cPickle.dumps(prediction_ls, -1)
-			communicator.send(prediction_ls_pickle, node_to_receive_block, 0)
+			communicator.send(prediction_ls_pickle, int(free_computing_node), 0)	#WATCH: int()
 			if self.debug:
 				sys.stderr.write("block %s sent to %s.\n"%(counter, node_to_receive_block))
 			prediction_ls = self.fetch_predictions(curs, size)
@@ -433,12 +436,15 @@ class MpiPredictionFilter:
 	
 	def output_node(self, communicator, curs, output_table):
 		"""
-		10-07-05
+		10-15-05
+		10-16-05
+			reserve a pool of free_computing_nodes for input_node to choose
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
 		data, source, tag = communicator.receiveString(None, 1)
 		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
+		free_computing_nodes = range(1,communicator.size-1)
 		while 1:
 			if data=="-1":
 				no_of_resting_nodes += 1
@@ -448,7 +454,11 @@ class MpiPredictionFilter:
 					break
 					if self.debug:
 						sys.stderr.write("node %s output finished.\n"%node_rank)
+			elif data=="1":	#the input_node is asking me for free computing_node
+				free_computing_node = free_computing_nodes.pop(0)
+				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
 			else:
+				free_computing_nodes.append(source)	#append the free computing_node
 				prediction_ls = cPickle.loads(data)
 				for row in prediction_ls:
 					p_attr_instance = prediction_attributes(row, type=2)
