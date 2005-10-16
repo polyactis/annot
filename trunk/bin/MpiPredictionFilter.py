@@ -19,6 +19,7 @@ Option:
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
 	-v ...,	the size of message(by string_length of each prediction), 1000000(default)
+	-t ...,	edge_gradient denominator type, 1(n(n-1)/2,default), 2(n), 3(#edges)
 	-c,	commit the database transaction
 	-b,	debug version.
 	-r,	enable report flag
@@ -86,11 +87,12 @@ class gradient_class:
 	10-15-05
 		change the interface to allow more efficient calling
 	"""
-	def __init__(self, gene_no2go, exponent, score_list, max_layer, debug=0):
+	def __init__(self, gene_no2go, exponent, score_list, max_layer, eg_d_type, debug):
 		self.gene_no2go = gene_no2go
 		self.exponent = float(exponent)
 		self.score_list = score_list
 		self.max_layer = int(max_layer)
+		self.eg_d_type = int(eg_d_type)
 		self.debug = int(debug)
 
 	def get_vertex2no(self, vertex_set):
@@ -137,6 +139,9 @@ class gradient_class:
 		"""
 		10-12-05
 		edge score changed from multiply to plus, like score1+score2
+		10-16-05
+			Take the inner-most edges of gene_no into account, but score only take that of the other vertex
+			three types to divide edge_gradient
 		"""
 		edge_gradient = 0.0
 		edge_set = edge_set_string[2:-2].split('},{')
@@ -154,10 +159,23 @@ class gradient_class:
 				v2_go_no_set = gene_no2go[edge[1]]
 				score1 = self.return_score(go_no, v1_go_no_set, score_list)
 				score2 = self.return_score(go_no, v2_go_no_set, score_list)
-				edge_gradient += 1/(math.pow(v1_layer, exponent)*math.pow(v2_layer, exponent))*(score1+score2)
+				edge_gradient += 1/(math.pow(v1_layer, exponent)+math.pow(v2_layer, exponent))*(score1+score2)
 				if self.debug:
 					print "edge,v1_go_no, v2_go_no, score1, score2, edge_gradient:",edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_gradient
-		edge_gradient /= float(len(vertex2no))*(len(vertex2no)-1)/2
+			elif v1_layer==0 and v2_layer<=max_layer:	#10-16-05
+				v2_go_no_set = gene_no2go[edge[1]]
+				score2 = self.return_score(go_no, v2_go_no_set, score_list)
+				edge_gradient += 1/math.pow(v2_layer, exponent)*score2
+			elif v2_layer==0 and v1_layer<=max_layer:	#10-16-05
+				v1_go_no_set = gene_no2go[edge[0]]
+				score1 = self.return_score(go_no, v1_go_no_set, score_list)
+				edge_gradient += 1/math.pow(v1_layer, exponent)*score1
+		if self.eg_d_type==1:	#10-16-05
+			edge_gradient /= float(len(vertex2no))*(len(vertex2no)-1)/2
+		elif self.eg_d_type==2:
+			edge_gradient /= float(len(vertex2no))
+		elif self.eg_d_type==3:
+			edge_gradient /= float(len(edge_set))	#10-16-05 divide the edge_gradient by no_of_edges
 		if self.debug:
 			print "edge_gradient:", edge_gradient
 		return edge_gradient
@@ -184,7 +202,7 @@ class MpiPredictionFilter:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
 		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
 		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, recurrence_x=0.8,\
-		recurrence_x_type=0, size=1000000, commit=0, debug=0, report=0):
+		recurrence_x_type=0, size=1000000, eg_d_type=1, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -202,6 +220,7 @@ class MpiPredictionFilter:
 		self.recurrence_x = float(recurrence_x)
 		self.recurrence_x_type = int(recurrence_x_type)
 		self.size = int(size)
+		self.eg_d_type = int(eg_d_type)
 		self.commit = int(commit)
 		self.debug = int(debug)
 		self.report = int(report)
@@ -350,14 +369,14 @@ class MpiPredictionFilter:
 		return good_prediction_ls
 		
 	def computing_node(self, communicator,  gene_no2go, exponent, score_list, \
-				max_layer, mcl_id2accuracy, acc_cut_off, functor):
+				max_layer, eg_d_type, mcl_id2accuracy, acc_cut_off, functor):
 		"""
 		10-15-05
 			
 		"""
 		node_rank = communicator.rank
 		data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
-		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, self.debug)
+		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, eg_d_type, self.debug)
 		while 1:
 			if data=="-1":
 				if self.debug:
@@ -571,7 +590,7 @@ class MpiPredictionFilter:
 			self.input_node(communicator, curs, old_schema_instance, crs_sentence, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator, gene_no2go, self.exponent, self.score_list, \
-				self.max_layer, mcl_id2accuracy, self.acc_cut_off, functor)
+				self.max_layer, self.eg_d_type, mcl_id2accuracy, self.acc_cut_off, functor)
 		elif node_rank==communicator.size-1:
 			self.output_node(communicator, curs, new_schema_instance.p_gene_table)
 			if self.commit:
@@ -583,7 +602,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:m:u:p:y:a:e:s:l:x:w:v:cbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:m:u:p:y:a:e:s:l:x:w:v:t:cbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -605,6 +624,7 @@ if __name__ == '__main__':
 	recurrence_x = 0.8
 	recurrence_x_type = 0
 	size = 1000000
+	eg_d_type = 1
 	commit = 0
 	debug = 0
 	report = 0
@@ -644,6 +664,8 @@ if __name__ == '__main__':
 			recurrence_x_type = int(arg)
 		elif opt in ("-v"):
 			size = int(arg)
+		elif opt in ("-t"):
+			eg_d_type = int(arg)
 		elif opt in ("-c"):
 			commit = 1
 		elif opt in ("-b"):
@@ -653,7 +675,7 @@ if __name__ == '__main__':
 	if schema and input_fname and jnput_fname:
 		instance = MpiPredictionFilter(hostname, dbname, schema, input_fname, jnput_fname, max_size, \
 			unknown_gene_ratio, p_value_cut_off, is_correct_type, acc_cut_off, exponent, score_list, \
-			max_layer, recurrence_x, recurrence_x_type, size, commit, debug, report)
+			max_layer, recurrence_x, recurrence_x_type, size, eg_d_type, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
