@@ -45,7 +45,7 @@ from codense.common import get_gene_no2gene_id, get_gene_no2go_no
 from cluster_info import cluster_info	#transform vertex_set and edge_set into subgraph
 from codense.common import system_call, graphDotOutput
 from p_gene_analysis import p_gene_analysis	#related to linear model coeff
-from PredictionFilterByClusterSize import prediction_attributes	#to accept data from sql select
+from MpiPredictionFilter import prediction_attributes	#to accept data from sql select
 
 class SettingCmp:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, \
