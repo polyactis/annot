@@ -1,3 +1,9 @@
+linear model coeffs of two settings
+
+No.	intercept	coeff1	coeff2	coeff3	coeff4	coeff5	intercept_p_value	coeff1_p_value	coeff2_p_value	coeff3_p_value	coeff4_p_value	coeff5_p_value	score_cut_off
+1.6-9	-1.88914860084	0.013743000043	0.240728008183	2.94256446356	0	0	0	0	0	0	1	1	0.960114979785
+1.4-2	-1.67420335322	0.00784130475335	0.280267337558	0	0	1.48741315262	0	0	0	1	1	0	1.0073294006
+
 Category 1
 Only in hs_fim_40m4x40rec0_8,11100,0.6
 p_gene_id	gene_no	go_no	is_correct_lca	p_value	recurrence	connectivity	cluster_size	unknown_ratio	mcl_id	lca_list	edge_gradient	score1	is_accepted1	score2	is_accepted2
