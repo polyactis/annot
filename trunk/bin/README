@@ -74,8 +74,9 @@ shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py)
 	annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py
 	annot/bin/gene_stat.py
 	shell/cluster_stat2.sh
-	annot/bin/PredictionFilterByClusterSize.py
-	shell/cluster_stat2.sh
+	shell/prediction_filter.sh
+		annot/bin/MpiPredictionFilter.py
+		shell/cluster_stat2.sh
 
 	shell/cluster_stat2.sh (big mem node due to p_gene_lm.py)
 		shell/p_gene_lm.sh(p_gene_lm.py 1. needs R library(lapack.so) exported in .bash_profile 2. R thread not allowed, ssh itself to run p_gene_lm.sh)
