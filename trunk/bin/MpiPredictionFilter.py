@@ -18,7 +18,7 @@ Option:
 	-l ...,	maximum layer, 0(default, no gradient stuff, -e, -s, -l no effect)
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
-	-v ...,	the size of each passing block, 2000(default)
+	-v ...,	the size of message(by string_length of each prediction), 1000000(default)
 	-c,	commit the database transaction
 	-b,	debug version.
 	-r,	enable report flag
@@ -184,7 +184,7 @@ class MpiPredictionFilter:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
 		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
 		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, recurrence_x=0.8,\
-		recurrence_x_type=0, size=2000, commit=0, debug=0, report=0):
+		recurrence_x_type=0, size=1000000, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -244,14 +244,24 @@ class MpiPredictionFilter:
 	def fetch_predictions(self, curs, size):
 		"""
 		10-15-05
+		10-16-05
+			use string_length to compare against size,
+			not the number of rows
 		"""
 		if self.report:
 			sys.stderr.write("Fetching predictions...\n")
-		curs.execute("fetch %s from crs"%size)
+		curs.execute("fetch 50 from crs")
 		rows = curs.fetchall()
 		prediction_ls = []
-		for row in rows:
-			prediction_ls.append(list(row))
+		string_length = 0
+		while rows:
+			for row in rows:
+				prediction_ls.append(list(row))
+				string_length += len(repr(row))	#the length to control MPI message size
+			if string_length>=size:
+				break
+			curs.execute("fetch 50 from crs")
+			rows = curs.fetchall()
 		if self.report:
 			sys.stderr.write("Fetching done.\n")
 		return prediction_ls
@@ -594,7 +604,7 @@ if __name__ == '__main__':
 	max_layer = 0
 	recurrence_x = 0.8
 	recurrence_x_type = 0
-	size = 2000
+	size = 1000000
 	commit = 0
 	debug = 0
 	report = 0
