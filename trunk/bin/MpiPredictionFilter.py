@@ -51,6 +51,9 @@ class prediction_attributes:
 	"""
 	10-15-05
 		add type
+	10-16-05
+		type 2 expanded
+		add type 3
 	"""
 	def __init__(self, row, type=1):
 		self.p_gene_id = row[0]
@@ -77,7 +80,13 @@ class prediction_attributes:
 		elif type==2:
 			self.vertex_gradient = row[17]	#for output_node()
 			self.edge_gradient = row[18]
-		
+		elif type==3:	#for computing_node()
+			self.vertex_gradient = row[17]
+			self.edge_gradient = row[18]
+			self.vertex_set = row[19]
+			self.edge_set = row[20]
+			self.d_matrix = row[21]
+			self.recurrence_array = row[22]
 		self.is_correct_dict = {0:self.is_correct, 1:self.is_correct_l1, 2:self.is_correct_lca}
 
 class gradient_class:
@@ -343,6 +352,8 @@ class MpiPredictionFilter:
 		10-15-05
 			passing row  should be faster than a p_attr_instance
 		#10-16-05 already got vertex_gradient and edge_gradient from old p_gene_table
+		10-17-05
+			type 3 prediction_attributes
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -351,7 +362,8 @@ class MpiPredictionFilter:
 		no_of_good_predictions = 0
 		good_prediction_ls = []
 		for row in prediction_ls:
-			p_attr_instance = prediction_attributes(row)
+			
+			p_attr_instance = prediction_attributes(row, type=3)
 			if functor:	#if functor is None, keep the old recurrence_cut_off
 				recurrence_array = row[-1][1:-1].split(',')
 				recurrence_array = map(float, recurrence_array)
@@ -359,14 +371,12 @@ class MpiPredictionFilter:
 				row[10] = sum(recurrence_array)	#replace the old recurrence_cut_off
 			
 			if self.is_good_prediction(p_attr_instance, mcl_id2accuracy):
-				no_of_good_predictions += 1
-				row = row[:-2]	#discard d_matrix_string and recurrence_array
 				if max_layer:	#not 0
 					row[17], row[18] = gradient_class_instance.cal_gradient(\
 						p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.vertex_set,\
 						p_attr_instance.edge_set, p_attr_instance.d_matrix)
-				#else:	#10-16-05 already got vertex_gradient and edge_gradient from old p_gene_table
-				#	row[17], row[18] = 0,0	#vertex_gradient and edge_gradient equal to 0
+				row = row[:-4]	#discard vertex_set, edge_set, d_matrix_string and recurrence_array
+				no_of_good_predictions += 1
 				good_prediction_ls.append(row)
 			counter += 1
 			if self.report:
@@ -439,7 +449,13 @@ class MpiPredictionFilter:
 		10-05-05
 		10-09-05
 			add vertex_gradient and edge_gradient
+		10-16-05
+			judge if p_attr_instance.vertex_gradient and edge_gradient is None or not
 		"""
+		if not p_attr_instance.vertex_gradient:
+			p_attr_instance.vertex_gradient =0.0
+		if not p_attr_instance.edge_gradient:
+			p_attr_instance.edge_gradient = 0.0
 		if p_attr_instance.lca_list:
 			curs.execute("insert into %s(p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
 			is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
@@ -547,18 +563,21 @@ class MpiPredictionFilter:
 			new_schema_instance = form_schema_tables(self.jnput_fname)
 			gene_no2go = get_gene_no2go_no_set(curs)
 			gene_no2go_pickle = cPickle.dumps(gene_no2go, -1)	#-1 means use the highest protocol
+			"""
 			if self.max_layer:	#not 0
 				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
-				p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
+				p.vertex_gradient, p.edge_gradient, p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
 				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
 			else:
-				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+			"""
+			#10-16-05 following crs_sentence is totally temporary
+			crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, p.vertex_gradient,\
-				p.edge_gradient, 'd_matrix', 'recurrence_array'\
-				from %s p"%(old_schema_instance.p_gene_table)	#10-16-05 vertex_gradient, and edge_gradient
+				p.edge_gradient, p.vertex_set, p.edge_set, p.d_matrix, p.recurrence_array \
+				from %s p"%(old_schema_instance.p_gene_table)
 				
 				#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
 			if self.acc_cut_off:
