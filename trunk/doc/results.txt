@@ -159,6 +159,10 @@ Conclusion:
 	calculate the accuracy. The wrong formula is (#correct-#unknown)/#total.
 	The correct one is #correct/(#correct+#wrong).
 
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40a0_6_e5_a60
+
 No.	-a	lm	results
 1	0.6	0	0.7444/136195/14864/0.5765/11555/1942/2343/430
 
@@ -314,7 +318,91 @@ No.	exp	l	score	results
 6.	3	10	1,-1,0	0.7617/44925/4210/0.5991/1786/195/670/85
 
 
+1.4.3 (10-16-05) new edge-gradient formula
+	1. takes the edges between layer 0 and 1 into account.
+	2. the operator between L1 and L2 is + now, old is *
+	3. there're options for denominator, n(n-1)/2, n, #e, ...
 
+Notation:
+	(exp,l,score ditto)
+	-rx: recurrence_x number, meaning depends on -w
+	-w: recurrence_x_type, 0(just the sum), 1(use -rx as cutoff)
+		2(use -rx as exponent)
+
+the no2lm_suffix mapping for each setting (used to track database tables)
+No.	lm_suffix
+1.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_11001a60
+2.	hs_fim_40m4x40e2s3__1_0l10w1t2_e5_11001a60
+3.	hs_fim_40m4x40e0_5s3__1_0l10w1t2_e5_11001a60
+4.	hs_fim_40m4x40e1s3__1_0l10w1t2_e5_11001a60
+5.	hs_fim_40m4x40e2s1__1_0l10w1t2_e5_11001a60
+6.	hs_fim_40m4x40e3s3__1_0l10w1t2_e5_11001a60
+7.	hs_fim_40m4x40e2s3__1_0l10w1t3_e5_11001a60
+8.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_00001a60
+9.	hs_fim_40m4x40e2s3__1_0l10w1t1n_e5_00001a60
+10.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_10000a60
+11.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_10001a60
+12.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_00100a60
+13.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_11001a60
+14.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_01001a60
+15.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_11000a60
+16.	hs_fim_40m4x40e2s3__1_0l10w1t1j_e5_01000a60
+17.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_10000a60
+18.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_10001a60
+19.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_01000a60
+20.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_01001a60
+21.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_11000a60
+22.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_00100a60
+
+No.	exp	score	-t	lm_bits	results
+-w=1, -rx=0.8, l=10
+1.	2	3,-1,0	1	11001	0.7526/31627/3184/0.6001/1928/210/740/93
+2.	2	3,-1,0	2	11001	0.7648/48878/4700/0.6000/1785/202/671/82
+3.	0.5	3,-1,0	2	11001	0.7565/28752/2920/0.6004/926/111/448/63
+4.	1	3,-1,0	2	11001	0.7640/37736/3694/0.6005/1214/145/516/73
+5.	2	1,-1,0	2	11001	0.7611/47081/4442/0.6006/1710/200/651/82
+6.	3	3,-1,0	2	11001	0.7692/48878/4662/0.6007/1916/217/704/90
+7.	2	3,-1,0	3	11001	0.7595/25338/2828/0.5991/1731/190/699/87
+(8 is special, -p=0.005, -a=0.5)
+8.	2	3,-1,0	1	00001	0.7656/76994/7021/0.5994/5380/646/1599/224
+
+9.	2	3,-1,0	1	00001	0.6949/6823/508/0.5847/1546/171/769/93
+
+(10-16 is also special, -p=0.005, -a=0.5)
+10.	2	3,-1,0	1	10000	0.7691/30961/2906/0.5999/7229/1036/1645/267
+11.	2	3,-1,0	1	10001	0.7672/67859/6257/0.5995/5468/664/1607/230
+12.	2	3,-1,0	1	00100	0.7594/54765/4553/0.5996/6254/753/1689/236
+13.	2	3,-1,0	1	11001	0.7672/75688/6998/0.5999/5179/643/1363/186
+14.	2	3,-1,0	1	01001	0.7624/78463/6972/0.5991/4647/560/1312/178
+15.	2	3,-1,0	1	11000	0.7659/70466/6863/0.5994/5319/740/1140/179
+16.	2	3,-1,0	1	01000	0.7185/114429/11976/0.5367/7973/1292/1481/273
+
+17.	2	3,-1,0	1	10000	-1.0000/0/0/-1.0000/0/0/0/0
+18.	2	3,-1,0	1	10001	0.7107/8272/597/0.5993/1632/170/786/88
+19.	2	3,-1,0	1	01000	0.7675/17983/2132/0.6309/905/101/318/34
+20.	2	3,-1,0	1	01001	0.7424/20126/2164/0.6006/1755/193/663/79
+21.	2	3,-1,0	1	11000	0.7580/22986/2478/0.5986/882/100/333/36
+22.	2	3,-1,0	1	00100	0.7061/27763/2188/0.5654/6326/679/1869/248
+
+Conclusion:
+	. -t 1 is good, 2 and 3 not good. No. 1 vs. 2 and 7.
+	. exp is a strong factor. No. 1,3,4,6
+	. -p=0.005 and -a=0.5 followed by different lm_bits. No.8,10-16.
+	  Rank individual parameter
+	    1. recurrence No.16
+	    2. p-value No.10
+	    3. connectivity No.12
+	    4. edge-gradient No.8
+	  But combining any of them is bad. No.11,13-15.
+	. No.9 and No.17-22. The most chaotic part is here.
+	  Compare them to No.1. If i rank it, it's
+	    1. connectivity No.22
+	    2. edge-gradient No.9
+	    3. recurrence No.19
+	    4. p-value No.17
+	  (No.17 is a little bit weird. CHECK needed!)
+	  Combination is also bad.
+	  
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
 (10-12-05)
 (10-15-05, all the pictures and tables are in ./1.3_1vs1.1_1/)
