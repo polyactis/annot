@@ -41,6 +41,8 @@ Examples:
 	15: TestGraphModelingGraphCC
 09-18-05
 	16: Test_attr_of_mt_no
+10-17-05
+	17: Test_cal_edge_gradient
 """
 import unittest, os, sys, getopt, csv
 
@@ -1013,7 +1015,39 @@ class Test_attr_of_mt_no(unittest.TestCase):
 			row = heappop(unit.hq_list)
 			print row
 		print unit.acc2id_set
+	
+class Test_cal_edge_gradient(unittest.TestCase):
+	"""
+	10-17-05
+	"""
+	def setUp(self):
+		"""
+		04-03-05
+		"""
+		self.hostname = 'zhoudb'
+		self.dbname = 'graphdb'
+		self.schema = 'hs_fim_40'
 		
+	def test_cal_edge_gradient(self):
+		from codense.common import db_connect, get_gene_no2go_no_set
+		from MpiPredictionFilter import gradient_class
+		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
+		gene_no2go = get_gene_no2go_no_set(curs)
+		
+		exponent = 2
+		score_list = [3,-1,0]
+		max_layer = 10
+		eg_d_type = 4
+		debug = 1
+		vertex_set_string = '{199,2207,2215,3055,3109,3115}'
+		edge_set_string = '{{199,2207},{199,2215},{199,3055},{199,3109},{2207,3055},{2215,3055},{2215,3109},{3109,3115}}'
+		d_matrix_string = '{{0,1,1,1,1,2},{1,0,2,1,2,3},{1,2,0,1,1,2},{1,1,1,0,2,3},{1,2,1,2,0,1},{2,3,2,3,1,0}}'
+		gene_no = 2207
+		go_no = 664
+		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, eg_d_type, debug)
+		vertex_gradient, edge_gradient = gradient_class_instance.cal_gradient(\
+			gene_no, go_no, vertex_set_string, edge_set_string, d_matrix_string)
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1041,7 +1075,8 @@ if __name__ == '__main__':
 		13: TestPGeneFactor,
 		14: TestConnectivity2Homogeneity,
 		15: TestGraphModelingGraphCC,
-		16: Test_attr_of_mt_no}
+		16: Test_attr_of_mt_no,
+		17: Test_cal_edge_gradient}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
