@@ -112,6 +112,8 @@ class SettingCmp:
 			score and is_accepted depend on whether pga_instance is None or not
 		10-17-05 add simple to allow no graph pictures output
 			also get prediction from schema_instance1 and calculate the score if prediction is available
+		10-18-05
+			sort the p_gene_id_list first
 		"""
 		#10-15-05 following sentence slightly different from PredictionFilterByClusterSize.py in the trailing edge_gradient
 			#and d_matrix is a placeholder
@@ -129,6 +131,7 @@ class SettingCmp:
 			schema_instance2.splat_table, schema_instance2.mcl_table)
 		writer.writerow(['p_gene_id', 'gene_no', 'go_no', 'is_correct_lca', 'p_value', 'recurrence', 'connectivity',\
 			'cluster_size', 'unknown_ratio', 'mcl_id', 'lca_list', 'edge_gradient', 'score1', 'is_accepted1', 'score2', 'is_accepted2'])
+		p_gene_id_list.sort()
 		for p_gene_id in p_gene_id_list:
 			#sql_sentence1's prediction infomation is not gonna be displayed
 			curs.execute("%s and p.p_gene_id=%s"%(sql_sentence1, p_gene_id))
