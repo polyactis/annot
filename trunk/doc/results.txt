@@ -328,6 +328,7 @@ Notation:
 	-rx: recurrence_x number, meaning depends on -w
 	-w: recurrence_x_type, 0(just the sum), 1(use -rx as cutoff)
 		2(use -rx as exponent)
+	-t: 1=n(n-1)/2, 2=n, 3=#e, 4=gradient n(n-1)/2, 0 nothing
 
 the no2lm_suffix mapping for each setting (used to track database tables)
 No.	lm_suffix
@@ -353,6 +354,18 @@ No.	lm_suffix
 20.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_01001a60
 21.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_11000a60
 22.	hs_fim_40m4x40e2s3__1_0l10w1t1_e5_00100a60
+(10-17-05)
+23.	hs_fim_40m4x40e2s310l10w1t1w2x5_e5_01000a60
+24.	hs_fim_40m4x40e2s310l10w1t1t4_e5_11001a60
+25.	hs_fim_40m4x40e2s310l10w1t1tr4_e5_11001a60
+26.	hs_fim_40m4x40e2s310l10w1t1tr4_e5_00001a60
+27.	hs_fim_40m4x40e2s310l10w1t1t4_e5_00001a60
+28.	hs_fim_40m4x40e2s310l10w1t1s320_e5_00001a60
+29.	hs_fim_40m4x40e2s310l10w1t1e3_e5_00001a60
+30.	hs_fim_40m4x40e2s310l10w1t1s31_1_e5_00001a60
+31.	hs_fim_40m4x40e2s310l10w1t1l5_e5_00001a60
+32.	hs_fim_40m4x40e2s310l10w1t1e7_e5_00001a60
+33.	hs_fim_40m4x40e2s310l10w1t1jwhole_e5_00000a0
 
 No.	exp	score	-t	lm_bits	results
 -w=1, -rx=0.8, l=10
@@ -384,8 +397,47 @@ No.	exp	score	-t	lm_bits	results
 21.	2	3,-1,0	1	11000	0.7580/22986/2478/0.5986/882/100/333/36
 22.	2	3,-1,0	1	00100	0.7061/27763/2188/0.5654/6326/679/1869/248
 
+No.	-w	exp	score	-t	layer	lm_bits	results
+(10-17-05)
+23.	2(x=5)	2	3,-1,0	1	10	01000	0.7658/18677/2173/0.5991/1387/169/411/51
+24.	1(x=.8)	2	3,-1,0	0	10	11001	0.7660/31628/3228/0.5998/1127/135/472/61
+25.	1(x=.8)	2	3,-1,0	4	10	11001	0.7251/17252/1804/0.5994/1323/138/583/67
+26.	1(x=.8)	2	3,-1,0	4	10	00001	0.6461/1003/79/0.6016/369/44/273/34
+27.	1(x=.8)	2	3,-1,0	0	10	00001	0.7558/1429/95/0.5976/164/18/164/18
+28.	1(x=.8)	2	3,-2,0	1	10	00001	0.6879/6271/462/0.5801/1467/164/748/95
+29.	1(x=.8)	3	3,-1,0	1	10	00001	0.7012/6835/507/0.5892/1514/166/751/92
+30.	1(x=.8)	2	3,-1,-1	1	10	00001	0.6949/6536/475/0.5823/1513/165/757/91
+31.	1(x=.8)	2	3,-1,0	1	5	00001	0.6949/6823/508/0.5847/1546/171/769/93
+32.	1(x=.8)	7	3,-1,0	1	10	00001	0.7036/7115/529/0.5875/1532/169/756/92
+(33 a special ensemble of No.8,10,12,16)
+33.	1(x=.8)	2	3,-1,0	1	10	00000	0.7148/135251/14013/0.5349/10989/1707/2037/353
+
 Conclusion:
-	. -t 1 is good, 2 and 3 not good. No. 1 vs. 2 and 7.
+	. -t=1 is still best, compare with -t=2,3,4,0. No. 1 vs. 2,7,24,25
+	  This edge-gradient denominator is used as a normalization factor.
+	  Jasmine suggested -t=3(see 1.7, her email). But i realized probl-
+	  em,
+	  <quote from my email on 10-16-05>
+	  One more thing is the denominator of edge-gradient formula. See
+	  conclusion of 1.4.3, the '-t' parameter. When i was implementing this, i
+	  realized the no_of_edges has a problem. It overlooks the density
+	  difference between different clustes. Say, two clusters with same size,
+	  but one has much more edges than the other in its core. Because of the
+	  no_of_edges denominator, we 'll see little difference in terms of
+	  edge-gradient for the genes in the core. You can see n(n-1)/2 is still
+	  the best. I tried n, but it's even worse.
+	  The point is that no_of_edges is still not the expected number of edges
+	  for a cluster. I come up with a gradient n(n-1)/2 denominator and going
+	  to test it out.
+	  </quote from my email on 10-16-05>
+	  Specific example for which -t=3 is bad is two clusters with same amount
+	  of edges within one layer, but one has less vertices on that layer. Cer-
+	  tainly, the latter should be better in function enrichness.
+	  Example for which -t=2 is bad is that it ignores the number of edges in-
+	  crease by ^2 of number of vertices. Not plainly ^1.
+	  -t=4 is supposed to be good. It can solve both examples above. Probably
+	  the big clusters missed by -t=1 come into play and mess the prediction 
+	  up(see below about No.17) (Need CHECK)
 	. exp is a strong factor. No. 1,3,4,6
 	. -p=0.005 and -a=0.5 followed by different lm_bits. No.8,10-16.
 	  Rank individual parameter
@@ -393,7 +445,7 @@ Conclusion:
 	    2. p-value No.10
 	    3. connectivity No.12
 	    4. edge-gradient No.8
-	  But combining any of them is bad. No.11,13-15.
+i	  But combining any of them is bad. No.11,13-15.
 	. No.9 and No.17-22. The most chaotic part is here.
 	  Compare them to No.1. If i rank it, it's
 	    1. connectivity No.22
@@ -401,7 +453,36 @@ Conclusion:
 	    3. recurrence No.19
 	    4. p-value No.17
 	  (No.17 is a little bit weird. CHECK needed!)
-	  Combination is also bad.
+	  Combination is also bad. No.22 is surprisingly good. But in terms
+	  of predictions(2nd, 3rd digit in results), it's not big. It's also
+	  true for edge-gradient.
+	  It means high connectivity or edge-gradient
+	  encompasses more DIVERSE clusters than other high parameters!(THIS
+	  IS ALSO TRUE in No. 26-32.)
+
+	  (10-17-05)
+	. The chaotic two rankings above tell us one thing. After removal of
+	  some low-accuracy clusters, every papameter is kind of good. These
+	  low-accuracy clusters' accuracy are very confusing in terms of the
+	  parameters. They could have very good p-value, recurrence. Connect-
+	  ivity and edge-gradient are less affected by them(No.9 and 22). It-
+	  's probably saying that topology or gradient is far precise and st-
+	  able.
+	. No.17's no prediction is found out why. The sub-region with highest
+	  p-value(hypergeometric) is still very confusing and don't have
+	  consistent 60%. Actually, this sub-region contains lots of big clu-
+	  sters. Big cluster's representative function has usually a very lo-
+	  w p-value due to its relative high number of associated genes. It
+	  turns out that these big clusters could also have lots of genes wi-
+	  th other functions(examples showed >half), which drags down the ac-
+	  curacy.
+	  In short, there's big exaggeration or distortion of function overr-
+	  epresentation by hypergeometric p-value.
+	. 5 is pretty much enough for max-layer. No. 9 vs 31.
+	. exp=7 is more like adding pleitropy, instead of #genes predicted.
+	  No. 32.
+	. No. 26,27 is pretty bad among No.26-32. This is probably due to the
+	  problem similar to No.17(comment above)
 	  
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
 (10-12-05)
