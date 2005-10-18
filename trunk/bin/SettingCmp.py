@@ -80,10 +80,15 @@ class SettingCmp:
 		"""
 		10-15-05
 			return a sample from p_gene_id_set
+		10-18-05
+			handle the situation that step=0(no_of_samples>len(p_gene_id_set)
 		"""
 		sys.stderr.write("Sampling...")
 		step = len(p_gene_id_set)/no_of_samples
-		index_ls = range(0, len(p_gene_id_set), step)
+		if step==0:
+			index_ls = range(0, len(p_gene_id_set))
+		else:
+			index_ls = range(0, len(p_gene_id_set), step)
 		p_gene_id_list = list(p_gene_id_set)
 		sys.stderr.write("End sampling.\n")
 		return [p_gene_id_list[index] for index in index_ls]
