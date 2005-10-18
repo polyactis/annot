@@ -55,6 +55,8 @@ class prediction_attributes:
 	10-16-05
 		type 2 expanded
 		add type 3
+	10-17-05
+		make type 1 NULL
 	"""
 	def __init__(self, row, type=1):
 		self.p_gene_id = row[0]
@@ -74,11 +76,7 @@ class prediction_attributes:
 		self.depth_cut_off = row[14]
 		self.mcl_id = row[15]
 		self.lca_list = row[16]
-		if type==1:
-			self.vertex_set = row[17]	#vertex_set and edge_set is used by SettingCmp.py
-			self.edge_set = row[18]
-			self.d_matrix = row[19]
-		elif type==2:
+		if type==2:
 			self.vertex_gradient = row[17]	#for output_node()
 			self.edge_gradient = row[18]
 		elif type==3:	#for computing_node()
@@ -155,6 +153,9 @@ class gradient_class:
 			three types to divide edge_gradient
 		10-17-05
 			add the fourth type of edge_gradient_denominator
+		10-18-05
+			the 4th type has been modified. The denominator uses 
+			n^1.2, not n^2 as expected number of edges given n vertices. 
 		"""
 		edge_gradient = 0.0
 		edge_set = edge_set_string[2:-2].split('},{')
@@ -204,14 +205,17 @@ class gradient_class:
 					layer2no_of_vertices[layer] += 1
 			edge_gradient_denominator = 0.0
 			for i in range(1, max_layer+1):
-				if i not in layer2no_of_vertices:	#i-1 is the last layer
+				#1st, possible edges between i-1 and i
+				if i not in layer2no_of_vertices:       #i-1 is the last layer
 					break
 				n_i_1 = layer2no_of_vertices[i-1]
 				n_i = layer2no_of_vertices[i]
-				#1st, possible edges between i-1 and i
-				edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
+				#edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
+				edge_gradient_denominator += math.pow(n_i_1*n_i,0.6)/(math.pow(i-1, exponent)+math.pow(i, exponent))
+				
 				#2nd possible edges within i
-				edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
+				#edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
+				edge_gradient_denominator += math.pow(n_i*(n_i-1)/2,0.6)/(2*math.pow(i,exponent))
 			edge_gradient /= edge_gradient_denominator
 		if self.debug:
 			print "edge_gradient:", edge_gradient
