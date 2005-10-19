@@ -483,7 +483,29 @@ i	  But combining any of them is bad. No.11,13-15.
 	  No. 32.
 	. No. 26,27 is pretty bad among No.26-32. This is probably due to the
 	  problem similar to No.17(comment above)
-	  
+
+1.4.3.1 (10-18-05) edge gradient's formula and denominator
+
+Notation:
+	(see 1.4.3's Notation)
+	-t has more meanings, see proj200407.tex.
+	
+No.	lm_suffix
+1.	hs_fim_40m4x40e2s310l10w1t1tm4s320_e5_00001a60
+2.	hs_fim_40m4x40e2s310l10w1t1tm4_e5_00001a60
+3.	hs_fim_40m4x40e2s310l10w1t1tv4_e5_00001a60
+4.	hs_fim_40m4x40e2s310l10w1t1tu4_e5_00001a60
+5.	hs_fim_40m4x40e2s310l10w1t1t4sep_e5_00001a60
+
+No.	-w	exp	score	-t	layer	lm_bits	results
+1.	1(x=.8)	2	3,-2,0	m4	10	00001	0.7100/969/75/0.6340/418/42/322/37
+2.	1(x=.8)	2	3,-1,0	m4	10	00001	0.6816/1250/110/0.5997/572/61/422/48
+3.	1(x=.8)	2	3,-1,0	v4	10	00001	0.7027/7908/541/0.5996/1381/161/750/95
+4.	1(x=.8)	2	3,-1,0	u4	10	00001	0.7089/2157/142/0.6009/223/24/176/22
+5.	1(x=.8)	2	3,-1,0	4sep	10	00001	0.6364/11/1/0.6667/9/1/9/1
+
+
+
 1.5 WhyManyParametersAndLinearModelCaptureSoFewGoodClusters(WMPALMCSFGC)?
 (10-12-05)
 (10-15-05, all the pictures and tables are in ./1.3_1vs1.1_1/)
