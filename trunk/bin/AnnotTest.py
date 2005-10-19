@@ -1029,6 +1029,10 @@ class Test_cal_edge_gradient(unittest.TestCase):
 		self.schema = 'hs_fim_40'
 		
 	def test_cal_edge_gradient(self):
+		"""
+		10-19-05
+			test each gene in the cluster
+		"""
 		from codense.common import db_connect, get_gene_no2go_no_set
 		from MpiPredictionFilter import gradient_class
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
@@ -1038,15 +1042,18 @@ class Test_cal_edge_gradient(unittest.TestCase):
 		score_list = [3,-1,0]
 		max_layer = 10
 		eg_d_type = 4
-		debug = 1
+		debug = 0
 		vertex_set_string = '{199,2207,2215,3055,3109,3115}'
 		edge_set_string = '{{199,2207},{199,2215},{199,3055},{199,3109},{2207,3055},{2215,3055},{2215,3109},{3109,3115}}'
 		d_matrix_string = '{{0,1,1,1,1,2},{1,0,2,1,2,3},{1,2,0,1,1,2},{1,1,1,0,2,3},{1,2,1,2,0,1},{2,3,2,3,1,0}}'
 		gene_no = 2207
 		go_no = 664
 		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, eg_d_type, debug)
-		vertex_gradient, edge_gradient = gradient_class_instance.cal_gradient(\
+		vertex_set = [199,2207,2215,3055,3109,3115]
+		for gene_no in vertex_set:
+			vertex_gradient, edge_gradient = gradient_class_instance.cal_gradient(\
 			gene_no, go_no, vertex_set_string, edge_set_string, d_matrix_string)
+			print gene_no,vertex_gradient, edge_gradient
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
