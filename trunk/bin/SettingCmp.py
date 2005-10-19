@@ -182,8 +182,8 @@ class SettingCmp:
 					#following copied from GuiAnalyzer.py
 					subgraph = cluster_info_instance.graph_from_node_edge_set(vertex_set, edge_set)
 					graphSrcFname = '/tmp/GuiAnalyzer.dot'
-					graphFname = os.path.join(pic_output_dir, '%s_%s_%s.png'%(p_attr_instance2.p_gene_id, \
-						p_attr_instance2.gene_no, p_attr_instance2.go_no))
+					graphFname = os.path.join(pic_output_dir, '%s_%s_%s_%s.png'%(p_attr_instance2.p_gene_id, \
+						p_attr_instance2.gene_no, p_attr_instance2.go_no, p_attr_instance2.mcl_id))
 					graphSrcF = open(graphSrcFname, 'w')
 					graphDotOutput(graphSrcF, subgraph, \
 						self.gene_no2gene_id, self.gene_no2go_no, \
