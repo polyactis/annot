@@ -131,21 +131,24 @@ class MpiBFSCluster:
 		"""
 		10-09-05
 			add mcl_table to get vertex_set
+		10-19-05
+			ask output_node for a free_computing_node
 		"""
 		sys.stderr.write("Reading clusters from tables...\n")
 		node_rank = communicator.rank
 		curs.execute("DECLARE crs CURSOR FOR select s.splat_id, m.vertex_set, s.edge_set\
 			from %s s, %s m where m.mcl_id=s.splat_id"%(input_table, mcl_table))
 		cluster_block = self.fetch_cluster_block(curs, size)
-		which_node = 0
+		counter = 0	#10-19-05
 		while cluster_block:
-			node_to_receive_block = which_node%(communicator.size-2)+1	#it's -2, work like this. 
-				#"which_node%(communicator.size-2)" is in range (0,size-3). Regard node 1 to size-2 as 0 to size-3. So need +1.
-			communicator.send(cluster_block, node_to_receive_block, 0)
+			communicator.send(Numeric.array([-2.0]), communicator.size-1, 1)	#10-19-05 WATCH: tag is 1, to the output_node. Message is array,Float.
+			free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)	#10-19-05
+				#WATCH: tag is 2, from the output_node
+			communicator.send(cluster_block, int(free_computing_node), 0)	#10-19-05	#WATCH: int()
 			if self.debug:
-				sys.stderr.write("block %s sent to %s.\n"%(which_node, node_to_receive_block))
+				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))	#10-19-05
 			cluster_block = self.fetch_cluster_block(curs, size)
-			which_node += 1
+			counter += 1	#10-19-05
 		#tell computing_node to exit the loop
 		stop_signal = Numeric.zeros((1,1), Numeric.Int)
 		stop_signal[0,0] = -1
@@ -258,13 +261,19 @@ class MpiBFSCluster:
 	def output_node(self, communicator, curs, output_table):
 		"""
 		10-07-05
+		10-19-05
+			reserve a pool of free_computing_nodes for input_node to choose
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
 		data, source, tag, count = communicator.receive(Numeric.Int, None, 1)
 		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
+		free_computing_nodes = range(1,communicator.size-1)	#10-19-05
 		while 1:
-			if data[0]==-1.0:
+			if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
+				free_computing_node = free_computing_nodes.pop(0)
+				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
+			elif data[0]==-1.0:	#10-19-05
 				no_of_resting_nodes += 1
 				if self.debug:
 					sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
@@ -273,6 +282,7 @@ class MpiBFSCluster:
 					if self.debug:
 						sys.stderr.write("node %s output finished.\n"%node_rank)
 			else:
+				free_computing_nodes.append(source)	#10-19-05 append the free computing_node
 				self.submit2output_table(curs, output_table, data)
 			data, source, tag, count = communicator.receive(Numeric.Int, None, 1)
 		sys.stderr.write("Node no.%s output done.\n"%node_rank)
