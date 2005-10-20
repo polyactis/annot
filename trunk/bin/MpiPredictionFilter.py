@@ -16,6 +16,7 @@ Option:
 	-e ...,	exponent of the layer, 1(default)
 	-s ...,	score for genes, 1,-1,0(default)
 	-l ...,	maximum layer, 0(default, no gradient stuff, -e, -s, -l no effect)
+	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.7(default)
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
@@ -94,12 +95,15 @@ class gradient_class:
 		class to calculate the gradients
 	10-15-05
 		change the interface to allow more efficient calling
+	10-20-05
+		add norm_exp
 	"""
-	def __init__(self, gene_no2go, exponent, score_list, max_layer, eg_d_type, debug):
+	def __init__(self, gene_no2go, exponent, score_list, max_layer, norm_exp, eg_d_type, debug):
 		self.gene_no2go = gene_no2go
 		self.exponent = float(exponent)
 		self.score_list = score_list
 		self.max_layer = int(max_layer)
+		self.norm_exp = float(norm_exp)
 		self.eg_d_type = int(eg_d_type)
 		self.debug = int(debug)
 		self.cal_edge_gradient_func_dict = {4: self.cal_edge_gradient_t4sepbug,
@@ -160,7 +164,7 @@ class gradient_class:
 		return vertex_gradient
 	
 	def cal_edge_gradient_t4sepbug(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, \
-		score_list, max_layer, eg_d_type=4):
+		score_list, max_layer, norm_exp, eg_d_type=4):
 		"""
 		10-12-05
 		edge score changed from multiply to plus, like score1+score2
@@ -242,9 +246,9 @@ class gradient_class:
 				n_i = layer2no_of_vertices[i]
 				#edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
 				if i==1:	#10-19-05 layer 0 and 1 uses a different a exponent
-					edge_gradient_denominator = math.pow(n_i_1*n_i, 0.4)*math.pow(2*i-1, exponent)
+					edge_gradient_denominator = math.pow(n_i_1*n_i, norm_exp-0.2)*math.pow(2*i-1, exponent)
 				else:
-					edge_gradient_denominator = math.pow(n_i_1*n_i, 0.6)*math.pow(2*i-1, exponent)
+					edge_gradient_denominator = math.pow(n_i_1*n_i, norm_exp)*math.pow(2*i-1, exponent)
 				key_layer = 2*i-1
 				if key_layer in layer2edge_gradient:
 					layer2edge_gradient[key_layer] /= edge_gradient_denominator
@@ -252,7 +256,7 @@ class gradient_class:
 					layer2edge_gradient[key_layer] = 0.0
 				#2nd possible edges within i
 				#edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
-				edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, 0.6)*math.pow(2*i,exponent)
+				edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, norm_exp)*math.pow(2*i,exponent)
 				key_layer = 2*i
 				if key_layer in layer2edge_gradient:
 					layer2edge_gradient[key_layer] /= edge_gradient_denominator
@@ -264,7 +268,7 @@ class gradient_class:
 		return edge_gradient
 	
 	def cal_edge_gradient_t5(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, \
-		score_list, max_layer):
+		score_list, max_layer, norm_exp):
 		"""
 		10-19-05
 			(see proj200407.tex)
@@ -339,9 +343,9 @@ class gradient_class:
 			n_i = layer2no_of_vertices[i]
 			#edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
 			if i==1:	#10-19-05 layer 0 and 1 uses a different a exponent
-				edge_gradient_denominator = math.pow(n_i_1*n_i, 0.4)*math.pow(2*i-1, exponent)
+				edge_gradient_denominator = math.pow(n_i_1*n_i, norm_exp-0.2)*math.pow(2*i-1, exponent)
 			else:
-				edge_gradient_denominator = math.pow(n_i_1*n_i, 0.6)*math.pow(2*i-1, exponent)
+				edge_gradient_denominator = math.pow(n_i_1*n_i, norm_exp)*math.pow(2*i-1, exponent)
 			key_layer = 2*i-1
 			if key_layer in layer2edge_gradient:
 				layer2edge_gradient[key_layer] /= edge_gradient_denominator
@@ -349,7 +353,7 @@ class gradient_class:
 				layer2edge_gradient[key_layer] = 0.0
 			#2nd possible edges within i
 			#edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
-			edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, 0.6)*math.pow(2*i,exponent)
+			edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, norm_exp)*math.pow(2*i,exponent)
 			key_layer = 2*i
 			if key_layer in layer2edge_gradient:
 				layer2edge_gradient[key_layer] /= edge_gradient_denominator
@@ -368,7 +372,7 @@ class gradient_class:
 		vertex_gradient = self.cal_vertex_gradient(gene_no,go_no, vertex_set, vertex2no, d_row, \
 			self.gene_no2go, self.exponent, self.score_list, self.max_layer)
 		edge_gradient = self.cal_edge_gradient_func_dict[self.eg_d_type](gene_no, go_no, edge_set_string, vertex2no, d_row, \
-			self.gene_no2go, self.exponent, self.score_list, self.max_layer)
+			self.gene_no2go, self.exponent, self.score_list, self.max_layer, self.norm_exp)
 		return (vertex_gradient, edge_gradient)
 
 
@@ -378,10 +382,12 @@ class MpiPredictionFilter:
 		upgrade the function-form to class, 
 		p_gene_view is not a view anymore, a real table derived from p_gene_table
 			because runtime select cluster_size_cut_off<=max_size blows the memory
+	10-20-05
+		add norm_exp
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
 		jnput_fname=None, max_size=100000, unknown_gene_ratio=1, p_value_cut_off=1,\
-		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, recurrence_x=0.8,\
+		is_correct_type=2, acc_cut_off=0, exponent=1, score_list='1,-1,0', max_layer=0, norm_exp=0.7, recurrence_x=0.8,\
 		recurrence_x_type=0, size=10000000, eg_d_type=1, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
@@ -397,6 +403,7 @@ class MpiPredictionFilter:
 		score_list = score_list.split(',')
 		self.score_list = map(float, score_list)
 		self.max_layer = int(max_layer)
+		self.norm_exp = float(norm_exp)
 		self.recurrence_x = float(recurrence_x)
 		self.recurrence_x_type = int(recurrence_x_type)
 		self.size = int(size)
@@ -556,14 +563,14 @@ class MpiPredictionFilter:
 		return good_prediction_ls
 		
 	def computing_node(self, communicator,  gene_no2go, exponent, score_list, \
-				max_layer, eg_d_type, mcl_id2accuracy, acc_cut_off, functor):
+				max_layer, norm_exp, eg_d_type, mcl_id2accuracy, acc_cut_off, functor):
 		"""
 		10-15-05
 			
 		"""
 		node_rank = communicator.rank
 		data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
-		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, eg_d_type, self.debug)
+		gradient_class_instance = gradient_class(gene_no2go, exponent, score_list, max_layer, norm_exp, eg_d_type, self.debug)
 		while 1:
 			if data=="-1":
 				if self.debug:
@@ -787,7 +794,7 @@ class MpiPredictionFilter:
 			self.input_node(communicator, curs, old_schema_instance, crs_sentence, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			self.computing_node(communicator, gene_no2go, self.exponent, self.score_list, \
-				self.max_layer, self.eg_d_type, mcl_id2accuracy, self.acc_cut_off, functor)
+				self.max_layer, self.norm_exp, self.eg_d_type, mcl_id2accuracy, self.acc_cut_off, functor)
 		elif node_rank==communicator.size-1:
 			self.output_node(communicator, curs, new_schema_instance.p_gene_table)
 			if self.commit:
@@ -799,7 +806,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:m:u:p:y:a:e:s:l:x:w:v:t:cbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:m:u:p:y:a:e:s:l:q:x:w:v:t:cbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -818,6 +825,7 @@ if __name__ == '__main__':
 	exponent = 1
 	score_list = '1,-1,0'
 	max_layer = 0
+	norm_exp = 0.7
 	recurrence_x = 0.8
 	recurrence_x_type = 0
 	size = 10000000
@@ -855,6 +863,8 @@ if __name__ == '__main__':
 			score_list = arg
 		elif opt in ("-l"):
 			max_layer = int(arg)
+		elif opt in ("-q"):
+			norm_exp = float(arg)
 		elif opt in ("-x"):
 			recurrence_x = float(arg)
 		elif opt in ("-w"):
@@ -872,7 +882,7 @@ if __name__ == '__main__':
 	if schema and input_fname and jnput_fname:
 		instance = MpiPredictionFilter(hostname, dbname, schema, input_fname, jnput_fname, max_size, \
 			unknown_gene_ratio, p_value_cut_off, is_correct_type, acc_cut_off, exponent, score_list, \
-			max_layer, recurrence_x, recurrence_x_type, size, eg_d_type, commit, debug, report)
+			max_layer, norm_exp, recurrence_x, recurrence_x_type, size, eg_d_type, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
