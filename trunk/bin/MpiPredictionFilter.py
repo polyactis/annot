@@ -19,8 +19,8 @@ Option:
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
-	-t ...,	edge_gradient denominator type, 1(n(n-1)/2,default), 2(n), 3(#edges),
-		4(1's gradient-version), any number outside 1-4 is regarded as no denominator
+	-t ...,	edge_gradient type,
+		4(sepbug see proj200407.tex), 5(see proj200407.tex)
 	-c,	commit the database transaction
 	-b,	debug version.
 	-r,	enable report flag
@@ -102,6 +102,10 @@ class gradient_class:
 		self.max_layer = int(max_layer)
 		self.eg_d_type = int(eg_d_type)
 		self.debug = int(debug)
+		self.cal_edge_gradient_func_dict = {4: self.cal_edge_gradient_t4sepbug,
+			5: self.cal_edge_gradient_t5
+			}
+			
 
 	def get_vertex2no(self, vertex_set):
 		vertex2no = {}
@@ -128,6 +132,18 @@ class gradient_class:
 			score = score_list[1]
 		return score
 	
+	def return_vertex_type(self, go_no, v_go_no_set):
+		"""
+		10-17-05
+		"""
+		if go_no in v_go_no_set:
+			score_type = 0
+		elif 0 in v_go_no_set:
+			score_type = -1
+		else:
+			score_type = 1
+		return score_type
+	
 	def cal_vertex_gradient(self, gene_no, go_no, vertex_set, vertex2no, d_row, gene_no2go, exponent, score_list, max_layer):
 		vertex_gradient = 0.0
 		if self.debug:
@@ -143,8 +159,8 @@ class gradient_class:
 					print "vertex, v_go_no, score, vertex_gradient:", vertex, v_go_no_set, score, vertex_gradient
 		return vertex_gradient
 	
-	def cal_edge_gradient(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, \
-		score_list, max_layer, eg_d_type):
+	def cal_edge_gradient_t4sepbug(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, \
+		score_list, max_layer, eg_d_type=4):
 		"""
 		10-12-05
 		edge score changed from multiply to plus, like score1+score2
@@ -154,13 +170,16 @@ class gradient_class:
 		10-17-05
 			add the fourth type of edge_gradient_denominator
 		10-18-05
-			the 4th type has been modified. The denominator uses 
-			n^1.2, not n^2 as expected number of edges given n vertices. 
+			the 4th type has been modified. The denominator uses
+			n^1.2, not n^2 as expected number of edges given n vertices.
+		10-19-05
+			see proj200407.tex
 		"""
 		edge_gradient = 0.0
 		edge_set = edge_set_string[2:-2].split('},{')
 		if self.debug:
 			print "gene_no",gene_no, "go_no", go_no, "edge_set", edge_set, "d_row", d_row
+		layer2edge_gradient = {}	#key i stores layer i/2 or (i-1)/2's edge_gradient_part Tue Oct 18 14:49:56 2005
 		for edge in edge_set:
 			edge = edge.split(',')
 			edge = map(int, edge)
@@ -171,31 +190,43 @@ class gradient_class:
 			if v1_layer>0 and v1_layer<=max_layer and v2_layer>0 and v2_layer<=max_layer:
 				v1_go_no_set = gene_no2go[edge[0]]
 				v2_go_no_set = gene_no2go[edge[1]]
-				score1 = self.return_score(go_no, v1_go_no_set, score_list)
-				score2 = self.return_score(go_no, v2_go_no_set, score_list)
-				edge_gradient += 1/(math.pow(v1_layer, exponent)+math.pow(v2_layer, exponent))*(score1+score2)
+				v1_type = self.return_vertex_type(go_no, v1_go_no_set)
+				v2_type = self.return_vertex_type(go_no, v2_go_no_set)
+				score1 = score_list[v1_type]
+				score2 = score_list[v2_type]
+				key_layer = max(v1_layer, v2_layer)*2-int(v1_layer!=v2_layer)
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				edge_gradient_part = score1+score2
+				layer2edge_gradient[key_layer] += edge_gradient_part
 				if self.debug:
-					print "edge,v1_go_no, v2_go_no, score1, score2, edge_gradient:",\
-					edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_gradient
+					print "edge,v1_go_no, v2_go_no, score1, score2, edge_gradient_part:",\
+					edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_gradient_part
 			elif v1_layer==0 and v2_layer<=max_layer:	#10-16-05
 				v2_go_no_set = gene_no2go[edge[1]]
-				score2 = self.return_score(go_no, v2_go_no_set, score_list)
-				edge_gradient += 1/math.pow(v2_layer, exponent)*score2
+				v2_type = self.return_vertex_type(go_no, v2_go_no_set)
+				score2 = score_list[v2_type]
+				edge_gradient_part = score2
+				key_layer = v2_layer*2 -1
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				layer2edge_gradient[key_layer] += edge_gradient_part
 				if self.debug:
-					print "edge, v2_go_no, score2, edge_gradient:",edge, v2_go_no_set, score2, edge_gradient
+					print "edge, v2_go_no, score2, edge_gradient_part:",edge, v2_go_no_set, score2, edge_gradient_part
 			elif v2_layer==0 and v1_layer<=max_layer:	#10-16-05
 				v1_go_no_set = gene_no2go[edge[0]]
-				score1 = self.return_score(go_no, v1_go_no_set, score_list)
-				edge_gradient += 1/math.pow(v1_layer, exponent)*score1
+				v1_type = self.return_vertex_type(go_no, v1_go_no_set)
+				score1 = score_list[v1_type]
+				edge_gradient_part = score1
+				key_layer = v1_layer*2 - 1
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				layer2edge_gradient[key_layer] += edge_gradient_part
 				if self.debug:
-					print "edge, v1_go_no, score1, edge_gradient:",edge, v1_go_no_set, score1, edge_gradient
-		if eg_d_type==1:	#10-16-05
-			edge_gradient /= float(len(vertex2no))*(len(vertex2no)-1)/2
-		elif eg_d_type==2:
-			edge_gradient /= float(len(vertex2no))
-		elif eg_d_type==3:
-			edge_gradient /= float(len(edge_set))	#10-16-05 divide the edge_gradient by no_of_edges
-		elif eg_d_type==4:	#Mon Oct 17 00:07:43 2005
+					print "edge, v1_go_no, score1, edge_gradient_part:",edge, v1_go_no_set, score1, edge_gradient_part
+		if self.debug:
+			print "layer2edge_gradient",layer2edge_gradient
+		if eg_d_type==4:	#Mon Oct 17 00:07:43 2005
 			layer2no_of_vertices = {}
 			for i in range(len(d_row)):
 				layer = d_row[i]
@@ -203,24 +234,132 @@ class gradient_class:
 					if layer not in layer2no_of_vertices:
 						layer2no_of_vertices[layer] = 0
 					layer2no_of_vertices[layer] += 1
-			edge_gradient_denominator = 0.0
 			for i in range(1, max_layer+1):
 				#1st, possible edges between i-1 and i
-				if i not in layer2no_of_vertices:       #i-1 is the last layer
+				if i not in layer2no_of_vertices:
 					break
 				n_i_1 = layer2no_of_vertices[i-1]
 				n_i = layer2no_of_vertices[i]
 				#edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
-				edge_gradient_denominator += math.pow(n_i_1*n_i,0.6)/(math.pow(i-1, exponent)+math.pow(i, exponent))
-				
+				if i==1:	#10-19-05 layer 0 and 1 uses a different a exponent
+					edge_gradient_denominator = math.pow(n_i_1*n_i, 0.4)*math.pow(2*i-1, exponent)
+				else:
+					edge_gradient_denominator = math.pow(n_i_1*n_i, 0.6)*math.pow(2*i-1, exponent)
+				key_layer = 2*i-1
+				if key_layer in layer2edge_gradient:
+					layer2edge_gradient[key_layer] /= edge_gradient_denominator
+				else:
+					layer2edge_gradient[key_layer] = 0.0
 				#2nd possible edges within i
 				#edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
-				edge_gradient_denominator += math.pow(n_i*(n_i-1)/2,0.6)/(2*math.pow(i,exponent))
-			edge_gradient /= edge_gradient_denominator
+				edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, 0.6)*math.pow(2*i,exponent)
+				key_layer = 2*i
+				if key_layer in layer2edge_gradient:
+					layer2edge_gradient[key_layer] /= edge_gradient_denominator
+				else:
+					layer2edge_gradient[key_layer] = 0.0
+		edge_gradient = sum(layer2edge_gradient.values())
 		if self.debug:
-			print "edge_gradient:", edge_gradient
+			print "layer2edge_gradient, edge_gradient:", layer2edge_gradient, edge_gradient
 		return edge_gradient
 	
+	def cal_edge_gradient_t5(self, gene_no, go_no, edge_set_string, vertex2no, d_row, gene_no2go, exponent, \
+		score_list, max_layer):
+		"""
+		10-19-05
+			(see proj200407.tex)
+			discard the edges with one vertex same function, one vertex different function
+		"""
+		edge_gradient = 0.0
+		edge_set = edge_set_string[2:-2].split('},{')
+		if self.debug:
+			print "gene_no",gene_no, "go_no", go_no, "edge_set", edge_set, "d_row", d_row
+		layer2edge_gradient = {}	#key i stores layer i/2 or (i-1)/2's edge_gradient_part Tue Oct 18 14:49:56 2005
+		for edge in edge_set:
+			edge = edge.split(',')
+			edge = map(int, edge)
+			v1_no = vertex2no[edge[0]]
+			v2_no = vertex2no[edge[1]]
+			v1_layer = d_row[v1_no]
+			v2_layer = d_row[v2_no]
+			if v1_layer>0 and v1_layer<=max_layer and v2_layer>0 and v2_layer<=max_layer:
+				v1_go_no_set = gene_no2go[edge[0]]
+				v2_go_no_set = gene_no2go[edge[1]]
+				v1_type = self.return_vertex_type(go_no, v1_go_no_set)
+				v2_type = self.return_vertex_type(go_no, v2_go_no_set)
+				if v1_type==0 and v2_type==1:
+					continue
+				score1 = score_list[v1_type]
+				score2 = score_list[v2_type]
+				#key_layer = max(v1_layer, v2_layer)*2-int(v1_layer!=v2_layer)
+				key_layer = v1_layer + v2_layer
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				edge_gradient_part = score1+score2
+				layer2edge_gradient[key_layer] += edge_gradient_part
+				if self.debug:
+					print "edge,v1_go_no, v2_go_no, score1, score2, edge_gradient_part:",\
+					edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_gradient_part
+			elif v1_layer==0 and v2_layer<=max_layer:	#10-16-05
+				v2_go_no_set = gene_no2go[edge[1]]
+				v2_type = self.return_vertex_type(go_no, v2_go_no_set)
+				score2 = score_list[v2_type]
+				edge_gradient_part = score2
+				key_layer = v2_layer*2 -1
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				layer2edge_gradient[key_layer] += edge_gradient_part
+				if self.debug:
+					print "edge, v2_go_no, score2, edge_gradient_part:",edge, v2_go_no_set, score2, edge_gradient_part
+			elif v2_layer==0 and v1_layer<=max_layer:	#10-16-05
+				v1_go_no_set = gene_no2go[edge[0]]
+				v1_type = self.return_vertex_type(go_no, v1_go_no_set)
+				score1 = score_list[v1_type]
+				edge_gradient_part = score1
+				key_layer = v1_layer*2 - 1
+				if key_layer not in layer2edge_gradient:
+					layer2edge_gradient[key_layer] = 0.0
+				layer2edge_gradient[key_layer] += edge_gradient_part
+				if self.debug:
+					print "edge, v1_go_no, score1, edge_gradient_part:",edge, v1_go_no_set, score1, edge_gradient_part
+		if self.debug:
+			print "layer2edge_gradient",layer2edge_gradient
+		layer2no_of_vertices = {}
+		for i in range(len(d_row)):
+			layer = d_row[i]
+			if layer<=max_layer:
+				if layer not in layer2no_of_vertices:
+					layer2no_of_vertices[layer] = 0
+				layer2no_of_vertices[layer] += 1
+		for i in range(1, max_layer+1):
+			#1st, possible edges between i-1 and i
+			if i not in layer2no_of_vertices:
+				break
+			n_i_1 = layer2no_of_vertices[i-1]
+			n_i = layer2no_of_vertices[i]
+			#edge_gradient_denominator += n_i_1*n_i/(math.pow(i-1, exponent)+math.pow(i, exponent))
+			if i==1:	#10-19-05 layer 0 and 1 uses a different a exponent
+				edge_gradient_denominator = math.pow(n_i_1*n_i, 0.4)*math.pow(2*i-1, exponent)
+			else:
+				edge_gradient_denominator = math.pow(n_i_1*n_i, 0.6)*math.pow(2*i-1, exponent)
+			key_layer = 2*i-1
+			if key_layer in layer2edge_gradient:
+				layer2edge_gradient[key_layer] /= edge_gradient_denominator
+			else:
+				layer2edge_gradient[key_layer] = 0.0
+			#2nd possible edges within i
+			#edge_gradient_denominator += n_i*(n_i-1)/(4*math.pow(i,exponent))
+			edge_gradient_denominator = math.pow(n_i*(n_i-1)/2, 0.6)*math.pow(2*i,exponent)
+			key_layer = 2*i
+			if key_layer in layer2edge_gradient:
+				layer2edge_gradient[key_layer] /= edge_gradient_denominator
+			else:
+				layer2edge_gradient[key_layer] = 0.0
+		edge_gradient = sum(layer2edge_gradient.values())
+		if self.debug:
+			print "layer2edge_gradient, edge_gradient:", layer2edge_gradient, edge_gradient
+		return edge_gradient
+		
 	def cal_gradient(self, gene_no, go_no, vertex_set_string, edge_set_string, d_matrix_string):
 		vertex_set = vertex_set_string[1:-1].split(',')
 		vertex_set = map(int, vertex_set)
@@ -228,8 +367,8 @@ class gradient_class:
 		d_row = self.get_d_row(d_matrix_string, vertex2no[gene_no])
 		vertex_gradient = self.cal_vertex_gradient(gene_no,go_no, vertex_set, vertex2no, d_row, \
 			self.gene_no2go, self.exponent, self.score_list, self.max_layer)
-		edge_gradient = self.cal_edge_gradient(gene_no, go_no, edge_set_string, vertex2no, d_row, \
-			self.gene_no2go, self.exponent, self.score_list, self.max_layer, self.eg_d_type)
+		edge_gradient = self.cal_edge_gradient_func_dict[self.eg_d_type](gene_no, go_no, edge_set_string, vertex2no, d_row, \
+			self.gene_no2go, self.exponent, self.score_list, self.max_layer)
 		return (vertex_gradient, edge_gradient)
 
 
@@ -522,6 +661,8 @@ class MpiPredictionFilter:
 		10-15-05
 		10-16-05
 			reserve a pool of free_computing_nodes for input_node to choose
+		10-19-05
+			use source to judge  what type of response to do
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
@@ -529,7 +670,10 @@ class MpiPredictionFilter:
 		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
 		free_computing_nodes = range(1,communicator.size-1)
 		while 1:
-			if data=="-1":
+			if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
+				free_computing_node = free_computing_nodes.pop(0)
+				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
+			elif data=="-1":
 				no_of_resting_nodes += 1
 				if self.debug:
 					sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
@@ -537,9 +681,6 @@ class MpiPredictionFilter:
 					break
 					if self.debug:
 						sys.stderr.write("node %s output finished.\n"%node_rank)
-			elif data=="1":	#the input_node is asking me for free computing_node
-				free_computing_node = free_computing_nodes.pop(0)
-				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
 			else:
 				free_computing_nodes.append(source)	#append the free computing_node
 				prediction_ls = cPickle.loads(data)
