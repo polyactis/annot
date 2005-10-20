@@ -482,6 +482,8 @@ class MpiPredictionFilter:
 		10-15-05
 		10-16-05
 			ask output_node for a free_computing_node
+		10-20-05
+			one more place to put free_computing_node
 		"""
 		sys.stderr.write("Reading predictions...\n")
 		node_rank = communicator.rank
@@ -495,7 +497,7 @@ class MpiPredictionFilter:
 			prediction_ls_pickle = cPickle.dumps(prediction_ls, -1)
 			communicator.send(prediction_ls_pickle, int(free_computing_node), 0)	#WATCH: int()
 			if self.debug:
-				sys.stderr.write("block %s sent to %s.\n"%(counter, node_to_receive_block))
+				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))	#10-20-05
 			prediction_ls = self.fetch_predictions(curs, size)
 			counter += 1
 		#tell computing_node to exit the loop
