@@ -939,3 +939,101 @@ def p_gene_id_set_from_gene_p_table(curs, gene_p_table):
 		p_gene_id_set.add(p_gene_id)
 	sys.stderr.write("End to get p_gene_id_set.\n")
 	return p_gene_id_set
+
+def get_go_no2edge_counter_list(curs, gene_no2go_no_set, edge_type2index, edge_table='edge_cor_vector', debug=0):
+	"""
+	10-20-05
+		construct a edge_counter list which represents the counter of six types of edges for each function
+	
+	"""
+	sys.stderr.write("Getting go_no2edge_counter_list...\n")
+	go_no2edge_counter_list = {}	#value is a six integer list, each corresponds to below edge_type
+	edge_type = [0,0]
+	curs.execute("DECLARE crs CURSOR FOR select edge_name from %s "%(edge_table))
+	curs.execute("fetch 5000 from crs")
+	rows = curs.fetchall()
+	no_of_total_edges = 0
+	while rows:
+		if debug:
+			is_continue=raw_input("Continue?Y/n")
+			if is_continue=='n':
+				break
+		for row in rows:
+			edge_name = row[0][1:-1].split(',')
+			edge_name = map(int, edge_name)
+			gene_no1, gene_no2 = edge_name
+			go_no_set1 = gene_no2go_no_set[gene_no1]
+			go_no_set2 = gene_no2go_no_set[gene_no2]
+			go_no_set = go_no_set1 | go_no_set2
+			if debug:
+				print "gene_no1", gene_no1, "go_no_set1", go_no_set1
+				print "gene_no2", gene_no2, "go_no_set2", go_no_set2
+				print "go_no_set", go_no_set
+				is_continue=raw_input("Continue?Y/n")
+			for go_no in go_no_set:
+				if go_no not in go_no2edge_counter_list:
+					go_no2edge_counter_list[go_no] = [0]*6
+				
+				if go_no in go_no_set1:
+					edge_type[0] = 0
+				elif 0 in go_no_set1:
+					edge_type[0] = 2
+				else:
+					edge_type[0] = 1
+				
+				if go_no in go_no_set2:
+					edge_type[1] = 0
+				elif 0 in go_no_set2:
+					edge_type[1] = 2
+				else:
+					edge_type[1] = 1
+				go_no2edge_counter_list[go_no][edge_type2index[tuple(edge_type)]] += 1
+				if debug:
+					print "go_no", go_no, "edge_type", edge_type, "its edge_counter_list",go_no2edge_counter_list[go_no]
+			no_of_total_edges += 1
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
+	no_of_edges_half_unknown = go_no2edge_counter_list[0][1]
+	if debug:
+		print "no_of_total_edges",no_of_total_edges,"no_of_edges_half_unknown",no_of_edges_half_unknown
+	for go_no in go_no2edge_counter_list:
+		if go_no == 0:	#0 is different
+			#no of edges, both are other function(1-1)
+			go_no2edge_counter_list[go_no][3] = no_of_total_edges - sum(go_no2edge_counter_list[go_no])
+			#0-2,1-2 are 0-0 are same
+			go_no2edge_counter_list[go_no][2] = go_no2edge_counter_list[go_no][5] = go_no2edge_counter_list[go_no][0]
+		else:
+			#no of total unknown edges (2-2)
+			go_no2edge_counter_list[go_no][5] = go_no2edge_counter_list[0][0]
+			#no of edges, one is other function, one is unknown(1-2)
+			go_no2edge_counter_list[go_no][4] = no_of_edges_half_unknown - go_no2edge_counter_list[go_no][2]
+			#no of edges, both are other function(1-1)
+			go_no2edge_counter_list[go_no][3] = no_of_total_edges - sum(go_no2edge_counter_list[go_no])
+	sys.stderr.write("End getting go_no2edge_counter_list.\n")
+	return go_no2edge_counter_list
+
+def combine_numerator_a_denominator_dict(numerator_dict, denominator_dict):
+	"""
+	10-20-05
+		based on the key in denominator_dict.
+		If one key appears in numerator_dict, not in denominator_dict, consider its
+		corresponding denominator is 1.
+		If one key appears in denominator_dict, not in numerator_dict, the corresponding
+		numerator is 0.
+	"""
+	final_value_dict = {}
+	for key in denominator_dict:
+		if key in numerator_dict:
+			final_value_dict[key] = numerator_dict[key] / float(denominator_dict[key])
+		else:
+			final_value_dict[key] = 0.0
+	return final_value_dict
+
+def one_dim_list2string(ls):
+	"""
+	10-21-05
+		for database submission
+	"""
+	ls_string = '{' + repr(ls)[1:-1] + '}'
+	return ls_string
