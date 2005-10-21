@@ -139,11 +139,13 @@ class gradient_class:
 	def return_vertex_type(self, go_no, v_go_no_set):
 		"""
 		10-17-05
+		10-21-05
+			score_type=2 for unknown case, -1 is not good to determne edge_type
 		"""
 		if go_no in v_go_no_set:
 			score_type = 0
 		elif 0 in v_go_no_set:
-			score_type = -1
+			score_type = 2
 		else:
 			score_type = 1
 		return score_type
@@ -631,39 +633,71 @@ class MpiPredictionFilter:
 			add vertex_gradient and edge_gradient
 		10-16-05
 			judge if p_attr_instance.vertex_gradient and edge_gradient is None or not
+		10-21-05
+			if p_gene_id==-2, means don't submit p_gene_id
 		"""
 		if not p_attr_instance.vertex_gradient:
 			p_attr_instance.vertex_gradient =0.0
 		if not p_attr_instance.edge_gradient:
 			p_attr_instance.edge_gradient = 0.0
-		if p_attr_instance.lca_list:
-			curs.execute("insert into %s(p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
-			is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
-			connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list, \
-			vertex_gradient, edge_gradient)\
-			values(%s, %s, %s, %s, %s,\
-			%s, %s, %s, '%s', %s, %s,\
-			%s, %s, %s, %s, %s, '%s', \
-			%s, %s)"%\
-			(p_gene_table, \
-			p_attr_instance.p_gene_id, p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
-			p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
-			p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id, p_attr_instance.lca_list,\
-			p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
+		if p_attr_instance.p_gene_id==-2:
+			if p_attr_instance.lca_list:
+				curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_l1, \
+				is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
+				connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list, \
+				vertex_gradient, edge_gradient)\
+				values(%s, %s, %s, %s,\
+				%s, %s, %s, '%s', %s, %s,\
+				%s, %s, %s, %s, %s, '%s', \
+				%s, %s)"%\
+				(p_gene_table, \
+				p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
+				p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
+				p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id, p_attr_instance.lca_list,\
+				p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
+			else:
+				curs.execute("insert into %s(gene_no, go_no, is_correct, is_correct_l1, \
+				is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
+				connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id,\
+				vertex_gradient, edge_gradient)\
+				values(%s, %s, %s, %s,\
+				%s, %s, %s, '%s', %s, %s,\
+				%s, %s, %s, %s, %s,\
+				%s, %s)"%\
+				(p_gene_table, \
+				p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
+				p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
+				p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id,\
+				p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
 		else:
-			curs.execute("insert into %s(p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
-			is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
-			connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id,\
-			vertex_gradient, edge_gradient)\
-			values(%s, %s, %s, %s, %s,\
-			%s, %s, %s, '%s', %s, %s,\
-			%s, %s, %s, %s, %s,\
-			%s, %s)"%\
-			(p_gene_table, \
-			p_attr_instance.p_gene_id, p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
-			p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
-			p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id,\
-			p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
+			if p_attr_instance.lca_list:
+				curs.execute("insert into %s(p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
+				is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
+				connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id, lca_list, \
+				vertex_gradient, edge_gradient)\
+				values(%s, %s, %s, %s, %s,\
+				%s, %s, %s, '%s', %s, %s,\
+				%s, %s, %s, %s, %s, '%s', \
+				%s, %s)"%\
+				(p_gene_table, \
+				p_attr_instance.p_gene_id, p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
+				p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
+				p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id, p_attr_instance.lca_list,\
+				p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
+			else:
+				curs.execute("insert into %s(p_gene_id, gene_no, go_no, is_correct, is_correct_l1, \
+				is_correct_lca, avg_p_value, no_of_clusters, cluster_array, p_value_cut_off, recurrence_cut_off, \
+				connectivity_cut_off, cluster_size_cut_off, unknown_cut_off, depth_cut_off, mcl_id,\
+				vertex_gradient, edge_gradient)\
+				values(%s, %s, %s, %s, %s,\
+				%s, %s, %s, '%s', %s, %s,\
+				%s, %s, %s, %s, %s,\
+				%s, %s)"%\
+				(p_gene_table, \
+				p_attr_instance.p_gene_id, p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.is_correct, p_attr_instance.is_correct_l1,\
+				p_attr_instance.is_correct_lca, p_attr_instance.avg_p_value, p_attr_instance.no_of_clusters, p_attr_instance.cluster_array, p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off,\
+				p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id,\
+				p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
 	
 	def output_node(self, communicator, curs, output_table):
 		"""
