@@ -940,7 +940,9 @@ def p_gene_id_set_from_gene_p_table(curs, gene_p_table):
 	sys.stderr.write("End to get p_gene_id_set.\n")
 	return p_gene_id_set
 
-def get_go_no2edge_counter_list(curs, gene_no2go_no_set, edge_type2index, edge_table='edge_cor_vector', debug=0):
+def get_go_no2edge_counter_list(curs, gene_no2go_no_set, \
+	edge_type2index={(0,0):0, (0,1):1, (1,0):1, (0,2):2, (2,0):2, (1,1):3, (1,2):4, (2,1):4, (2,2):5 }, \
+	edge_table='edge_cor_vector', debug=0):
 	"""
 	10-20-05
 		construct a edge_counter list which represents the counter of six types of edges for each function
@@ -1037,3 +1039,35 @@ def one_dim_list2string(ls):
 	"""
 	ls_string = '{' + repr(ls)[1:-1] + '}'
 	return ls_string
+
+	
+def get_no_of_unknown_genes(gene_no2go):
+	"""
+	10-20-05
+	"""
+	sys.stderr.write("Getting no_of_unknown_genes from gene_no2go...\n")
+	no_of_unknown_genes = 0
+	for gene_no, go_no_set in gene_no2go.iteritems():
+		if 0 in go_no_set:
+			no_of_unknown_genes += 1
+	sys.stderr.write("Done getting no_of_unknown_genes.\n")
+	return no_of_unknown_genes
+
+def get_go_no2gene_no_set(curs, schema=None, go_table='go'):
+	"""
+	10-21-05
+		get the go_no2gene_no_set
+	"""
+	sys.stderr.write("Getting go_no2gene_no_set...")
+	if schema:
+		curs.execute("set search_path to %s"%schema)
+	go_no2gene_no_set = {}
+	curs.execute("select go_no,gene_array from %s"%go_table)
+	rows = curs.fetchall()
+	for row in rows:
+		go_no, gene_array = row
+		gene_array = gene_array[1:-1].split(',')
+		gene_array = map(int, gene_array)
+		go_no2gene_no_set[go_no] = Set(gene_array)
+	sys.stderr.write("Done\n")
+	return go_no2gene_no_set
