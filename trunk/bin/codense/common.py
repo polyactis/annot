@@ -1071,3 +1071,49 @@ def get_go_no2gene_no_set(curs, schema=None, go_table='go'):
 		go_no2gene_no_set[go_no] = Set(gene_array)
 	sys.stderr.write("Done\n")
 	return go_no2gene_no_set
+
+def output_node(communicator, free_computing_nodes, parameter_list, handler, report=0):
+	"""
+	10-20-05
+	10-21-05
+		handle the situation when free_computing_node list is exhausted
+	10-21-05
+		a common output_node() function, communicating by string format
+		two jobs:
+		1. give node 0 the free_computing_node
+		2. handle the data from the computing_nodes
+		
+		handler(communicator, parameter_list, data)
+	"""
+	node_rank = communicator.rank
+	sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
+	data, source, tag = communicator.receiveString(None, 1)
+	no_of_computing_nodes = len(free_computing_nodes)
+	no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
+	free_computing_node_request = 0	#10-21-05 Flag used to check whether node 0 is requesting
+	request_node = 0	#default request_node is 0
+	while 1:
+		if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
+			if len(free_computing_nodes)==0:	#10-21-05, it's empty. Flag the request.
+				free_computing_node_request = 1
+				request_node = source	#record the request_node
+			else:
+				free_computing_node = free_computing_nodes.pop(0)
+				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
+		elif data=="-1":
+			no_of_resting_nodes += 1
+			if report:
+				sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
+			if no_of_resting_nodes==no_of_computing_nodes:	#WATCH: its' size-3
+				break
+				if report:
+					sys.stderr.write("node %s output finished.\n"%node_rank)
+		else:
+			if free_computing_node_request==1:	#there's a request for free_computing_node.
+				communicator.send(str(source), request_node, 2)	#WATCH tag is 2.
+				free_computing_node_request = 0
+			else:
+				free_computing_nodes.append(source)	#append the free computing_node
+			handler(communicator, parameter_list, data)
+		data, source, tag = communicator.receiveString(None, 1)
+	sys.stderr.write("Node no.%s output done.\n"%node_rank)
