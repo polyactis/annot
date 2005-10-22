@@ -40,7 +40,8 @@ sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, get_gene_no2go_no_set, get_go_no2depth,\
 	get_go_no2edge_counter_list, combine_numerator_a_denominator_dict, one_dim_list2string, \
-	get_no_of_unknown_genes, get_go_no2gene_no_set, form_schema_tables, output_node
+	get_no_of_unknown_genes, get_go_no2gene_no_set, form_schema_tables, output_node, input_node,\
+	computing_node
 from sets import Set
 from MpiPredictionFilter import prediction_attributes, gradient_class, MpiPredictionFilter
 from gene_stat import gene_stat
@@ -530,60 +531,14 @@ class MpiStatCluster:
 			#1st digit is gene1, 2nd digit is gene2,(order doesn't matter), 0 means gene having this function,
 			#1 means gene having the other function, 2 means unknown gene
 	
-	def fetch_cluster_block(self, curs, message_size):
+	def node_fire_handler(self, communicator, data, parameter_list):
 		"""
-		10-20-05
-		"""
-		if self.report:
-			sys.stderr.write("Fetching stuff...\n")
-		curs.execute("fetch 25 from crs")
-		rows = curs.fetchall()
-		prediction_ls = []
-		string_length = 0
-		while rows:
-			for row in rows:
-				prediction_ls.append(list(row))
-				string_length += len(repr(row))	#the length to control MPI message size
-			if string_length>=message_size:
-				break
-			curs.execute("fetch 25 from crs")
-			rows = curs.fetchall()
-		if self.report:
-			sys.stderr.write("Fetching done.\n")
-		return prediction_ls
-		
-	
-	def input_node(self, communicator, curs, schema_instance, message_size):
-		"""
-		10-20-05
-		"""
-		node_rank = communicator.rank
-		sys.stderr.write("Input node(%s) working...\n"%node_rank)
-		curs.execute("DECLARE crs CURSOR FOR SELECT id, vertex_set, edge_set, no_of_edges,\
-			connectivity, unknown_gene_ratio, recurrence_array, d_matrix from %s"%(schema_instance.pattern_table))
-		data = self.fetch_cluster_block(curs, message_size)
-		counter = 0
-		while data:
-			communicator.send("1", communicator.size-1, 1)	#WATCH: tag is 1, to the output_node.
-			free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)
-				#WATCH: tag is 2, from the output_node
-			data_pickle = cPickle.dumps(data, -1)
-			communicator.send(data_pickle, int(free_computing_node), 0)	#WATCH: int()
-			if self.report:
-				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))
-			data = self.fetch_cluster_block(curs, message_size)
-			counter += 1
-		#tell computing_node to exit the loop
-		for node in range(1, communicator.size-2):	#send it to the computing_node
-			communicator.send("-1", node, 0)
-		sys.stderr.write("Input node(%s) done\n"%(node_rank))
-	
-	def node_fire(self, communicator, data, GradientScorePrediction_instance, functor):
-		"""
-		10-20-05
+		10-21-05
+			called by common.computing_node()
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
+		GradientScorePrediction_instance, functor = parameter_list
 		data = cPickle.loads(data)
 		no_of_clusters = 0
 		no_of_predictions = 0
@@ -626,32 +581,8 @@ class MpiStatCluster:
 			no_of_clusters += 1
 		sys.stderr.write("Node no.%s done with %s clusters, %s predictions.\n"%(node_rank, no_of_clusters, no_of_predictions))
 		return prediction_ls
-		
 	
-	def computing_node(self, communicator, gene_no2go, go_no2gene_no_set, go_no2depth, \
-		go_no2edge_counter_list, depth, \
-		no_of_genes_layer1, exponent, score_list, max_layer, norm_exp, eg_d_type, functor):
-		"""
-		10-15-05
-			--get_no_of_unknown_genes()
-			--node_fire()
-		"""
-		node_rank = communicator.rank
-		no_of_unknown_genes = get_no_of_unknown_genes(gene_no2go)
-		GradientScorePrediction_instance = GradientScorePrediction(gene_no2go, go_no2gene_no_set, go_no2depth, \
-			go_no2edge_counter_list, no_of_unknown_genes, depth, no_of_genes_layer1, exponent, score_list, \
-			max_layer, norm_exp, eg_d_type, self.debug)
-		data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
-		while 1:
-			if data=="-1":
-				if self.report:
-					sys.stderr.write("node %s breaked.\n"%node_rank)
-				break
-			else:
-				prediction_ls = self.node_fire(communicator, data, GradientScorePrediction_instance, functor)
-				prediction_ls_pickle = cPickle.dumps(prediction_ls, -1)
-				communicator.send(prediction_ls_pickle, communicator.size-1, 1)
-			data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
+	def cleanup_handler(self, communicator):
 		#tell the size-2 node to stop
 		communicator.send("-1", communicator.size-2, 3)	#tag is 3
 		#tell the last node to stop
@@ -733,11 +664,12 @@ class MpiStatCluster:
 				--get_go_no2edge_counter_list()(if necessary)
 				(pass go_no2edge_counter_list to computing_node)
 			
-			--input_node()
+			(input_node)
 				--fetch_cluster_block()
-			--computing_node()
+			(computing_node)
 				--get_no_of_unknown_genes()
-				--node_fire()
+				--node_fire_handler()
+				--cleanup_handler()
 			--judge_node()
 				--gene_stat_instance.(match functions)
 			--output_node()
@@ -797,20 +729,23 @@ class MpiStatCluster:
 		
 		mpi_synchronize(communicator)
 		
-		
-		
+		free_computing_nodes = range(1,communicator.size-2)	#exclude the last node
 		if node_rank == 0:
-			self.input_node(communicator, curs, old_schema_instance, self.message_size)
-		elif node_rank<=communicator.size-3:	#exclude the last node
-			self.computing_node(communicator, gene_no2go_no, go_no2gene_no_set, go_no2depth, go_no2edge_counter_list, self.depth,\
-				self.no_of_genes_layer1, self.exponent, self.score_list, self.max_layer, self.norm_exp, \
-				self.eg_d_type, functor)
+			curs.execute("DECLARE crs CURSOR FOR SELECT id, vertex_set, edge_set, no_of_edges,\
+			connectivity, unknown_gene_ratio, recurrence_array, d_matrix from %s"%(old_schema_instance.pattern_table))
+			input_node(communicator, curs, free_computing_nodes, self.message_size, self.report)
+		elif node_rank in free_computing_nodes:
+			no_of_unknown_genes = get_no_of_unknown_genes(gene_no2go_no)
+			GradientScorePrediction_instance = GradientScorePrediction(gene_no2go_no, go_no2gene_no_set, go_no2depth, \
+				go_no2edge_counter_list, no_of_unknown_genes, self.depth, self.no_of_genes_layer1, self.exponent, \
+				self.score_list, self.max_layer, self.norm_exp, self.eg_d_type, self.debug)
+			parameter_list = [GradientScorePrediction_instance, functor]
+			computing_node(communicator, parameter_list, self.node_fire_handler, self.cleanup_handler, self.report)
 		elif node_rank == communicator.size-2:
 			self.judge_node(communicator, curs, gene_stat_instance, node_distance_class)
 		elif node_rank==communicator.size-1:
 			parameter_list = [curs, MpiPredictionFilter_instance, old_schema_instance.p_gene_table]
-			free_computing_nodes = range(1,communicator.size-2)
-			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler)
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler, self.report)
 			if self.commit:
 				curs.execute("end")
 
