@@ -1090,6 +1090,8 @@ class Test_cal_gradient_score(unittest.TestCase):
 	def test_cal_gradient_score(self):
 		"""
 		10-21-05
+		10-22-05
+			GradientScorePrediction changed its return value of get_prediction()
 		"""
 		import cPickle, os
 		from MpiStatCluster import GradientScorePrediction
@@ -1130,8 +1132,8 @@ class Test_cal_gradient_score(unittest.TestCase):
 			edge_set[i] = map(int, edge_set[i])
 		
 		GradientScorePrediction_instance.setup_cluster_info(vertex_set, edge_set, d_matrix_string)
-		gradient_score, edge_gradient, go_no = GradientScorePrediction_instance.get_prediction(gene_no)
-		print "gradient_score", gradient_score, "edge_gradient",edge_gradient,"go_no",go_no
+		prediction_list = GradientScorePrediction_instance.get_prediction(gene_no)
+		print "prediction_list",prediction_list
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
