@@ -4,7 +4,7 @@ functions or classes common to all programs
 
 """
 
-import csv, sys
+import csv, sys, cPickle
 import psycopg
 from sets import Set
 
@@ -1072,11 +1072,18 @@ def get_go_no2gene_no_set(curs, schema=None, go_table='go'):
 	sys.stderr.write("Done\n")
 	return go_no2gene_no_set
 
-def output_node(communicator, free_computing_nodes, parameter_list, handler, report=0):
+"""
+10-21-05
+	below output_node(), fetch_cluster_block(),input_node(), computing_node() are shared
+	functions for Mpi Programs
+"""
+
+def output_node(communicator, free_computing_nodes, parameter_list, handler, report=0, type=1):
 	"""
 	10-20-05
 	10-21-05
 		handle the situation when free_computing_node list is exhausted
+		add type to specify the communicating data type
 	10-21-05
 		a common output_node() function, communicating by string format
 		two jobs:
@@ -1087,7 +1094,10 @@ def output_node(communicator, free_computing_nodes, parameter_list, handler, rep
 	"""
 	node_rank = communicator.rank
 	sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
-	data, source, tag = communicator.receiveString(None, 1)
+	if type==1:
+		data, source, tag = communicator.receiveString(None, 1)
+	else:
+		data, source, tag, count = communicator.receive(type, None, 1)
 	no_of_computing_nodes = len(free_computing_nodes)
 	no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
 	free_computing_node_request = 0	#10-21-05 Flag used to check whether node 0 is requesting
@@ -1115,5 +1125,75 @@ def output_node(communicator, free_computing_nodes, parameter_list, handler, rep
 			else:
 				free_computing_nodes.append(source)	#append the free computing_node
 			handler(communicator, parameter_list, data)
-		data, source, tag = communicator.receiveString(None, 1)
+		if type==1:
+			data, source, tag = communicator.receiveString(None, 1)
+		else:
+			data, source, tag, count = communicator.receive(type, None, 1)
 	sys.stderr.write("Node no.%s output done.\n"%node_rank)
+
+def fetch_cluster_block(curs, message_size, report=0):
+	"""
+	10-20-05
+		commonly used by input_node()
+	"""
+	if report:
+		sys.stderr.write("Fetching stuff...\n")
+	curs.execute("fetch 50 from crs")
+	rows = curs.fetchall()
+	prediction_ls = []
+	string_length = 0
+	while rows:
+		for row in rows:
+			prediction_ls.append(list(row))
+			string_length += len(repr(row))	#the length to control MPI message size
+		if string_length>=message_size:
+			break
+		curs.execute("fetch 50 from crs")
+		rows = curs.fetchall()
+	if report:
+		sys.stderr.write("Fetching done.\n")
+	return prediction_ls
+	
+
+def input_node(communicator, curs, free_computing_nodes, message_size, report=0):
+	"""
+	10-20-05
+	"""
+	node_rank = communicator.rank
+	sys.stderr.write("Input node(%s) working...\n"%node_rank)
+	data = fetch_cluster_block(curs, message_size)
+	counter = 0
+	while data:
+		communicator.send("1", communicator.size-1, 1)	#WATCH: tag is 1, to the output_node.
+		free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)
+			#WATCH: tag is 2, from the output_node
+		data_pickle = cPickle.dumps(data, -1)
+		communicator.send(data_pickle, int(free_computing_node), 0)	#WATCH: int()
+		if report:
+			sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))
+		data = fetch_cluster_block(curs, message_size)
+		counter += 1
+	#tell computing_node to exit the loop
+	for node in free_computing_nodes:	#send it to the computing_node
+		communicator.send("-1", node, 0)
+	sys.stderr.write("Input node(%s) done\n"%(node_rank))
+
+def computing_node(communicator, parameter_list, node_fire_handler, cleanup_handler, report=0):
+	"""
+	10-21-05
+		0 is the node where the data is from
+		size-1 is the node where output goes
+	"""
+	node_rank = communicator.rank
+	data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
+	while 1:
+		if data=="-1":
+			if report:
+				sys.stderr.write("node %s breaked.\n"%node_rank)
+			break
+		else:
+			result = node_fire_handler(communicator, data, parameter_list)
+			result_pickle = cPickle.dumps(result, -1)
+			communicator.send(result_pickle, communicator.size-1, 1)
+		data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
+	cleanup_handler(communicator)
