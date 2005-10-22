@@ -1084,8 +1084,9 @@ def output_node(communicator, free_computing_nodes, parameter_list, handler, rep
 	10-21-05
 		handle the situation when free_computing_node list is exhausted
 		add type to specify the communicating data type
+		based on type, different ways to get stop_signal
 	10-21-05
-		a common output_node() function, communicating by string format
+		a common output_node() function
 		two jobs:
 		1. give node 0 the free_computing_node
 		2. handle the data from the computing_nodes
@@ -1110,7 +1111,15 @@ def output_node(communicator, free_computing_nodes, parameter_list, handler, rep
 			else:
 				free_computing_node = free_computing_nodes.pop(0)
 				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
-		elif data=="-1":
+		elif type==1 and data=="-1":
+			no_of_resting_nodes += 1
+			if report:
+				sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
+			if no_of_resting_nodes==no_of_computing_nodes:	#WATCH: its' size-3
+				break
+				if report:
+					sys.stderr.write("node %s output finished.\n"%node_rank)
+		elif type!=1 and data.toscalar()==-1:	#10-21-05 for non-string type
 			no_of_resting_nodes += 1
 			if report:
 				sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
