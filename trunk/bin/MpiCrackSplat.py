@@ -33,7 +33,7 @@ import sys, os, getopt, csv, math, Numeric
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from graph.cc_from_edge_list import ClusterByEBC
-from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize, db_connect
+from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize, db_connect, output_node
 from netmine_wrapper import netmine_wrapper
 from codense.codense2db import codense2db
 from sets import Set
@@ -164,7 +164,7 @@ class MpiCrackSplat:
 			free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)	#10-19-05
 				#WATCH: tag is 2, from the output_node
 			communicator.send(cluster_block_matrix, int(free_computing_node), 0)	#10-19-05	#WATCH: int()
-			if self.debug:
+			if self.report:
 				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))	#10-19-05
 			cluster_block_matrix = self.get_cluster_block(reader,min_size, max_no_of_clusters, cluster_block_edges)
 			counter += 1	#10-19-05
@@ -263,51 +263,19 @@ class MpiCrackSplat:
 				edge_list.append(list(edge))	#Watch: convert to list
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 	
-	def output_node(self, communicator, outputfile, codense2db_instance, edge2encodedOccurrence, no_of_datasets):
-		"""
-		09-05-05
-			what the output_node does
-		09-07-05
-			node_fire() changed the format of edge_block, follow it
-		10-19-05
-			reserve a pool of free_computing_nodes for input_node to choose
-			
-			--output_cluster()
-		"""
-		node_rank = communicator.rank
-		data, source, tag, count = communicator.receive(Numeric.Int, None, 1)
-		no_of_resting_nodes = 0	#to keep track how many computing_nodes rested
-		writer = csv.writer(open(outputfile,'w'), delimiter='\t')
-		free_computing_nodes = range(1,communicator.size-1)	#10-19-05
-		while 1:	#10-19-05
-			if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
-				free_computing_node = free_computing_nodes.pop(0)
-				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
-			elif data[0]==-1:	#10-19-05
-				no_of_resting_nodes += 1
-				if self.debug:
-					sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
-				if no_of_resting_nodes==communicator.size-2:	#all computing_nodes have stopped, i'm done.
-					break
-					if self.debug:
-						sys.stderr.write("node %s output finished.\n"%node_rank)
-			else:
-				free_computing_nodes.append(source)	#10-19-05 append the free computing_node
-				shape_x = count/2
-				data.shape = (shape_x, 2)
-				self.output_cluster(writer, codense2db_instance, edge2encodedOccurrence, data, no_of_datasets)
-			data, source, tag, count = communicator.receive(Numeric.Int, None, 1)
-		del writer
-		
-	def output_cluster(self, writer, codense2db_instance, edge2encodedOccurrence, edge_block, no_of_datasets):
+	def output_cluster(self, communicator, parameter_list, edge_block):
 		"""
 		09-05-05
 			output the cluster
 		09-07-05
 			node_fire() changed the format of edge_block, follow it
+		10-21-05
+			called by common.output_node()
 		"""
+		writer, codense2db_instance, edge2encodedOccurrence, no_of_datasets = parameter_list
+		shape_x = len(edge_block)/2
+		edge_block.shape = (shape_x, 2)
 		no_of_vertices, no_of_edges = edge_block[0]
-		
 		vertex_list = []
 		for i in range(1, no_of_vertices+1):
 			vertex_list.append(edge_block[i,0])
@@ -329,6 +297,8 @@ class MpiCrackSplat:
 		"""
 		09-05-05
 			Watch: when sending via MPI, tag 0 means from node 0,  tag 1 means goes to the last node.
+		10-21-05
+			replace output_node() with the one from codense.common for better scheduling
 			
 			--fill_edge2encodedOccurrence()
 			
@@ -356,7 +326,12 @@ class MpiCrackSplat:
 			self.computing_node(communicator, self.cluster_block_size, self.min_size, self.min_con)
 		elif node_rank==communicator.size-1:
 			codense2db_instance = codense2db()
-			self.output_node(communicator, intermediateFile, codense2db_instance, edge2encodedOccurrence, no_of_datasets) 
+			free_computing_nodes = range(1,communicator.size-1)
+			writer = csv.writer(open(intermediateFile,'w'), delimiter='\t')
+			parameter_list = [writer, codense2db_instance, edge2encodedOccurrence, no_of_datasets]
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_cluster, report=self.report, type=Numeric.Int)
+			del writer
+			#10-21-05self.output_node(communicator, intermediateFile, codense2db_instance, edge2encodedOccurrence, no_of_datasets)
 		
 		mpi_synchronize(communicator)
 		#collecting
