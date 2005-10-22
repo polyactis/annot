@@ -45,6 +45,7 @@ from codense.common import mpi_synchronize, db_connect, get_gene_no2go_no_set, g
 from sets import Set
 from MpiPredictionFilter import prediction_attributes, gradient_class, MpiPredictionFilter
 from gene_stat import gene_stat
+from heapq import heappush, heappop
 
 class MpiSetupGo_no2Edges:
 	"""
@@ -452,8 +453,11 @@ class GradientScorePrediction(gradient_class):
 		"""
 		10-20-05
 			--setup_cluster_info() must be run ahead.
+		10-22-05
+			use heap to keep track of predictions
+			no-prob to probability conversion degree changed to 10
 			
-			return gradient_score, edge_gradient, go_no
+			return list of [gradient_score, edge_gradient, go_no]
 			
 			--cal_denominator_dict()
 			--get_candidate_go_nos()
@@ -465,7 +469,7 @@ class GradientScorePrediction(gradient_class):
 		if self.vertex_set==None or self.edge_set==None or self.d_matrix == None or self.vertex2no == None:
 			sys.stderr.write("In GradientScorePrediction, fill in vertex_set, edge_set, d_matrix first by setup_cluster_info().\n")
 			sys.exit(2)
-		list_to_be_sort = []
+		result_heap = []
 		d_row = self.d_matrix[self.vertex2no[gene_no]]
 		layer2gradient_score_denominator, layer2edge_gradient_denominator = self.cal_denominator_dict[self.eg_d_type](\
 			d_row, self.exponent, self.max_layer, self.norm_exp)
@@ -477,21 +481,31 @@ class GradientScorePrediction(gradient_class):
 			layer2gradient_score, layer2edge_gradient = self.cal_func_dict[self.eg_d_type](gene_no, go_no, self.edge_set, \
 				self.vertex2no, d_row, self.gene_no2go, self.go_no2gene_no_set, self.exponent, self.score_list, self.max_layer, \
 				self.no_of_total_edges, self.no_of_total_genes, self.no_of_unknown_genes)
-			if degree>=5:
+			if degree>=10:
 				layer2gradient_score = combine_numerator_a_denominator_dict(layer2gradient_score, layer2gradient_score_denominator)
 				gradient_score = sum(layer2gradient_score.values())
 			else:	#use edge_gradient
 				layer2gradient_score = combine_numerator_a_denominator_dict(layer2edge_gradient, layer2edge_gradient_denominator)
 				gradient_score = sum(layer2gradient_score.values())
-			list_to_be_sort.append([gradient_score, layer2edge_gradient, go_no])
-		if list_to_be_sort:	#not empty
-			list_to_be_sort.sort()
+			heappush(result_heap, [-gradient_score, layer2edge_gradient, go_no])	#10-22-05, -gradient_score due to min heap
+		if result_heap:	#not empty 10-22-05 revamped
+			max_prediction = heappop(result_heap)
+			#reverse the sign
+			max_prediction[0] = -max_prediction[0]
 			#replace the layer2edge_gradient with edge_gradient
-			layer2edge_gradient = combine_numerator_a_denominator_dict(list_to_be_sort[-1][1], layer2edge_gradient_denominator)
-			list_to_be_sort[-1][1] = sum(layer2edge_gradient.values())
-			return list_to_be_sort[-1]	#-1 is the highest
+			max_prediction[1] = sum(combine_numerator_a_denominator_dict(max_prediction[1], layer2edge_gradient_denominator).values())
+			list_to_return = [max_prediction]
+			for i in range(len(result_heap)):
+				one_prediction = heappop(result_heap)
+				if one_prediction[0] == -max_prediction[0]:
+					one_prediction[0] = -one_prediction[0]
+					one_prediction[1] = sum(combine_numerator_a_denominator_dict(one_prediction[1], layer2edge_gradient_denominator).values())
+					list_to_return.append(one_prediction)
+				else:	#other have lower gradient_score
+					break
+			return list_to_return
 		else:
-			return None,None,None
+			return []
 	
 
 
@@ -535,6 +549,8 @@ class MpiStatCluster:
 		"""
 		10-21-05
 			called by common.computing_node()
+		10-22-05
+			GradientScorePrediction changed its return value of get_prediction()
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -564,8 +580,8 @@ class MpiStatCluster:
 			#Before call its get_prediction(), setup the vertex_set, edge_set, d_matrix
 			GradientScorePrediction_instance.setup_cluster_info(vertex_set, edge_set, d_matrix_string)
 			for gene_no in vertex_set:
-				gradient_score, edge_gradient, go_no = GradientScorePrediction_instance.get_prediction(gene_no)
-				if gradient_score:	#not None, None means no prediction.
+				prediction_list = GradientScorePrediction_instance.get_prediction(gene_no)	#10-22-05
+				for gradient_score, edge_gradient, go_no in prediction_list:	#not None, None means no prediction.
 					#ask the judge_node if its' correct
 					communicator.send(cPickle.dumps([gene_no, go_no], -1), communicator.size-2, 3)	#tag is 3
 					data, source, tag = communicator.receiveString(communicator.size-2, 3)
@@ -722,7 +738,7 @@ class MpiStatCluster:
 			if self.go_no2edge_counter_list_fname:
 				go_no2edge_counter_list = cPickle.load(open(self.go_no2edge_counter_list_fname,'r'))
 			else:
-				go_no2edge_counter_list = get_go_no2edge_counter_list(curs, gene_no2go, self.edge_type2index)
+				go_no2edge_counter_list = get_go_no2edge_counter_list(curs, gene_no2go_no, self.edge_type2index)
 			go_no2edge_counter_list_pickle = cPickle.dumps(go_no2edge_counter_list, -1)
 			for node in range(1, communicator.size-2):	#send it to the computing_node
 				communicator.send(go_no2edge_counter_list_pickle, node, 0)
