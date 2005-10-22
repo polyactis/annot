@@ -42,7 +42,7 @@ Description:
 
 import sys, os, getopt, cPickle	#10-15-05 cPickle is used to serialize objects to pass between nodes
 sys.path += [os.path.expanduser('~/script/annot/bin')]
-from codense.common import db_connect, form_schema_tables, get_gene_no2go_no_set
+from codense.common import db_connect, form_schema_tables, get_gene_no2go_no_set, output_node
 from Scientific import MPI
 from codense.common import mpi_synchronize
 from gene_stat import gene_stat
@@ -699,39 +699,16 @@ class MpiPredictionFilter:
 				p_attr_instance.connectivity_cut_off, p_attr_instance.cluster_size_cut_off, p_attr_instance.unknown_cut_off, p_attr_instance.depth_cut_off, p_attr_instance.mcl_id,\
 				p_attr_instance.vertex_gradient, p_attr_instance.edge_gradient))
 	
-	def output_node(self, communicator, curs, output_table):
+	def output_node_handler(self, communicator, parameter_list, data):
 		"""
-		10-15-05
-		10-16-05
-			reserve a pool of free_computing_nodes for input_node to choose
-		10-19-05
-			use source to judge  what type of response to do
+		10-21-05
+			called by common.output_node()
 		"""
-		node_rank = communicator.rank
-		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
-		data, source, tag = communicator.receiveString(None, 1)
-		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
-		free_computing_nodes = range(1,communicator.size-1)
-		while 1:
-			if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
-				free_computing_node = free_computing_nodes.pop(0)
-				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
-			elif data=="-1":
-				no_of_resting_nodes += 1
-				if self.debug:
-					sys.stderr.write("node %s(%s-th) rested.\n"%(source, no_of_resting_nodes))
-				if no_of_resting_nodes==communicator.size-2:	#all computing_nodes have stopped, i'm done.
-					break
-					if self.debug:
-						sys.stderr.write("node %s output finished.\n"%node_rank)
-			else:
-				free_computing_nodes.append(source)	#append the free computing_node
-				prediction_ls = cPickle.loads(data)
-				for row in prediction_ls:
-					p_attr_instance = prediction_attributes(row, type=2)
-					self.submit_to_p_gene_table(curs, output_table, p_attr_instance)
-			data, source, tag = communicator.receiveString(None, 1)
-		sys.stderr.write("Node no.%s output done.\n"%node_rank)
+		curs, output_table = parameter_list
+		prediction_ls = cPickle.loads(data)
+		for row in prediction_ls:
+			p_attr_instance = prediction_attributes(row, type=2)
+			self.submit_to_p_gene_table(curs, output_table, p_attr_instance)
 	
 	def run(self):
 		"""
@@ -769,7 +746,8 @@ class MpiPredictionFilter:
 						--gradient_class()
 			elif output_node:
 				--output_node()
-					--submit_to_p_gene_table()
+					--output_node_handler()
+						--submit_to_p_gene_table()
 		"""		
 		communicator = MPI.world.duplicate()
 		node_rank = communicator.rank
@@ -779,23 +757,21 @@ class MpiPredictionFilter:
 			new_schema_instance = form_schema_tables(self.jnput_fname)
 			gene_no2go = get_gene_no2go_no_set(curs)
 			gene_no2go_pickle = cPickle.dumps(gene_no2go, -1)	#-1 means use the highest protocol
-			"""
-			if self.max_layer:	#not 0
-				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+			
+			crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
 				p.vertex_gradient, p.edge_gradient, p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
 				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
-			else:
 			"""
-			#10-16-05 following crs_sentence is totally temporary
-			crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, p.vertex_gradient,\
-				p.edge_gradient, p.vertex_set, p.edge_set, p.d_matrix, p.recurrence_array \
+				p.edge_gradient, 'vertex_set', 'edge_set', 'd_matrix', 'recurrence_array' \
 				from %s p"%(old_schema_instance.p_gene_table)
 				
 				#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
+			"""
 			if self.acc_cut_off:
 				mcl_id2accuracy = self.get_mcl_id2accuracy(curs, old_schema_instance.p_gene_table, crs_sentence, self.is_correct_type)
 			else:
@@ -832,7 +808,9 @@ class MpiPredictionFilter:
 			self.computing_node(communicator, gene_no2go, self.exponent, self.score_list, \
 				self.max_layer, self.norm_exp, self.eg_d_type, mcl_id2accuracy, self.acc_cut_off, functor)
 		elif node_rank==communicator.size-1:
-			self.output_node(communicator, curs, new_schema_instance.p_gene_table)
+			parameter_list = [curs, new_schema_instance.p_gene_table]
+			free_computing_nodes = range(1,communicator.size-1)
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler)
 			if self.commit:
 				curs.execute("end")
 
