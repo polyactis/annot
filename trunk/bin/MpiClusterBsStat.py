@@ -30,7 +30,7 @@ Description:
 import sys, os, getopt, csv, math, Numeric
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
-from codense.common import mpi_synchronize, db_connect
+from codense.common import mpi_synchronize, db_connect, output_node
 from sets import Set
 from TF_functions import cluster_bs_analysis
 
@@ -148,7 +148,7 @@ class MpiClusterBsStat:
 			#node_to_receive_block = counter%(communicator.size-2)+1	#it's -2, work like this. 10-19-05 bad scheduling mechanism
 			#	#"counter%(communicator.size-2)" is in range (0,size-3). Regard node 1 to size-2 as 0 to size-3. So need +1.
 			communicator.send(cluster_block, int(free_computing_node), 0)	#10-19-05	#WATCH: int()
-			if self.debug:
+			if self.report:
 				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))	#10-19-05
 			cluster_block = self.fetch_cluster_block(curs, size)
 			counter += 1	#10-19-05
@@ -192,7 +192,8 @@ class MpiClusterBsStat:
 	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number):
 		"""
 		09-19-05
-			
+		10-21-05
+			stop_signal's dimension is 1. In fact, dimension (1,1) is same as (1).
 		"""
 		node_rank = communicator.rank
 		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
@@ -205,8 +206,8 @@ class MpiClusterBsStat:
 				self.node_fire(communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number)
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
 		#tell the last node to stop
-		stop_signal = Numeric.zeros((1,1), Numeric.Float)
-		stop_signal[0,0] = -1.0
+		stop_signal = Numeric.zeros((1), Numeric.Float)
+		stop_signal[0] = -1.0
 		communicator.send(stop_signal, communicator.size-1, 1)
 	
 	def create_cluster_bs_table(self, curs, cluster_bs_table):
@@ -224,11 +225,12 @@ class MpiClusterBsStat:
 			score_type	integer)"%(cluster_bs_table))
 		sys.stderr.write("%s created.\n"%cluster_bs_table)
 	
-	def submit_cluster_bs_table(self, curs, cluster_bs_table, data):
+	def submit_cluster_bs_table(self, communicator, parameter_list, data):
 		"""
 		09-20-05
 			data is Float
 		"""
+		curs, cluster_bs_table = parameter_list
 		mcl_id = int(data[0])
 		row = []
 		for no in data[1:]:
@@ -252,37 +254,6 @@ class MpiClusterBsStat:
 				row.append(no)
 		if len(data)==1:	#no cluster_bs_analysis result
 			curs.execute("insert into %s(mcl_id) values(%s)"%(cluster_bs_table, mcl_id))
-			
-	
-	def output_node(self, communicator, curs, cluster_bs_table):
-		"""
-		09-19-05
-			BUG!!!  while 1: not while data: (mcl_id could just be 0, data is [0], which is nothing)
-		10-19-05
-			reserve a pool of free_computing_nodes for input_node to choose
-		"""
-		node_rank = communicator.rank
-		sys.stderr.write("Node no.%s ready to accept output...\n"%node_rank)
-		data, source, tag, count = communicator.receive(Numeric.Float, None, 1)
-		no_of_resting_nodes = 0	#to keep track how many computing_nodes have rested
-		free_computing_nodes = range(1,communicator.size-1)	#10-19-05
-		while 1:
-			if source==0:	#10-19-05 the input_node is asking me for free computing_node WATCH: it's array
-				free_computing_node = free_computing_nodes.pop(0)
-				communicator.send(str(free_computing_node), source, 2)	#WATCH tag is 2.
-			elif data[0]==-1.0:	#10-19-05
-				no_of_resting_nodes += 1
-				if self.debug:
-					sys.stderr.write("node %s rested (total %s so far rested).\n"%(source, no_of_resting_nodes))
-				if no_of_resting_nodes==communicator.size-2:	#all computing_nodes have stopped, i'm done.
-					if self.debug:
-						sys.stderr.write("node %s output finished.\n"%node_rank)
-					break
-			else:
-				free_computing_nodes.append(source)	#10-19-05 append the free computing_node
-				self.submit_cluster_bs_table(curs, cluster_bs_table, data)
-			data, source, tag, count = communicator.receive(Numeric.Float, None, 1)
-		sys.stderr.write("Node no.%s output done.\n"%node_rank)
 	
 	def run(self):
 		"""
@@ -322,7 +293,9 @@ class MpiClusterBsStat:
 		elif node_rank==communicator.size-1:
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
-			self.output_node(communicator, curs, self.cluster_bs_table)
+			free_computing_nodes = range(1,communicator.size-1)
+			parameter_list = [curs, self.cluster_bs_table]
+			output_node(communicator, free_computing_nodes, parameter_list, self.submit_cluster_bs_table, report=self.report, type=Numeric.Float)
 			if self.commit:
 				curs.execute("end")
 
