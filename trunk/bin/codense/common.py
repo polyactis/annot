@@ -1164,13 +1164,15 @@ def fetch_cluster_block(curs, message_size, report=0):
 	return prediction_ls
 	
 
-def input_node(communicator, curs, free_computing_nodes, message_size, report=0):
+def input_node(communicator, curs, free_computing_nodes, message_size, report=0, input_handler=fetch_cluster_block):
 	"""
 	10-20-05
+	10-22-05
+		add input_handler and regard curs as parameter_list
 	"""
 	node_rank = communicator.rank
 	sys.stderr.write("Input node(%s) working...\n"%node_rank)
-	data = fetch_cluster_block(curs, message_size)
+	data = input_handler(curs, message_size, report)
 	counter = 0
 	while data:
 		communicator.send("1", communicator.size-1, 1)	#WATCH: tag is 1, to the output_node.
@@ -1180,18 +1182,28 @@ def input_node(communicator, curs, free_computing_nodes, message_size, report=0)
 		communicator.send(data_pickle, int(free_computing_node), 0)	#WATCH: int()
 		if report:
 			sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))
-		data = fetch_cluster_block(curs, message_size)
+		data = input_handler(curs, message_size, report)
 		counter += 1
 	#tell computing_node to exit the loop
 	for node in free_computing_nodes:	#send it to the computing_node
 		communicator.send("-1", node, 0)
 	sys.stderr.write("Input node(%s) done\n"%(node_rank))
 
-def computing_node(communicator, parameter_list, node_fire_handler, cleanup_handler, report=0):
+def computing_cleanup_handler(communicator):
+	"""
+	10-22-05
+		default cleanup_handler
+	"""
+	#tell the last node to stop
+	communicator.send("-1", communicator.size-1, 1)	#tag is 1
+
+def computing_node(communicator, parameter_list, node_fire_handler, cleanup_handler=computing_cleanup_handler, report=0):
 	"""
 	10-21-05
 		0 is the node where the data is from
 		size-1 is the node where output goes
+	10-22-05
+		make computing_cleanup_handler to be the default cleanup_handler
 	"""
 	node_rank = communicator.rank
 	data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
@@ -1206,3 +1218,31 @@ def computing_node(communicator, parameter_list, node_fire_handler, cleanup_hand
 			communicator.send(result_pickle, communicator.size-1, 1)
 		data, source, tag = communicator.receiveString(0, 0)	#get data from node 0
 	cleanup_handler(communicator)
+
+"""
+10-22-05
+	a function to get edge2occurrence
+"""
+def get_edge2occurrence(curs, min_sup=0, max_sup=200, edge_table='edge_cor_vector'):
+	sys.stderr.write("Getting edge2occurrence...\n")
+	curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
+		from %s"%(edge_table))
+	edge2occurrence = {}
+	curs.execute("fetch 5000 from crs")
+	rows = curs.fetchall()
+	no_of_datasets = 0
+	while rows:
+		for row in rows:
+			edge = row[0][1:-1].split(',')
+			edge = map(int, edge)
+			sig_vector = row[1][1:-1].split(',')
+			sig_vector = map(int, sig_vector)
+			if no_of_datasets==0:
+				no_of_datasets = len(sig_vector)
+			if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+				edge2occurrence[tuple(edge)] = sum(sig_vector)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
+	sys.stderr.write("Got edge2occurrence.\n")
+	return edge2occurrence, no_of_datasets
