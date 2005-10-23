@@ -1,14 +1,13 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiStatCluster.py -k SCHEMA -i -o [OPTIONS]
+Usage: MpiStatCluster.py -k SCHEMA -i -j [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-i ...,	the old input_fname(input->pattern_table, output->p_gene_table)
-	-j ...,	the new input_fname
-		(input->old pattern_table+ old p_gene_table, output->new p_gene_table), filtering
+	-i ...,	the old input_fname(views from splat_table, mcl_table, input=>pattern_table)
+	-j ...,	the new input_fname(new views, and output=>p_gene_table)
 	--de=...,	the minimum GO tree depth(root is 0) to consider, 5(default)
 	-u ...,	#genes associated with the candidate go in layer 1, 1(default)
 	-e ...,	exponent of the layer, 1(default)
@@ -28,7 +27,7 @@ Option:
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiStatCluster.py
-	-k hs_fim_40 -i -n -c -r
+	-k hs_fim_40 -i -j -n -c -r
 	
 Description:
 	Program to do function prediction statistics based on gradient.
@@ -657,7 +656,10 @@ class MpiStatCluster:
 	def run(self):
 		"""
 		09-05-05
-			
+		10-23-05
+			create views from old schema
+			result goes to the new schema's p_gene_table
+		
 			(input_node)
 				--db_connect()
 				--form_schema_tables()
@@ -733,11 +735,15 @@ class MpiStatCluster:
 			old_schema_instance = form_schema_tables(self.input_fname)
 			new_schema_instance = form_schema_tables(self.jnput_fname)
 			MpiPredictionFilter_instance = MpiPredictionFilter()
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
 			if self.new_table:
-				MpiPredictionFilter_instance.createGeneTable(curs, old_schema_instance.p_gene_table)
+				MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
 			if self.go_no2edge_counter_list_fname:
 				go_no2edge_counter_list = cPickle.load(open(self.go_no2edge_counter_list_fname,'r'))
 			else:
+				gene_no2go_no = get_gene_no2go_no_set(curs)
 				go_no2edge_counter_list = get_go_no2edge_counter_list(curs, gene_no2go_no, self.edge_type2index)
 			go_no2edge_counter_list_pickle = cPickle.dumps(go_no2edge_counter_list, -1)
 			for node in range(1, communicator.size-2):	#send it to the computing_node
@@ -760,7 +766,7 @@ class MpiStatCluster:
 		elif node_rank == communicator.size-2:
 			self.judge_node(communicator, curs, gene_stat_instance, node_distance_class)
 		elif node_rank==communicator.size-1:
-			parameter_list = [curs, MpiPredictionFilter_instance, old_schema_instance.p_gene_table]
+			parameter_list = [curs, MpiPredictionFilter_instance, new_schema_instance.p_gene_table]
 			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler, self.report)
 			if self.commit:
 				curs.execute("end")
@@ -841,7 +847,7 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and input_fname:
+	if schema and input_fname and jnput_fname:
 		instance = MpiStatCluster(hostname, dbname, schema, input_fname, jnput_fname, depth, no_of_genes_layer1, \
 			exponent, score_list, max_layer, norm_exp, eg_d_type, recurrence_x, recurrence_x_type, message_size, \
 			go_no2edge_counter_list_fname, new_table, commit, debug, report)
