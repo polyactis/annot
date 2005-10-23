@@ -14,7 +14,7 @@ Option:
 	-s ...,	score for genes, 1,-1,0(default)
 	-l ...,	maximum layer, 10(default)
 	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.7(default)
-	-t ...,	edge_gradient type, 1 (default)
+	-t ...,	edge_gradient type, 1 (default, edge_gradient), 0(edge gradient_score),2(vertex_gradient)
 	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
 	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
@@ -211,10 +211,12 @@ class GradientScorePrediction(gradient_class):
 			#this is used to map to the index of the value of go_no2edge_counter_list,
 			#1st digit is gene1, 2nd digit is gene2,(order doesn't matter), 0 means gene having this function,
 			#1 means gene having the other function, 2 means unknown gene
-		self.cal_func_dict = {1: self.cal_score_edge_gradient_1,
+		self.cal_func_dict = {0: self.cal_score_edge_gradient_1,
+			1: self.cal_score_edge_gradient_1,
 			2: self.cal_score_edge_gradient_2
 			}
-		self.cal_denominator_dict = {1: self.cal_gradient_denominator_1,
+		self.cal_denominator_dict = {0: self.cal_gradient_denominator_1,
+			1: self.cal_gradient_denominator_1,
 			2: self.cal_gradient_denominator_2}
 	
 	def get_d_matrix(self, d_matrix_string):
@@ -455,6 +457,7 @@ class GradientScorePrediction(gradient_class):
 		10-22-05
 			use heap to keep track of predictions
 			no-prob to probability conversion degree changed to 10
+		10-23-05 type 0 refers to edge gradient_score
 			
 			return list of [gradient_score, edge_gradient, go_no]
 			
@@ -472,7 +475,9 @@ class GradientScorePrediction(gradient_class):
 		d_row = self.d_matrix[self.vertex2no[gene_no]]
 		layer2gradient_score_denominator, layer2edge_gradient_denominator = self.cal_denominator_dict[self.eg_d_type](\
 			d_row, self.exponent, self.max_layer, self.norm_exp)
-		degree = sum([int(layer==1) for layer in d_row])	#to judge whether consider probability or not
+		
+		#10-23-05 comment out 
+		#degree = sum([int(layer==1) for layer in d_row])	#to judge whether consider probability or not
 		#check each go_no
 		candidate_go_no_ls = self.get_candidate_go_nos(self.gene_no2go, self.go_no2depth, self.vertex2no, \
 			d_row, self.depth, self.no_of_genes_layer1)
@@ -480,7 +485,7 @@ class GradientScorePrediction(gradient_class):
 			layer2gradient_score, layer2edge_gradient = self.cal_func_dict[self.eg_d_type](gene_no, go_no, self.edge_set, \
 				self.vertex2no, d_row, self.gene_no2go, self.go_no2gene_no_set, self.exponent, self.score_list, self.max_layer, \
 				self.no_of_total_edges, self.no_of_total_genes, self.no_of_unknown_genes)
-			if degree>=10:
+			if self.eg_d_type==0:	#10-23-05 type 0 refers to edge gradient_score
 				layer2gradient_score = combine_numerator_a_denominator_dict(layer2gradient_score, layer2gradient_score_denominator)
 				gradient_score = sum(layer2gradient_score.values())
 			else:	#use edge_gradient
