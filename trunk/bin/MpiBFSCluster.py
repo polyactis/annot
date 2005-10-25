@@ -33,6 +33,7 @@ from codense.common import mpi_synchronize, db_connect, output_node, \
 	form_schema_tables, input_node, computing_node
 from sets import Set
 from graph.johnson_sp import johnson_sp
+from MpiPredictionFilter import MpiPredictionFilter
 
 """
 class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
@@ -162,6 +163,8 @@ class MpiBFSCluster:
 		"""
 		10-07-05
 		10-09-05 input_node() add mcl_table
+		10-24-05 create new views for splat_table and mcl_table
+		
 			--db_connect()
 			
 			--input_node()
@@ -183,6 +186,9 @@ class MpiBFSCluster:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 			old_schema_instance = form_schema_tables(self.input_fname)
 			new_schema_instance = form_schema_tables(self.jnput_fname)
+			MpiPredictionFilter_instance = MpiPredictionFilter()
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
 		mpi_synchronize(communicator)
 		
 		free_computing_nodes = range(1,communicator.size-1)
