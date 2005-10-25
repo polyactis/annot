@@ -448,12 +448,14 @@ class codense2db:
 	def calculate_unknown_gene_ratio(self, vertex_set, known_gene_no2go_no_set):
 		"""
 		10-14-05
+		10-24-05
+			a bug, unknown_gene_ratio was calculated to be known_gene_ratio
 		"""
 		no_of_known_genes = 0.0
 		for vertex in vertex_set:
 			if vertex in known_gene_no2go_no_set:
 				no_of_known_genes += 1
-		unknown_gene_ratio = no_of_known_genes/len(vertex_set)
+		unknown_gene_ratio = 1-no_of_known_genes/len(vertex_set)
 		return unknown_gene_ratio
 	
 	def run(self):
