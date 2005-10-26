@@ -44,7 +44,9 @@ Examples:
 10-17-05
 	17: Test_cal_edge_gradient
 10-21-05
-	18: Test_cal_gradient_score}
+	18: Test_cal_gradient_score
+10-26-05
+	19: Test_cc_from_edge_list
 """
 import unittest, os, sys, getopt, csv
 
@@ -1134,6 +1136,20 @@ class Test_cal_gradient_score(unittest.TestCase):
 		GradientScorePrediction_instance.setup_cluster_info(vertex_set, edge_set, d_matrix_string)
 		prediction_list = GradientScorePrediction_instance.get_prediction(gene_no)
 		print "prediction_list",prediction_list
+
+class Test_cc_from_edge_list(unittest.TestCase):
+	"""
+	10-26-05
+	"""
+	def test_cc_from_edge_list(self):
+		edge_list = [[1,2],[2,3],[2,4],[3,4],[5,6],[7,6],[5,7],[8,9],[10,10]]
+		from graph.cc_from_edge_list import cc_from_edge_list
+		cf_instance = cc_from_edge_list()
+		cf_instance.run(edge_list)
+		cc_list = cf_instance.cc_list
+		print "edge_list",edge_list
+		for i in range(len(cc_list)):
+			print "component",i,cc_list[i]
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -1164,7 +1180,8 @@ if __name__ == '__main__':
 		15: TestGraphModelingGraphCC,
 		16: Test_attr_of_mt_no,
 		17: Test_cal_edge_gradient,
-		18: Test_cal_gradient_score}
+		18: Test_cal_gradient_score,
+		19: Test_cc_from_edge_list}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
