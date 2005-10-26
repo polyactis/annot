@@ -536,6 +536,7 @@ class MpiPredictionFilter:
 		#10-16-05 already got vertex_gradient and edge_gradient from old p_gene_table
 		10-17-05
 			type 3 prediction_attributes
+		10-24-05 based on max_layer, to determine the type of prediction_attributes
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -544,20 +545,22 @@ class MpiPredictionFilter:
 		no_of_good_predictions = 0
 		good_prediction_ls = []
 		for row in prediction_ls:
-			
-			p_attr_instance = prediction_attributes(row, type=3)
 			if functor:	#if functor is None, keep the old recurrence_cut_off
 				recurrence_array = row[-1][1:-1].split(',')
 				recurrence_array = map(float, recurrence_array)
 				recurrence_array = map(functor, recurrence_array)
 				row[10] = sum(recurrence_array)	#replace the old recurrence_cut_off
 			
+			if max_layer:
+				p_attr_instance = prediction_attributes(row, type=3)
+			else:
+				p_attr_instance = prediction_attributes(row, type=2)
 			if self.is_good_prediction(p_attr_instance, mcl_id2accuracy):
 				if max_layer:	#not 0
 					row[17], row[18] = gradient_class_instance.cal_gradient(\
 						p_attr_instance.gene_no, p_attr_instance.go_no, p_attr_instance.vertex_set,\
 						p_attr_instance.edge_set, p_attr_instance.d_matrix)
-				row = row[:-4]	#discard vertex_set, edge_set, d_matrix_string and recurrence_array
+				row = row[:19]	#discard vertex_set, edge_set, d_matrix_string and recurrence_array
 				no_of_good_predictions += 1
 				good_prediction_ls.append(row)
 			counter += 1
@@ -758,12 +761,13 @@ class MpiPredictionFilter:
 			gene_no2go = get_gene_no2go_no_set(curs)
 			gene_no2go_pickle = cPickle.dumps(gene_no2go, -1)	#-1 means use the highest protocol
 			
-			crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
+			if self.max_layer:
+				crs_sentence = 'DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, \
 				p.vertex_gradient, p.edge_gradient, p2.vertex_set, p2.edge_set, p2.d_matrix, p2.recurrence_array from %s p, %s p2 where \
 				p.mcl_id=p2.id'%(old_schema_instance.p_gene_table, old_schema_instance.pattern_table)
-			"""
+			else:
 				crs_sentence = "DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 				p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 				p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, p.vertex_gradient,\
@@ -771,7 +775,7 @@ class MpiPredictionFilter:
 				from %s p"%(old_schema_instance.p_gene_table)
 				
 				#some placeholders 'vertex_set', 'edge_set', 'd_matrix' for prediction_attributes()
-			"""
+			
 			if self.acc_cut_off:
 				mcl_id2accuracy = self.get_mcl_id2accuracy(curs, old_schema_instance.p_gene_table, crs_sentence, self.is_correct_type)
 			else:
