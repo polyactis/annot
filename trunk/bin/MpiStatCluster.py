@@ -9,14 +9,17 @@ Option:
 	-i ...,	the old input_fname(views from splat_table, mcl_table, input=>pattern_table)
 	-j ...,	the new input_fname(new views, and output=>p_gene_table)
 	--de=...,	the minimum GO tree depth(root is 0) to consider, 5(default)
-	-u ...,	#genes associated with the candidate go in layer 1, 1(default)
-	-e ...,	exponent of the layer, 1(default)
-	-s ...,	score for genes, 1,-1,0(default)
-	-l ...,	maximum layer, 10(default)
-	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.7(default)
-	-t ...,	edge_gradient type, 1 (default, edge_gradient), 0(edge gradient_score),2(vertex_gradient)
-	-x ...,	recurrence_x, either to do cutoff, or exponent, 0.8(default)
-	-w ...,	recurrence_x's type, 0(nothing, default), 1(cutoff), 2(exponent)
+	-u ...,	min #genes associated with the candidate go in layer 1, 2(default)
+	-g ...,	min ratio of #associated genes on layer 1, 0.5(default)
+	-o ...,	min #associated genes on layer 2, 2(default)
+	-p ...,	min ratio of #associated genes on layer 2, 0.1(default)
+	-e ...,	exponent of the layer, 2(default)
+	-s ...,	score for genes, 3,-1,0(default)
+	-l ...,	maximum layer, 5(default)
+	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.8(default)
+	-t ...,	edge_gradient type, 1 (edge_gradient), 0(edge gradient_score),2(vertex_gradient, default)
+	-x ...,	recurrence_x, either to do cutoff, or exponent, 5(default)
+	-w ...,	recurrence_x's type, 0(nothing), 1(cutoff), 2(exponent, default)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
 	-f ...,	file contains the go_no2edge_counter_list data structure
 	-n,	need to createGeneTable()
@@ -191,14 +194,18 @@ class GradientScorePrediction(gradient_class):
 		
 	"""
 	def __init__(self, gene_no2go, go_no2gene_no_set, go_no2depth, go_no2edge_counter_list, no_of_unknown_genes, \
-		depth, no_of_genes_layer1, exponent, score_list, max_layer, norm_exp, eg_d_type, debug):
+		depth, min_layer1_associated_genes, min_layer1_ratio, min_layer2_associated_genes, min_layer2_ratio, exponent,\
+		score_list, max_layer, norm_exp, eg_d_type, debug):
 		gradient_class.__init__(self, gene_no2go, exponent, score_list, max_layer, norm_exp, eg_d_type, debug)
 		self.go_no2gene_no_set = go_no2gene_no_set
 		self.go_no2depth = go_no2depth
 		self.go_no2edge_counter_list = go_no2edge_counter_list
 		self.no_of_unknown_genes = int(no_of_unknown_genes)
 		self.depth = int(depth)
-		self.no_of_genes_layer1 = int(no_of_genes_layer1)
+		self.min_layer1_associated_genes = int(min_layer1_associated_genes)
+		self.min_layer1_ratio = float(min_layer1_ratio)
+		self.min_layer2_associated_genes = int(min_layer2_associated_genes)
+		self.min_layer2_ratio = float(min_layer2_ratio)
 		
 		#get the no_of_total_edges from 0's value
 		self.no_of_total_edges = go_no2edge_counter_list[0][0]+go_no2edge_counter_list[0][1]+go_no2edge_counter_list[0][3]
@@ -226,29 +233,53 @@ class GradientScorePrediction(gradient_class):
 			d_matrix[index] = map(int, d_matrix[index])
 		return d_matrix
 	
-	def get_candidate_go_nos(self, gene_no2go, go_no2depth, vertex2no, d_row, depth, no_of_genes_layer1):
+	def get_candidate_go_nos(self, gene_no2go, go_no2depth, vertex2no, layer2no_of_vertices, d_row, depth,\
+		min_layer1_associated_genes, min_layer1_ratio, min_layer2_associated_genes, min_layer2_ratio):
 		"""
 		10-20-05
 			several criteria
 			1.  associated genes on layer 1
 			2. >= depth
-			3. >=no_of_genes_layer1 associated
+			3. >=min_layer1_associated_genes associated
+		10-25-05 add more requirements
+			1. layer1>=2 genes, >=50%
+			2. layer2>=2 genes, >=10%
 			
 			The 0 function shall be excluded because of depth.
 		"""
 		if self.debug:
 			sys.stderr.write("Getting candidate go_no...\n")
-		go_no2associated_genes = {}
+		go_no2layer2associated_genes = {}
 		for vertex, no in vertex2no.iteritems():
-			if d_row[no]==1:	#only layer 1
+			layer = d_row[no]
+			if layer>=1 and layer<=2:	#only layer 1
 				for go_no in gene_no2go[vertex]:
 					if go_no2depth[go_no]>=depth:	#only go_no under depth_cut_off
-						if go_no not in go_no2associated_genes:
-							go_no2associated_genes[go_no] = 0
-						go_no2associated_genes[go_no] += 1
+						if go_no not in go_no2layer2associated_genes:
+							go_no2layer2associated_genes[go_no] = {}
+						if layer not in go_no2layer2associated_genes[go_no]:
+							go_no2layer2associated_genes[go_no][layer] = 0
+						go_no2layer2associated_genes[go_no][layer] += 1
 		candidate_go_no_ls = []
-		for go_no, associated_genes in go_no2associated_genes.iteritems():
-			if associated_genes>=no_of_genes_layer1:	#have >=no_of_genes_layer1 associated
+		for go_no, layer2associated_genes in go_no2layer2associated_genes.iteritems():
+			if 1 in layer2associated_genes:
+				layer1_associated_genes = layer2associated_genes[1]
+			else:
+				layer1_associated_genes = 0.0
+			if 2 in layer2associated_genes:
+				layer2_associated_genes = layer2associated_genes[2]
+			else:
+				layer2_associated_genes = 0.0
+			if 1 in layer2no_of_vertices:
+				layer1_ratio = float(layer1_associated_genes)/layer2no_of_vertices[1]
+			else:
+				layer1_ratio = 0.0
+			if 2 in layer2no_of_vertices:
+				layer2_ratio = float(layer2_associated_genes)/layer2no_of_vertices[2]
+			else:
+				layer2_ratio = 0.0
+			if layer1_associated_genes>=min_layer1_associated_genes and layer1_ratio>=min_layer1_ratio \
+				and layer2_associated_genes>=min_layer2_associated_genes and layer2_ratio>=min_layer2_ratio:
 				candidate_go_no_ls.append(go_no)
 		if self.debug:
 			sys.stderr.write("candidate go_no done.\n")
@@ -266,20 +297,26 @@ class GradientScorePrediction(gradient_class):
 		self.d_matrix = self.get_d_matrix(d_matrix_string)
 		self.vertex2no = self.get_vertex2no(self.vertex_set)
 	
-	def cal_gradient_denominator_1(self, d_row, exponent, max_layer, norm_exp):
+	def cal_layer2no_of_vertices(self, d_row):
+		"""
+		10-25-05 calculate the layer2no_of_vertices
+		"""
+		layer2no_of_vertices = {}
+		for i in range(len(d_row)):
+			layer = d_row[i]
+			if layer not in layer2no_of_vertices:
+				layer2no_of_vertices[layer] = 0
+			layer2no_of_vertices[layer] += 1
+		return layer2no_of_vertices
+	
+	def cal_gradient_denominator_1(self, d_row, exponent, max_layer, norm_exp, layer2no_of_vertices):
 		"""
 		10-21-05
 			return layer2edge_gradient_denominator
+		10-25-05 get layer2no_of_vertices directly from arguments
 		"""
-		layer2no_of_vertices = {}
 		layer2gradient_score_denominator = {}
 		layer2edge_gradient_denominator = {}
-		for i in range(len(d_row)):
-			layer = d_row[i]
-			if layer<=max_layer:
-				if layer not in layer2no_of_vertices:
-					layer2no_of_vertices[layer] = 0
-				layer2no_of_vertices[layer] += 1
 		for i in range(1, max_layer+1):
 			if i not in layer2no_of_vertices:
 				break
@@ -306,22 +343,16 @@ class GradientScorePrediction(gradient_class):
 				"layer2edge_gradient_denominator", layer2edge_gradient_denominator
 		return layer2gradient_score_denominator, layer2edge_gradient_denominator
 	
-	def cal_gradient_denominator_2(self, d_row, exponent, max_layer, norm_exp):
+	def cal_gradient_denominator_2(self, d_row, exponent, max_layer, norm_exp, layer2no_of_vertices):
 		"""
 		10-21-05
 			type 2, no consideration between layer i and i-1
+		10-25-05 get layer2no_of_vertices directly from arguments
 			
 			return layer2edge_gradient_denominator
 		"""
-		layer2no_of_vertices = {}
 		layer2gradient_score_denominator = {}
 		layer2edge_gradient_denominator = {}
-		for i in range(len(d_row)):
-			layer = d_row[i]
-			if layer<=max_layer:
-				if layer not in layer2no_of_vertices:
-					layer2no_of_vertices[layer] = 0
-				layer2no_of_vertices[layer] += 1
 		for i in range(1, max_layer+1):
 			if i not in layer2no_of_vertices:
 				break
@@ -473,14 +504,16 @@ class GradientScorePrediction(gradient_class):
 			sys.exit(2)
 		result_heap = []
 		d_row = self.d_matrix[self.vertex2no[gene_no]]
+		layer2no_of_vertices = self.cal_layer2no_of_vertices(d_row)
 		layer2gradient_score_denominator, layer2edge_gradient_denominator = self.cal_denominator_dict[self.eg_d_type](\
-			d_row, self.exponent, self.max_layer, self.norm_exp)
+			d_row, self.exponent, self.max_layer, self.norm_exp, layer2no_of_vertices)
 		
 		#10-23-05 comment out 
 		#degree = sum([int(layer==1) for layer in d_row])	#to judge whether consider probability or not
 		#check each go_no
 		candidate_go_no_ls = self.get_candidate_go_nos(self.gene_no2go, self.go_no2depth, self.vertex2no, \
-			d_row, self.depth, self.no_of_genes_layer1)
+			layer2no_of_vertices, d_row, self.depth, self.min_layer1_associated_genes, self.min_layer1_ratio, \
+			self.min_layer2_associated_genes, self.min_layer2_ratio)
 		for go_no in candidate_go_no_ls:
 			layer2gradient_score, layer2edge_gradient = self.cal_func_dict[self.eg_d_type](gene_no, go_no, self.edge_set, \
 				self.vertex2no, d_row, self.gene_no2go, self.go_no2gene_no_set, self.exponent, self.score_list, self.max_layer, \
@@ -519,8 +552,9 @@ class MpiStatCluster:
 		largely copied from MpiPredictionFilter.py
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
-		jnput_fname=None, depth=5, no_of_genes_layer1=1, exponent=1, score_list='1,-1,0', \
-		max_layer=0, norm_exp=0.7, eg_d_type=1, recurrence_x=0.8,recurrence_x_type=0, message_size=10000000, \
+		jnput_fname=None, depth=5, min_layer1_associated_genes=2, min_layer1_ratio=0.5, min_layer2_associated_genes=2,\
+		min_layer2_ratio=0.1, exponent=2, score_list='3,-1,0', \
+		max_layer=5, norm_exp=0.8, eg_d_type=2, recurrence_x=5,recurrence_x_type=2, message_size=10000000, \
 		go_no2edge_counter_list_fname=None, new_table=0, commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
@@ -528,7 +562,10 @@ class MpiStatCluster:
 		self.input_fname = input_fname
 		self.jnput_fname = jnput_fname
 		self.depth = int(depth)
-		self.no_of_genes_layer1 = int(no_of_genes_layer1)
+		self.min_layer1_associated_genes = int(min_layer1_associated_genes)
+		self.min_layer1_ratio = float(min_layer1_ratio)
+		self.min_layer2_associated_genes = int(min_layer2_associated_genes)
+		self.min_layer2_ratio = float(min_layer2_ratio)
 		self.exponent = float(exponent)
 		score_list = score_list.split(',')
 		self.score_list = map(float, score_list)
@@ -764,7 +801,8 @@ class MpiStatCluster:
 		elif node_rank in free_computing_nodes:
 			no_of_unknown_genes = get_no_of_unknown_genes(gene_no2go_no)
 			GradientScorePrediction_instance = GradientScorePrediction(gene_no2go_no, go_no2gene_no_set, go_no2depth, \
-				go_no2edge_counter_list, no_of_unknown_genes, self.depth, self.no_of_genes_layer1, self.exponent, \
+				go_no2edge_counter_list, no_of_unknown_genes, self.depth, self.min_layer1_associated_genes, \
+				self.min_layer1_ratio, self.min_layer2_associated_genes, self.min_layer2_ratio, self.exponent, \
 				self.score_list, self.max_layer, self.norm_exp, self.eg_d_type, self.debug)
 			parameter_list = [GradientScorePrediction_instance, functor]
 			computing_node(communicator, parameter_list, self.node_fire_handler, self.cleanup_handler, self.report)
@@ -782,8 +820,8 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:u:e:s:l:q:t:x:w:v:f:ncbr", ["help", "hostname=", \
-			"dbname=", "schema=", "de="])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:u:g:o:p:e:s:l:q:t:x:w:v:f:ncbr", ["help", \
+			"hostname=", "dbname=", "schema=", "de="])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -794,14 +832,17 @@ if __name__ == '__main__':
 	input_fname = None
 	jnput_fname = None
 	depth = 5
-	no_of_genes_layer1 = 1
-	exponent = 1
-	score_list = '1,-1,0'
-	max_layer = 10
-	norm_exp = 0.7
-	eg_d_type = 1
-	recurrence_x = 0.8
-	recurrence_x_type = 0
+	min_layer1_associated_genes = 2
+	min_layer1_ratio = 0.5
+	min_layer2_associated_genes = 2
+	min_layer2_ratio = 0.1
+	exponent = 2
+	score_list = '3,-1,0'
+	max_layer = 5
+	norm_exp = 0.8
+	eg_d_type = 2
+	recurrence_x = 5
+	recurrence_x_type = 2
 	message_size = 10000000
 	go_no2edge_counter_list_fname = None
 	new_table = 0
@@ -825,7 +866,13 @@ if __name__ == '__main__':
 		elif opt in ("--de"):
 			depth = int(arg)
 		elif opt in ("-u"):
-			no_of_genes_layer1 = int(arg)
+			min_layer1_associated_genes = int(arg)
+		elif opt in ("-g"):
+			min_layer1_ratio = float(arg)
+		elif opt in ("-o"):
+			min_layer2_associated_genes = int(arg)
+		elif opt in ("-p"):
+			min_layer2_ratio = float(arg)
 		elif opt in ("-e"):
 			exponent = int(arg)
 		elif opt in ("-s"):
@@ -853,7 +900,8 @@ if __name__ == '__main__':
 		elif opt in ("-r"):
 			report = 1
 	if schema and input_fname and jnput_fname:
-		instance = MpiStatCluster(hostname, dbname, schema, input_fname, jnput_fname, depth, no_of_genes_layer1, \
+		instance = MpiStatCluster(hostname, dbname, schema, input_fname, jnput_fname, depth, min_layer1_associated_genes, \
+			min_layer1_ratio, min_layer2_associated_genes, min_layer2_ratio, \
 			exponent, score_list, max_layer, norm_exp, eg_d_type, recurrence_x, recurrence_x_type, message_size, \
 			go_no2edge_counter_list_fname, new_table, commit, debug, report)
 		instance.run()
