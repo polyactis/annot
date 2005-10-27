@@ -71,7 +71,8 @@ shell/annot.sh
 
 shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py)
 	annot/bin/codense/codense2db.py
-	annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py
+	MpiBFSCluster.py(10-26-05)
+	annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py or MpiStatCluster.py(10-26-05)
 	annot/bin/gene_stat.py
 	shell/cluster_stat2.sh
 	shell/prediction_filter.sh
