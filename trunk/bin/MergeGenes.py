@@ -14,11 +14,13 @@ Examples:
 
 Description:
 	Merge the expression values of same genes.
-	Inputfiles are sorted in advance.
+	Inputfiles will be sorted before transforming by calling 'sort'.
 """
 
 import sys, os, re, getopt, csv, math
 import MLab
+sys.path += [os.path.expanduser('~/script/microarray/bin')]
+from microarraydb import microarraydb
 from MA import array, average, maximum
 from Preprocess import PreprocessEdgeData
 from sets import Set
@@ -53,11 +55,14 @@ class MergeGenes:
 		new_ar = average(ar)*max(max_ls)
 		return gene_id, new_ar
 		
-	def transform_one_file(self, src_pathname, delimiter, outputdir, b_instance):
+	def transform_one_file(self, src_pathname, delimiter, outputdir, PreprocessEdgeData_instance,\
+		microarraydb_instance):
 		"""
 		08-28-05
 			the src_pathname is sorted in advance
+		10-26-05 sort the input file first
 		"""
+		microarraydb_instance.sort_outputfile(src_pathname)	#10-26-05
 		reader = csv.reader(file(src_pathname), delimiter=delimiter)
 		filename = os.path.basename(src_pathname)
 		output_filename = os.path.join(outputdir, filename)
@@ -99,7 +104,7 @@ class MergeGenes:
 					print 'final block is ', ar
 					raw_input("Continue?(Y/n)")
 				if ar.mask():
-					writer.writerow([pre_gene_id] + b_instance.ls_NA_fillin(ar))
+					writer.writerow([pre_gene_id] + PreprocessEdgeData_instance.ls_NA_fillin(ar))
 				else:	#no mask, just list
 					writer.writerow([pre_gene_id] + list(ar))
 				#clean up data structures
@@ -116,13 +121,14 @@ class MergeGenes:
 		"""
 		08-28-05
 		"""
-		b_instance = PreprocessEdgeData()
+		PreprocessEdgeData_instance = PreprocessEdgeData()
+		microarraydb_instance = microarraydb()
 		if not os.path.isdir(self.outputdir):
 			os.makedirs(self.outputdir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(self.files))
 		for f in self.files:
 			sys.stderr.write("%d/%d:\t%s"%(self.files.index(f)+1,len(self.files),f))
-			self.transform_one_file(f, self.delimiter, self.outputdir, b_instance)
+			self.transform_one_file(f, self.delimiter, self.outputdir, PreprocessEdgeData_instance, microarraydb_instance)
 			sys.stderr.write(".\n")
 
 
