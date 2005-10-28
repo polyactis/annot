@@ -40,6 +40,7 @@ from common import db_connect, get_haiyan_no2gene_no, get_known_genes_dict	#10-1
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	graph is visible in upper directory
 from graph import graph_modeling
 from graph.cc_from_edge_list import cc_from_edge_list
+from sets import Set
 
 class cluster_dstructure:
 	def __init__(self):
