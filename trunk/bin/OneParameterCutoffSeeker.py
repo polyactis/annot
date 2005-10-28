@@ -24,7 +24,7 @@ Description:
 		1: 'p_value_cut_off'; 2: 'recurrence_cut_off'; 3: 'connectivity_cut_off';
 		4: 'cluster_size_cut_off'; 5: 'edge_gradient'
 	In MpiStatCluster.py's resulting p_gene table, p_value_cut_off=edge_gradient.
-	10-27-05 memory threshold is 2.5e7
+	10-28-05 memory threshold is 1.5e7
 """
 
 import sys, os, getopt
@@ -57,12 +57,13 @@ class OneParameterCutoffSeeker:
 		"""
 		10-27-05 get a step to control the memory, from p_gene_lm.py
 			diff: 1e7 becomes 2.5e7 and the where condition
+		10-28-05 downsize 2.5e7 to 1.5e7
 		"""
 		sys.stderr.write("Getting step...\n")
 		curs.execute("select count(*) from %s where %s != -1"%(table, is_correct_dict[judger_type]))
 		rows = curs.fetchall()
 		no_of_entries = rows[0][0]
-		step = int(no_of_entries/2.5e7) + 1
+		step = int(no_of_entries/1.5e7) + 1
 		sys.stderr.write("Got step=%s.\n"%step)
 		return step
 	
