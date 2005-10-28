@@ -137,6 +137,7 @@ class p_gene_lm:
 			regard 1e7 as the memory threshold, use step to select entries
 		10-10-05
 			temporarily modify something
+		10-26-05 get connectivity from p_gene_table, not splat_table
 			
 			--prediction_space_setup()
 		"""
@@ -150,9 +151,8 @@ class p_gene_lm:
 		sys.stderr.write("\tstep is %s.\n"%step)
 		
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.cluster_size_cut_off,p.edge_gradient from %s p, %s s\
-			where p.mcl_id=s.splat_id"\
-			%(self.is_correct_dict[self.judger_type], table, self.splat_table))
+			p.recurrence_cut_off,p.connectivity_cut_off, p.depth_cut_off,p.cluster_size_cut_off,p.edge_gradient from %s p"\
+			%(self.is_correct_dict[self.judger_type], table))
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -209,11 +209,13 @@ class p_gene_lm:
 			Assign go_no = -1.
 		"""
 		#convert p_value to -log(p_value)
+		"""10-23-05 no need to convert p-value
 		if p_value == 0:
 			self.no_of_zero_p_values += 1
 			p_value = -math.log(1e-8)
 		else:
 			p_value = -math.log(p_value)
+		"""
 		unit = [p_value, recurrence, connectivity, cluster_size, connectivity_2nd, gene_no, go_no, is_correct]	#add gene_no and go_no to control accuracy pair
 		#if mcl_id not in self.mcl_id2prediction_space:
 		#	self.mcl_id2prediction_space[mcl_id] = []
