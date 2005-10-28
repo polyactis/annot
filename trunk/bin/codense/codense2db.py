@@ -14,7 +14,7 @@ Option:
 		(02-19-05)if not given, regard the input graph uses gene_no instead of haiyan's index
 	-f ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
-	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim)
+	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim), 4(fimbfs)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
 	-l ..., --delimiter=...	the delimiter for the DATAFILE, \t (default)
 	-b, --debug	debug version.
@@ -31,7 +31,7 @@ Description:
 	
 	The recurrence_array's and recurrence_cut_off's in all the tables of schema
 	are changed to be type float.
-
+	10-28-05, fimbfs: vertex_set and edge_set are pre-sorted
 """
 
 
@@ -65,6 +65,8 @@ class cluster_dstructure:
 		self.go_no2information = None
 		#04-11-05
 		self.cooccurrent_cluster_id=None
+		#10-28-05
+		self.d_matrix = None
 		
 class codense2db:
 	'''
@@ -96,7 +98,8 @@ class codense2db:
 	
 		self.parser_dict = {1:self.copath_parser,
 			2: self.codense_parser,
-			3: self.fim_parser}
+			3: self.fim_parser,
+			4: self.fimbfs_parser}
 		
 		self.cluster_no = 0
 		self.cooccurrent_cluster_id = 0
@@ -345,6 +348,52 @@ class codense2db:
 		self.cooccurrent_cluster_id += 1
 		return cluster_list
 	
+	def fimbfs_parser(self, row, argument=None, argument2=None):
+		"""
+		10-28-05 similar to fim_parser(), but no sort for vertex_set and edge_set.
+			and has d_matrix. Output of MpiBFSCluster.py
+		"""
+		
+		cluster_list = []
+		curs = argument2
+		cluster = cluster_dstructure()
+		#initialize two sets
+		cluster.vertex_set = row[0][1:-1].split(',')
+		cluster.vertex_set = map(int, cluster.vertex_set)
+		if len(cluster.vertex_set)<self.min_cluster_size:	#pre-stop
+			return cluster_list
+		
+		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
+		cluster.cluster_id = self.cluster_no
+		
+		cluster.edge_set = row[1][2:-2].split('], [')
+		for i in range(len(cluster.edge_set)):
+			cluster.edge_set[i] = cluster.edge_set[i].split(',')
+			cluster.edge_set[i] = map(int, cluster.edge_set[i])
+		
+		cluster.no_of_edges = len(cluster.edge_set)
+		no_of_nodes = len(cluster.vertex_set)
+		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+		
+		cluster.connectivity = cluster.splat_connectivity
+		cluster.recurrence_array = row[2][1:-1].split(',')
+		cluster.recurrence_array = map(float, cluster.recurrence_array)
+		
+		cluster.d_matrix = row[3]	#10-28-05 string form
+		
+		if self.debug:
+			print "cluster vertex_set: ", cluster.vertex_set
+			print "cluster edge_set: ", cluster.edge_set
+			print "cluster splat_connectivity: ", cluster.splat_connectivity
+			print "cluster recurrence_array: ", cluster.recurrence_array
+			print "cluster.d_matrix:", cluster.d_matrix
+			raw_input("Continue?(Y/n)")
+		cluster_list.append(cluster)
+			
+		self.cluster_no += 1
+		self.cooccurrent_cluster_id += 1
+		return cluster_list
+	
 	def get_edge_list_given_edge_id_list(self, curs, edge_id_list, edge_table='edge_cor_vector'):
 		"""
 		08-03-05
@@ -384,6 +433,7 @@ class codense2db:
 			and pattern_table is the real table
 		10-14-05
 			add no_of_vertices, recurrence
+		10-28-05 add d_matrix
 		"""
 		if pattern_table!='pattern':
 			curs.execute("create table %s(\
@@ -398,6 +448,7 @@ class codense2db:
 				unknown_gene_ratio	float,\
 				recurrence_array	float[],\
 				recurrence	float,\
+				d_matrix	integer[][],\
 				comment	varchar)"%pattern_table)
 		
 		#create tables if necessary
@@ -421,10 +472,19 @@ class codense2db:
 			submit directly to pattern_table, omit splat_table and mcl_table
 		10-14-05
 			add no_of_vertices, unknown_gene_ratio and recurrence to pattern_table
+		10-28-05 handle d_matrix
 		"""
 		#try:
 		#inserting into the pattern_table
-		curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
+		if cluster.d_matrix:
+			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
+			connectivity, unknown_gene_ratio, recurrence_array, recurrence, d_matrix) values (ARRAY%s, \
+			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s, ARRAY%s)"%\
+			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
+			cluster.splat_connectivity, cluster.unknown_gene_ratio, repr(cluster.recurrence_array), \
+			sum(cluster.recurrence_array), cluster.d_matrix))
+		else:
+			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
 			connectivity, unknown_gene_ratio, recurrence_array, recurrence) values (ARRAY%s, \
 			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s)"%\
 			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
@@ -495,7 +555,8 @@ class codense2db:
 		known_gene_no2go_no_set = get_known_genes_dict(curs)	#10-14-05	used to get unknown_gene_ratio
 		mapping_dict = {1:haiyan_no2gene_no,
 			2:haiyan_no2gene_no,
-			3:None}
+			3:None,
+			4:None}
 		self.create_tables(curs, self.table, self.mcl_table, self.pattern_table)
 		no = 0
 		
