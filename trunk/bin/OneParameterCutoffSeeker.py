@@ -10,7 +10,7 @@ Option:
 	-l ...,	the lm_table to store the linear_model results, needed if needcommit
 	-a ...,	0.5(default)
 	-j ...,	how to judge predicted functions, 0(default), 1, 2
-	-w ...,	which parameter, see below, (0, default).
+	-w ...,	a bit_string controlling which parameter to use, 00001(default, edge_gradient)
 	-c,	commit this database transaction
 	-r,	report flag
 	-u,	debug flag
@@ -20,10 +20,11 @@ Examples:
 	
 Description:
 	Calculate the parameter cutoff corresponding to an accuracy_cut_off.
-	Which parameter:
-		0: 'p_value_cut_off'; 1: 'recurrence_cut_off'; 2: 'connectivity_cut_off';
-		3: 'cluster_size_cut_off'; 4: 'edge_gradient'
+	Which parameter based on bit_string(e.g. 001, 1, 01, 0001, 00010):
+		1: 'p_value_cut_off'; 2: 'recurrence_cut_off'; 3: 'connectivity_cut_off';
+		4: 'cluster_size_cut_off'; 5: 'edge_gradient'
 	In MpiStatCluster.py's resulting p_gene table, p_value_cut_off=edge_gradient.
+	10-27-05 memory threshold is 2.5e7
 """
 
 import sys, os, getopt
@@ -52,9 +53,23 @@ class OneParameterCutoffSeeker:
 			3: 'cluster_size_cut_off',
 			4: 'edge_gradient'}
 	
-	def get_prediction_heap(self, curs, p_gene_table, is_correct_dict, judger_type, which_dict, which):
+	def get_prediction_step(self, curs, table, is_correct_dict, judger_type):
+		"""
+		10-27-05 get a step to control the memory, from p_gene_lm.py
+			diff: 1e7 becomes 2.5e7 and the where condition
+		"""
+		sys.stderr.write("Getting step...\n")
+		curs.execute("select count(*) from %s where %s != -1"%(table, is_correct_dict[judger_type]))
+		rows = curs.fetchall()
+		no_of_entries = rows[0][0]
+		step = int(no_of_entries/2.5e7) + 1
+		sys.stderr.write("Got step=%s.\n"%step)
+		return step
+	
+	def get_prediction_heap(self, curs, p_gene_table, is_correct_dict, judger_type, which_dict, which, step):
 		"""
 		10-27-05 get the prediction into a heap sorted by the param
+		10-27-05 add step to control memory
 		"""
 		sys.stderr.write("Getting prediction_heap...\n")
 		prediction_heap = []
@@ -62,12 +77,17 @@ class OneParameterCutoffSeeker:
 			%(which_dict[which], is_correct_dict[judger_type], p_gene_table))
 		curs.execute("fetch 10000 from crs")
 		rows = curs.fetchall()
+		counter = 0
 		while rows:
 			for row in rows:
 				param, is_correct, gene_no, go_no = row
 				if is_correct!=-1:	#unknown prediction is not needed
-					param = -param	#10-27-05 reverse the sign to use the min-heap as max-heap
-					heappush(prediction_heap, [param, is_correct, gene_no, go_no])
+					if (counter%step) == 0:	#10-27-05 step control
+						param = -param	#10-27-05 reverse the sign to use the min-heap as max-heap
+						heappush(prediction_heap, [param, is_correct, gene_no, go_no])
+					counter += 1
+			if self.report:
+				sys.stderr.write('%s%s'%('\x08'*20, counter))
 			curs.execute("fetch 10000 from crs")
 			rows = curs.fetchall()
 		sys.stderr.write("Got prediction_heap.\n")
@@ -137,13 +157,25 @@ class OneParameterCutoffSeeker:
 	def run(self):
 		"""
 		10-27-05
+			
+			--db_connect()
+			--get_prediction_step()
+			--get_prediction_heap()
+			--get_sorted_param_acc_list()
+			--get_cutoff()
+			--lm_table_create()
+			--submit()
 		"""
 		p_gene_lm_instance = p_gene_lm()
 		(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+		step = self.get_prediction_step(curs, self.p_gene_table, p_gene_lm_instance.is_correct_dict, \
+			self.judger_type)
 		prediction_heap = self.get_prediction_heap(curs, self.p_gene_table, p_gene_lm_instance.is_correct_dict, \
-			self.judger_type, self.which_dict, self.which)
+			self.judger_type, self.which_dict, self.which, step)
 		sorted_param_acc_list = self.get_sorted_param_acc_list(prediction_heap)
+		del prediction_heap	#10-27-05 release memory
 		cutoff_row = self.get_cutoff(sorted_param_acc_list, self.accuracy_cut_off)
+		del sorted_param_acc_list	#10-27-05 release memory
 		print "cutoff_row",cutoff_row
 		if self.commit and cutoff_row and self.lm_table:	#cutoff_row is not None
 			p_gene_lm_instance.lm_table_create(curs, self.lm_table)
@@ -152,8 +184,6 @@ class OneParameterCutoffSeeker:
 			go_no2lm_results[-1][which+1] = 1	#the coeffcient for "which" param is 1, others are 0
 			p_gene_lm_instance.submit(curs, self.lm_table, go_no2lm_results)
 			curs.execute("end")
-
-
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -197,7 +227,10 @@ if __name__ == '__main__':
 		elif opt in ("-j"):
 			judger_type = int(arg)
 		elif opt in ("-w"):
-			which = int(arg)
+			for i in range(len(arg)):	#10-27-05 find the first index which is not 0
+				if arg[i] == '1':
+					break
+			which = i
 		elif opt in ("-c"):
 			commit = 1
 		elif opt in ("-r"):
