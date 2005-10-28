@@ -24,7 +24,7 @@ Examples:
 	
 Description:
 	Program to filter clusters based on recurrence and no_of_edges.
-	
+	10-28-05 p-value log(ln)ged.
 """
 
 import sys, os, getopt, csv, math, cPickle
@@ -96,7 +96,7 @@ class MpiRecurrenceFilter:
 				edge = map(int, edge)
 				edge.sort()
 				prob *= edge2occurrrence[tuple(edge)]/float(no_of_datasets)
-			p_value = r.pbinom(recurrence-1, no_of_datasets, prob, lower_tail=r.FALSE)
+			p_value = r.pbinom(recurrence-1, no_of_datasets, prob, lower_tail=r.FALSE,log_p=r.TRUE)
 			if p_value<=alpha:
 				result.append(row)
 		sys.stderr.write("Node no.%s done with %s/%s clusters left.\n"%(node_rank, len(result), len(data)))
