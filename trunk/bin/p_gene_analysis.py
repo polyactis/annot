@@ -248,12 +248,13 @@ class p_gene_analysis:
 			add cluster_size_cut_off in fetch
 		10-13-05
 			add p.edge_gradient
+		10-26-05 get connectivity from p_gene_table, not splat_table
 		"""
 		sys.stderr.write("Setting up prediction_space and prediction_pair...\n")
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.mcl_id, p.%s, p.avg_p_value, \
-			p.recurrence_cut_off,s.connectivity, p.depth_cut_off,p.p_gene_id, p.cluster_size_cut_off, p.edge_gradient \
-			from %s p, %s s where p.mcl_id=s.splat_id"\
-			%(self.is_correct_dict[self.judger_type], gene_table, table))
+			p.recurrence_cut_off,p.connectivity_cut_off, p.depth_cut_off,p.p_gene_id, p.cluster_size_cut_off, p.edge_gradient \
+			from %s p"\
+			%(self.is_correct_dict[self.judger_type], gene_table))
 		
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -286,6 +287,7 @@ class p_gene_analysis:
 			add cluster_size
 		10-13-05
 			add edge_gradient
+		#10-27-05 no need to convert p-value by -log
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -303,7 +305,8 @@ class p_gene_analysis:
 			#the model is based on -log(p_value).
 			if p_value ==0:
 				p_value = 1e-8
-			(is_accepted, score) = self.prediction_accepted(go_no, [-math.log(p_value), recurrence, connectivity, cluster_size, edge_gradient])
+			#10-23-05 no need to convert p-value
+			(is_accepted, score) = self.prediction_accepted(go_no, [p_value, recurrence, connectivity, cluster_size, edge_gradient])
 		else:
 			is_accepted = (p_value <= self.p_value_cut_off)
 			score = p_value
