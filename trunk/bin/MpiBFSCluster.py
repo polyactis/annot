@@ -1,23 +1,23 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiBFSCluster.py -k SCHEMA -i -j [OPTIONS]
+Usage: MpiBFSCluster.py -i -o [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database
-	-i ...,	input_fname(input pattern_table)
-	-j ...,	jnput_fname(output pattern_table)
+	-k ..., --schema=...	which schema in the database(IGNORE)
+	-i ...,	inputfile
+	-o ...,	outputfile
 	-s ...,	no of clusters per transmission, 10000000(default)
-	-n,	output_table is new
-	-c,	commit the database transaction
+	-n,	output_table is new(IGNORE)
+	-c,	commit the database transaction(IGNORE)
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiBFSCluster.py
-	-k mm_fim_97 -i -j  -n -r -c
+	-i -o -r
 	
 Description:
 	Program to do BFS search for each vertex and record down the layer.
@@ -26,14 +26,13 @@ Description:
 	
 """
 
-import sys, os, getopt, csv, math, Numeric, cPickle
+import sys, os, getopt, csv, Numeric, cPickle
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, output_node, \
 	form_schema_tables, input_node, computing_node
 from sets import Set
 from graph.johnson_sp import johnson_sp
-from MpiPredictionFilter import MpiPredictionFilter
 
 """
 class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
@@ -67,26 +66,46 @@ class MpiBFSCluster:
 	"""
 	09-19-05
 	"""
-	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, input_fname=None,\
-		jnput_fname=None, size=2000, new_table=0, commit=0, debug=0, report=0):
+	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
+		outputfile=None, size=2000, new_table=0, commit=0, debug=0, report=0):
 		"""
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
-		self.input_fname = input_fname
-		self.jnput_fname = jnput_fname
+		self.inputfile = inputfile
+		self.outputfile = outputfile
 		self.size = int(size)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
 		self.report = int(report)
 	
+	def input_handler(self, parameter_list, message_size, report=0):
+		"""
+		10-28-05 the input is from MpiFromDatasetSignatureToPattern.py
+		"""
+		if report:
+			sys.stderr.write("Fetching stuff...\n")
+		inf = parameter_list[0]
+		block = []
+		string_length = 0
+		for row in inf:
+			block.append(row)
+			string_length += len(repr(row))	#the length to control MPI message size
+			if string_length>=message_size:
+				break
+		if report:
+			sys.stderr.write("Fetching done.\n")
+		return block
+	
 	def node_fire(self, communicator, data, parameter_list):
 		"""
 		10-07-05
 		10-21-05
 			called by common.computing_node()
+		10-28-05
+			the input is from MpiFromDatasetSignatureToPattern.py
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -94,17 +113,20 @@ class MpiBFSCluster:
 		result = []
 		for row in data:
 			try:
-				id, vertex_set, edge_set = row[:3]
+				vertex_set, edge_set, recurrence_array = row
 				vertex_set = vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
-				edge_set = edge_set[2:-2].split('},{')
+				vertex_set.sort()	#10-28-05
+				edge_set = edge_set[2:-2].split('], [')	#10-28-05
 				for i in range(len(edge_set)):
 					edge_set[i] = edge_set[i].split(',')
 					edge_set[i] = map(int, edge_set[i])
+					edge_set[i].sort()	#10-28-05
 				j_instance = johnson_sp()
 				j_instance.run(vertex_set, edge_set)
 				j_instance.D
-				row.append(j_instance.D)
+				edge_set.sort()	#10-28-05 to ease codense2db.py
+				row = [repr(vertex_set), repr(edge_set), row[2], repr(j_instance.D)]	#10-28-05
 				result.append(row)
 			except:
 				common_string = "Node %s error"%communicator.rank
@@ -124,6 +146,7 @@ class MpiBFSCluster:
 			splat_id becomes the primary key
 		10-20-05
 			output_table is just the pattern_table
+		10-28-05 DEFUNCT
 		"""
 		sys.stderr.write("Creating %s...\n"%output_table)
 		curs.execute("create table %s(\
@@ -147,6 +170,7 @@ class MpiBFSCluster:
 		10-07-05
 		10-21-05
 			called by common.output_node_int()
+		10-28-05 DEFUNCT
 		"""
 		curs, output_table = parameter_list
 		data = cPickle.loads(data)
@@ -159,54 +183,46 @@ class MpiBFSCluster:
 				(output_table, id, vertex_set, edge_set, no_of_vertices, no_of_edges, \
 				connectivity, unknown_gene_ratio, recurrence_array, recurrence, repr(d_matrix)))
 	
+	def output_handler(self, communicator, parameter_list, data):
+		"""
+		10-28-05 write it to outputfile
+		"""
+		writer = parameter_list[0]
+		data = cPickle.loads(data)
+		for row in data:
+			writer.writerow(row)
+	
 	def run(self):
 		"""
 		10-07-05
 		10-09-05 input_node() add mcl_table
 		10-24-05 create new views for splat_table and mcl_table
-		
-			--db_connect()
+		10-28-05 no views, no new pattern_table, read from inputfile, write to outputfile
 			
 			--input_node()
-				--fetch_cluster_block()
+				--input_handler()
 			--computing_node()
 				--node_fire()
 				--cleanup_handler()
-			--create_output_table()
 			--output_node()
-				--submit2output_table()
+				--output_handler()
 		"""
 		communicator = MPI.world.duplicate()
-		node_rank = communicator.rank
-		if node_rank == 0:
-			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-			old_schema_instance = form_schema_tables(self.input_fname)
-			new_schema_instance = form_schema_tables(self.jnput_fname)
-		elif node_rank==communicator.size-1:	#establish connection before pursuing
-			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-			old_schema_instance = form_schema_tables(self.input_fname)
-			new_schema_instance = form_schema_tables(self.jnput_fname)
-			MpiPredictionFilter_instance = MpiPredictionFilter()
-			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
-			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
-		mpi_synchronize(communicator)
-		
+		node_rank = communicator.rank		
 		free_computing_nodes = range(1,communicator.size-1)
 		if node_rank == 0:
-			curs.execute("DECLARE crs CURSOR FOR select id, vertex_set, edge_set, no_of_vertices, \
-			no_of_edges, connectivity, unknown_gene_ratio, recurrence_array, recurrence\
-			from %s"%(old_schema_instance.pattern_table))
-			input_node(communicator, curs, free_computing_nodes, self.size, self.report)
+			inf = csv.reader(open(self.inputfile,'r'), delimiter='\t')
+			parameter_list = [inf]
+			input_node(communicator, parameter_list, free_computing_nodes, self.size, self.report, input_handler=self.input_handler)
+			del inf
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			parameter_list = []
 			computing_node(communicator, parameter_list, self.node_fire, self.cleanup_handler, self.report)
 		elif node_rank==communicator.size-1:
-			if self.new_table:
-				self.create_output_table(curs, new_schema_instance.pattern_table)
-			parameter_list = [curs, new_schema_instance.pattern_table]
-			output_node(communicator, free_computing_nodes, parameter_list, self.submit2output_table, report=self.report)
-			if self.commit:
-				curs.execute("end")
+			writer = csv.writer(open(self.outputfile, 'w'), delimiter='\t')
+			parameter_list = [writer]
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_handler, self.report)
+			del writer
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -214,7 +230,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:s:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -223,8 +239,8 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
-	input_fname = None
-	jnput_fname = None
+	inputfile = None
+	outputfile = None
 	size = 10000000
 	new_table = 0
 	commit = 0
@@ -241,9 +257,9 @@ if __name__ == '__main__':
 		elif opt in ("-k", "--schema"):
 			schema = arg
 		elif opt in ("-i"):
-			input_fname = arg
-		elif opt in ("-j"):
-			jnput_fname = arg
+			inputfile = arg
+		elif opt in ("-o"):
+			outputfile = arg
 		elif opt in ("-s"):
 			size = int(arg)
 		elif opt in ("-n"):
@@ -254,8 +270,8 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
-	if schema and input_fname and jnput_fname:
-		instance = MpiBFSCluster(hostname, dbname, schema, input_fname, jnput_fname,\
+	if inputfile and outputfile:
+		instance = MpiBFSCluster(hostname, dbname, schema, inputfile, outputfile,\
 			size, new_table, commit, debug, report)
 		instance.run()
 	else:
