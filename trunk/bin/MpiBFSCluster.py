@@ -8,7 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database(IGNORE)
 	-i ...,	inputfile
 	-o ...,	outputfile
-	-s ...,	no of clusters per transmission, 10000000(default)
+	-s ...,	no of clusters per transmission, 1000000(default)
 	-n,	output_table is new(IGNORE)
 	-c,	commit the database transaction(IGNORE)
 	-b,	debug version.
@@ -241,7 +241,7 @@ if __name__ == '__main__':
 	schema = ''
 	inputfile = None
 	outputfile = None
-	size = 10000000
+	size = 1000000
 	new_table = 0
 	commit = 0
 	debug = 0
