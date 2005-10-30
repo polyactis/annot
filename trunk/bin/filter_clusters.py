@@ -31,7 +31,7 @@ Description:
 
 import sys, os, getopt
 sys.path += [os.path.expanduser('~/script/annot/bin')]
-from codense.common import db_connect
+from codense.common import db_connect, p_gene_id_set_from_gene_p_table
 from sets import Set
 from Queue import Queue
 from threading import *
@@ -55,25 +55,30 @@ class submit_clusters(Thread):
 		self.debug = int(debug)
 		self.report = int(report)
 		
-	def get_mcl_id2unknown_ratio(self, curs, gene_p_table, p_gene_table):
+	def get_mcl_id2unknown_ratio(self, curs, p_gene_table, p_gene_id_set):
+		"""
+			10-29-05 use p_gene_id_set to screen p_gene_table
+		"""
 		sys.stderr.write("Getting mcl_id2unknown_ratio...\n")
 		mcl_id2unknown_ratio = {}
-		curs.execute("DECLARE crs CURSOR FOR select p.mcl_id, p.unknown_cut_off, \
-			p.go_no, p.p_value_cut_off from %s p, %s g\
-			where g.p_gene_id=p.p_gene_id"%(p_gene_table, gene_p_table))
+		curs.execute("DECLARE crs CURSOR FOR select p.p_gene_id, p.mcl_id, p.unknown_cut_off, \
+			p.go_no, p.p_value_cut_off from %s p"%(p_gene_table))
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		counter = 0
+		real_counter = 0
 		while rows:
 			for row in rows:
-				mcl_id, unknown_ratio, go_no, p_value = row
-				if mcl_id not in mcl_id2unknown_ratio:
-					mcl_id2unknown_ratio[mcl_id] = [unknown_ratio, Set()]
-				prediction_tuple = (go_no, p_value)
-				mcl_id2unknown_ratio[mcl_id][1].add(prediction_tuple)
+				p_gene_id, mcl_id, unknown_ratio, go_no, p_value = row
+				if p_gene_id in p_gene_id_set:
+					if mcl_id not in mcl_id2unknown_ratio:
+						mcl_id2unknown_ratio[mcl_id] = [unknown_ratio, Set()]
+					prediction_tuple = (go_no, p_value)
+					mcl_id2unknown_ratio[mcl_id][1].add(prediction_tuple)
+					real_counter += 1
 				counter += 1
 			if self.report:
-				sys.stderr.write("%s%s"%('\x08'*15, counter))
+				sys.stderr.write("%s%s\t%s"%('\x08'*15, counter, real_counter))
 			if self.debug and counter ==5000:
 				break
 			curs.execute("fetch 5000 from crs")
@@ -131,10 +136,14 @@ class submit_clusters(Thread):
 			row = cluster_queue.get()
 		
 	def run(self):
+		"""
+		10-29-05 call p_gene_id_set_from_gene_p_table()
+		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		if self.new_table:
 			self.create_good_cluster_table(curs, self.good_cluster_table)
-		mcl_id2unknown_ratio = self.get_mcl_id2unknown_ratio(curs, self.gene_p_table, self.p_gene_table)
+		p_gene_id_set = p_gene_id_set_from_gene_p_table(curs, self.gene_p_table)
+		mcl_id2unknown_ratio = self.get_mcl_id2unknown_ratio(curs, self.p_gene_table, p_gene_id_set)
 		self.submit_good_clusters(curs, self.cluster_queue, self.good_cluster_table, mcl_id2unknown_ratio, self.occurrence_cutoff)
 		if self.commit:
 			curs.execute("end")
