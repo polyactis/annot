@@ -38,6 +38,8 @@ shell/datasets_filter.sh
 database schema sql/graph.sql loadin on zhoudb
 annot/gene_id_to_no.py to construct table graph.gene_id_to_no
 
+~/mapping/$schema_name file containing all selected datasets
+
 shell/annot.sh
 	shell/SchemaDatasetSetup.py to setup datasets and gph files
 		shell/file_batch_move.py
