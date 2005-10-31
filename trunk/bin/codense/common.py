@@ -932,11 +932,16 @@ def p_gene_id_set_from_gene_p_table(curs, gene_p_table):
 	sys.stderr.write("Starting to get p_gene_id_set...")
 	from sets import Set
 	p_gene_id_set = Set()
-	curs.execute("select p_gene_id from %s"%gene_p_table)
+	curs.execute("DECLARE crs CURSOR FOR select p_gene_id from %s"%gene_p_table)
+	curs.execute("fetch 10000 from crs")
 	rows = curs.fetchall()
-	for row in rows:
-		p_gene_id = row[0]
-		p_gene_id_set.add(p_gene_id)
+	while rows:
+		for row in rows:
+			p_gene_id = row[0]
+			p_gene_id_set.add(p_gene_id)
+		curs.execute("fetch 10000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
 	sys.stderr.write("End to get p_gene_id_set.\n")
 	return p_gene_id_set
 
@@ -1246,3 +1251,28 @@ def get_edge2occurrence(curs, min_sup=0, max_sup=200, edge_table='edge_cor_vecto
 	curs.execute("close crs")
 	sys.stderr.write("Got edge2occurrence.\n")
 	return edge2occurrence, no_of_datasets
+
+"""
+10-31-05 basic functions to draw images
+"""
+import Image, ImageDraw
+def get_char_dimension():
+	im = Image.new('RGB', (50,50))
+	draw = ImageDraw.Draw(im)
+	char_dimension = draw.textsize('a')
+	del im, draw
+	return char_dimension
+
+
+def get_text_region(text, dimension, rotate=1, foreground=(0,0,255), background=(255,255,255)):
+	"""
+	10-31-05 add background and foreground
+	"""
+	text_im = Image.new('RGB', dimension, background)
+	text_draw = ImageDraw.Draw(text_im)
+	text_draw.text((0,0), text, fill=foreground)
+	box = (0,0,dimension[0], dimension[1])
+	text_reg = text_im.crop(box)
+	if rotate:
+		text_reg = text_reg.transpose(Image.ROTATE_90)	#90 is anti-clockwise
+	return text_reg
