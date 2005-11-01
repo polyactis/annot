@@ -1325,3 +1325,31 @@ def get_gene_no2p_go_no_set_given_p_gene_id_set(curs, p_gene_table, given_p_gene
 		rows = curs.fetchall()
 	curs.execute("close crs")
 	return gene_no2p_go_no_set
+
+"""
+11-01-05
+"""
+def cluster_bs_id_set_from_good_bs_table(curs, good_bs_table):
+	sys.stderr.write("Getting cluster_bs_id_set...\n")
+	cluster_bs_id_set = Set()
+	curs.execute("select cluster_bs_id from %s"%good_bs_table)
+	rows = curs.fetchall()
+	for row in rows:
+		cluster_bs_id_set.add(row[0])
+	sys.stderr.write("End getting cluster_bs_id_set.\n")
+	return cluster_bs_id_set
+
+"""
+11-01-05
+"""
+def get_gene_no2no_of_events(curs, source_table='graph.gene_id2no_of_events', gene_table='gene', schema=None):
+	sys.stderr.write("Getting gene_no2no_of_events...\n")
+	gene_no2no_of_events = {}
+	curs.execute("select distinct g.gene_no, e.no_of_events from %s g, %s e where g.gene_id=e.gene_id"%\
+		(gene_table, source_table))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_no, no_of_events = row
+		gene_no2no_of_events[gene_no] = no_of_events
+	sys.stderr.write("End getting gene_no2no_of_events.\n")
+	return gene_no2no_of_events
