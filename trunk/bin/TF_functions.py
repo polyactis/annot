@@ -139,7 +139,7 @@ def hq_add(hq_list, row, top_number):
 	hq_len = len(hq_list)
 	if hq_len==top_number:
 		lowest_score = hq_list[0][0]
-		if lowest_score >= row[0]:
+		if lowest_score < row[0]:	#11-01-05 important bug. >= is wrong. < is correct.
 			heapreplace(hq_list, row)
 	elif hq_len<top_number:
 		heappush(hq_list, row)
