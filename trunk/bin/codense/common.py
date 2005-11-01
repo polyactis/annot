@@ -889,6 +889,7 @@ def form_schema_tables(ofname, acc_cut_off=0.6, lm_bit='111'):
 	schema_instance.gene_p_table='gene_p_'  + schema_instance.lm_suffix
 	schema_instance.good_cluster_table = 'good_cl_' + schema_instance.lm_suffix
 	schema_instance.cluster_bs_table = 'cluster_bs_' + schema_instance.lm_suffix
+	schema_instance.good_bs_table = 'good_bs_' + schema_instance.lm_suffix #11-01-05
 	return schema_instance
 
 """
