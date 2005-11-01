@@ -1276,3 +1276,51 @@ def get_text_region(text, dimension, rotate=1, foreground=(0,0,255), background=
 	if rotate:
 		text_reg = text_reg.transpose(Image.ROTATE_90)	#90 is anti-clockwise
 	return text_reg
+
+"""
+10-31-05
+"""
+def p_gene_id_src_set_from_gene_p_table(curs, gene_p_table):
+	sys.stderr.write("Starting to get p_gene_id_src_set...")
+	from sets import Set
+	p_gene_id_src_set = Set()
+	curs.execute("DECLARE crs CURSOR FOR select p_gene_id_src from %s"%gene_p_table)
+	curs.execute("fetch 10000 from crs")
+	rows = curs.fetchall()
+	while rows:
+		for row in rows:
+			p_gene_id_src = row[0]
+			p_gene_id_src_set.add(p_gene_id_src)
+		curs.execute("fetch 10000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
+	sys.stderr.write("End to get p_gene_id_src_set.\n")
+	return p_gene_id_src_set
+
+"""
+10-31-05
+"""
+def get_gene_no2p_go_no_set_given_p_gene_id_set(curs, p_gene_table, given_p_gene_id_set, report=0):
+	sys.stderr.write("Getting gene_no2p_go_no_set...\n")
+	gene_no2p_go_no_set = {}
+	curs.execute("DECLARE crs CURSOR FOR SELECT p_gene_id, gene_no, go_no \
+		from %s"%p_gene_table)
+	curs.execute("fetch 10000 from crs")
+	rows = curs.fetchall()
+	counter = 0
+	real_counter = 0
+	while rows:
+		for row in rows:
+			p_gene_id, gene_no, go_no = row
+			if p_gene_id in given_p_gene_id_set:
+				if gene_no not in gene_no2p_go_no_set:
+					gene_no2p_go_no_set[gene_no] = Set()
+				gene_no2p_go_no_set[gene_no].add(go_no)
+				real_counter += 1
+			counter += 1
+		if report:
+			sys.stderr.write("%s%s/%s"%('\x08'*20, counter, real_counter))
+		curs.execute("fetch 10000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
+	return gene_no2p_go_no_set
