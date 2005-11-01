@@ -1,3 +1,17 @@
+10-31-05
+. DrawMaps.py
+	Draw funtion_map and gene_function_map for a prediction setting.
+. construct graph.dataset_desc(SMD part)
+	1. take the 1st expt's info for the whole expt_set
+	   SELECT es.set_id,es.organism,es.category,es.subcategory,es.description, e.ch1desc, e.ch2desc into tmp from experiment e,expt_set es where e.exptid=es.exptid_list[1];
+	2. later use cut and paste (unix command) to concatenate category,
+	   subcategory,description,ch1desc,ch2desc into one description.
+	   delimiter is '|'.
+. fill_dataset_no2id.py
+	fill schema.dataset_no2id with the info from $schema\_datasets_mapping.
+
+	  
+
 09-30-05
 binding_site2gene_id2mt_no.py:
 	Construct gene_id2mt_no from binding_site. It translates prom_acc into
@@ -26,6 +40,7 @@ Schema2Darwin.py:
 	Program to convert results of one schema into darwin format.
 	Including TF, cluster, prediction from p_gene_table, gene_p_table, good_cluster_table
 	and cluster_bs_table.
+
 
 I. Annot pipeline(05-16-05, yh)
 
