@@ -930,3 +930,32 @@ Conclusion:
 	
 Suggestion:
 	. If we want to adjust any parameter(size, density, p-value, unknown), we are hoping that it has a strong positive relationship with accuracy. But some are true, some are partially true, some are wrong. Linear model helps us to balance the equation. However, another route is that we just use the accuracy of the each cluster to cut. In this way, we can keep the large pool(coverage) and sound accuracy.
+
+
+3. overview prediction results (10-29-05)
+
+No.	lm_suffix	results
+1.	rn_fim_33_m3x33bfsdfg0p0_e5_00001a60
+	0.7939/3416/394/0.6062/452/49/263/20
+2.	mm_fim_97m5x30bfse2s310l10t2w2x5q0_7_e5_00001a60
+	0.6629/600087/76823/0.5906/596/136/358/95
+3.	scfim30m3x30bfsdfg0p0_e5_00001a6
+	0.9143/871553/26227/0.6001/5146/759/1139/229
+4.	at_fim_26m3x26bfsdfg0p0_e5_00001a60
+	0.8048/4565/6117/0.6015/813/1324/324/699
+5.	hs_fim_92m5x25bfse2s310l10t2w2x5q0_7strict_e5_00001a60
+	0.8369/13160362/773548/0.5589/3657/558/1501/295
+6.	scfim30m3x30d50bfsdf_e5_00001a60
+	0.9306/374920/10180/0.6824/4081/421/640/83
+7.	at_fim_26m3x26d50bfsdf_e5_00001a60
+	0.9172/1148/966/0.8492/378/324/74/84
+8.	mm_fim_97m5x30d50bfsdf_e5_00001a60
+	0.6625/130248/15530/0.6019/839/150/335/85
+9.	mm_fim_97m5x30d50bfsdf_e5_00001a60
+	0.6625/130248/15530/0.6019/839/150/335/85
+10.	rnfim33m3x33bfsdfg0p0_e5_00001a60
+	0.9374/1131630/56707/0.6009/912/68/311/31
+11.	rnfim33m3x33d50bfsdf_e5_00001a60
+	0.9472/412044/25882/0.6000/900/59/226/21
+12.	hs_fim_92m5x25d50bfsdf_e5_00001a60
+	0.8278/2423527/114082/0.6005/3417/497/943/156
