@@ -24,7 +24,8 @@ Description:
 import os, sys, csv, getopt
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from codense.common import get_char_dimension, get_text_region, db_connect,\
-	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name
+	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name, \
+	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name
 from sets import Set
 import Image, ImageDraw
 from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv, decodeOccurrenceToBv, decodeOccurrence
@@ -241,14 +242,117 @@ class DrawMaps:
 		sys.stderr.write("End drawing function_map.\n")
 		return go_no2index, function_name_region
 	
+	def get_recurrence_rec_array_bs_no_list(self, curs, schema_instance):
+		"""
+		11-01-05
+		""" 
+		cluster_bs_id_set = cluster_bs_id_set_from_good_bs_table(curs, schema_instance.good_bs_table)
+		sys.stderr.write("Getting recurrence_rec_array_bs_no_list...\n")
+		bs_no2enc_recurrence = {}
+		no_of_datasets = 0
+		curs.execute("DECLARE crs CURSOR FOR select g.recurrence_array, c.bs_no_list,c.id from %s g, %s c\
+				where c.mcl_id=g.mcl_id"%(schema_instance.good_cluster_table,\
+				schema_instance.cluster_bs_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		counter = 0
+		real_counter =0
+		while rows:
+			for row in rows:
+				recurrence_array, bs_no_list, id = row
+				if id in cluster_bs_id_set:
+					recurrence_array = recurrence_array[1:-1].split(',')
+					recurrence_array = map(int, recurrence_array)
+					bs_no_list = bs_no_list[1:-1].split(',')
+					bs_no_list = map(int, bs_no_list)
+					if no_of_datasets == 0:
+						no_of_datasets = len(recurrence_array)
+					for bs_no in bs_no_list:
+						if bs_no not in bs_no2enc_recurrence:
+							bs_no2enc_recurrence[bs_no] = encodeOccurrenceBv(recurrence_array)
+						else:
+							bs_no2enc_recurrence[bs_no] |= encodeOccurrenceBv(recurrence_array)
+					real_counter += 1
+				counter += 1
+			if self.report:
+				sys.stderr.write("%s%s/%s"%('\x08'*20, counter, real_counter))
+			curs.execute("fetch 10000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		recurrence_rec_array_bs_no_list = []
+		for bs_no, enc_recurrence in bs_no2enc_recurrence.iteritems():
+			recurrence_array = decodeOccurrence(enc_recurrence)	#not binary vector
+			recurrence = len(recurrence_array)
+			recurrence_rec_array_bs_no_list.append([recurrence, recurrence_array, bs_no])
+		recurrence_rec_array_bs_no_list.sort()
+		sys.stderr.write("End getting recurrence_rec_array_bs_no_list.\n")
+		return recurrence_rec_array_bs_no_list, no_of_datasets
+	
+	def draw_tf_map(self, recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
+		output_fname, function_name_length, char_dimension):
+		sys.stderr.write("Drawing tf_map...\n")
+		
+		no_of_tfs = len(recurrence_rec_array_bs_no_list)
+		char_width, char_height = char_dimension
+		dataset_no_length = len(repr(no_of_datasets))
+		dataset_no_dimension = (char_width*dataset_no_length, char_height)
+			#one is not rotated(dataset_no), one is rotated(recurrence)
+		function_name_dimension = (char_width*function_name_length, char_height)	#will rotate
+		
+		x_offset0 = 0
+		x_offset1 = dataset_no_dimension[0]
+		y_offset0 = 0
+		y_offset1 = function_name_dimension[0]
+		y_offset2 = y_offset1 + no_of_datasets*dataset_no_dimension[1]
+		y_offset3 = y_offset2 + dataset_no_dimension[0]
+		whole_dimension = (x_offset1+no_of_tfs*char_height, y_offset3)
+		
+		im = Image.new('RGB',(whole_dimension[0],whole_dimension[1]),(255,255,255))
+		draw = ImageDraw.Draw(im)
+		#dataset_no section
+		for i in range(no_of_datasets):
+			text_region = get_text_region(repr(i+1), dataset_no_dimension, rotate=0)	#no rotate
+			box = (x_offset0, y_offset1+i*dataset_no_dimension[1], x_offset1, y_offset1+(i+1)*dataset_no_dimension[1])
+			im.paste(text_region, box)
+			
+		for i in range(len(recurrence_rec_array_bs_no_list)):
+			recurrence, recurrence_array, bs_no = recurrence_rec_array_bs_no_list[i]
+			x_offset_left = x_offset1+i*function_name_dimension[1]
+			x_offset_right = x_offset1+(i+1)*function_name_dimension[1]
+			#function_name
+			tf_name = '%s %s'%(bs_no, mt_no2tf_name[bs_no])
+			if len(tf_name)>function_name_length:
+				tf_name = tf_name[:function_name_length]
+			text_region = get_text_region(tf_name, function_name_dimension)	#rotate
+			box = (x_offset_left, y_offset0, x_offset_right, y_offset1)
+			im.paste(text_region, box)
+			
+			#fill in a cell for each dataset_no
+			for dataset_no in recurrence_array:
+				draw.rectangle((x_offset_left, y_offset1+(dataset_no-1)*dataset_no_dimension[1], \
+					x_offset_right, y_offset1+dataset_no*dataset_no_dimension[1]), fill=(0,255,0))
+			# write down the recurrence
+			text_region = get_text_region(repr(recurrence), dataset_no_dimension)	#rotate
+			box = (x_offset_left, y_offset2, x_offset_right, y_offset3)
+			im.paste(text_region, box)
+		im = im.rotate(270)
+		im.save(output_fname)
+		del im
+		sys.stderr.write("End drawing tf_map.\n")
+	
 	def run(self):
 		"""
 		10-31-05
 			--form_schema_tables()
 			--db_connect()
+			--get_char_dimension()
+			
+			--get_recurrence_rec_array_bs_no_list()
+			--get_mt_no2tf_name()
+			--draw_tf_map()
+			
 			--get_recurrence_go_no_rec_array_cluster_id_ls()
 			--get_go_no2name()
-			--get_char_dimension()
 			--draw_function_map()
 			
 			--p_gene_id_set_from_gene_p_table()
@@ -257,11 +361,17 @@ class DrawMaps:
 		"""
 		schema_instance = form_schema_tables(self.inputfname, self.acc_cutoff, self.lm_bit)
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+		char_dimension = get_char_dimension()
+		
+		recurrence_rec_array_bs_no_list, no_of_datasets = self.get_recurrence_rec_array_bs_no_list(curs, schema_instance)
+		mt_no2tf_name = get_mt_no2tf_name()
+		tf_map_output_fname = '%s.tf_map.png'%self.output_prefix
+		self.draw_tf_map(recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
+			tf_map_output_fname, self.function_name_length, char_dimension)
 		
 		recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets = self.get_recurrence_go_no_rec_array_cluster_id_ls(curs, \
 			schema_instance.good_cluster_table)
 		go_no2name = get_go_no2name(curs)
-		char_dimension = get_char_dimension()
 		no_of_functions = len(recurrence_go_no_rec_array_cluster_id_ls)
 		function_map_output_fname = '%s.function_map.png'%self.output_prefix
 		go_no2index, function_name_region = self.draw_function_map(recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets,\
@@ -273,6 +383,7 @@ class DrawMaps:
 		gene_function_map_output_fname = '%s.gene_function_map.png'%self.output_prefix
 		self.draw_gene_function_map(no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
 		gene_function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
