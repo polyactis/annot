@@ -185,8 +185,10 @@ class cluster_info:
 		04-06-05
 			generate a graph from node_set and edge_set.
 			edge_set and weight_list correspond to each other.
+		11_04_05 turn on stderr when self.report
 		"""
-		sys.stderr.write("Generating graph from node_set and edge_set...")
+		if self.report:
+			sys.stderr.write("Generating graph from node_set and edge_set...")
 		graph = Graph.Graph()
 		for node in node_set:
 			graph.add_node(node)
@@ -196,7 +198,8 @@ class cluster_info:
 				graph.add_edge(edge[0], edge[1], weight_list[i])
 			else:
 				graph.add_edge(edge[0], edge[1])
-		sys.stderr.write("Done.\n")
+		if self.report:
+			sys.stderr.write("Done.\n")
 		return graph
 	
 	def column_output(self, output_fname, list_2d):
