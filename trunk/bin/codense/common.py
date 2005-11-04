@@ -4,7 +4,7 @@ functions or classes common to all programs
 
 """
 
-import csv, sys, cPickle
+import csv, os, sys, cPickle
 import psycopg
 from sets import Set
 
@@ -663,7 +663,6 @@ def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=-1, f
 		default centralnode=-1(no gene_no is -1)
 		default unknown_color=red
 	'''
-	sys.stderr.write("Outputing graph...")
 	output_f.write('graph G  {\n')
 	output_f.write('\tnode [shape=ellipse, color=black];\n')
 	vertex_set = graph.node_list()
@@ -688,7 +687,6 @@ def graphDotOutput(output_f, graph, label_dict, gene_no2go_no, centralnode=-1, f
 		else:
 			output_f.write('\t%s -- %s ;\n'%(edge_tuple[0], edge_tuple[1]))
 	output_f.write('}\n')
-	sys.stderr.write("Done\n")
 
 def org2tax_id(organism):
 	"""
@@ -1353,3 +1351,21 @@ def get_gene_no2no_of_events(curs, source_table='graph.gene_id2no_of_events', ge
 		gene_no2no_of_events[gene_no] = no_of_events
 	sys.stderr.write("End getting gene_no2no_of_events.\n")
 	return gene_no2no_of_events
+
+
+"""
+11-03-05
+	Draw a pattern via graphviz commands.
+	1st call graphDotOutput() to output the input file.
+"""
+def draw_pattern(vertex_set, edge_set, go_no, gene_no2gene_id, gene_no2go_no, cluster_info_instance, graphFname,\
+	centralnode=-1, plot_type_command='neato -Goverlap=false'):
+	subgraph = cluster_info_instance.graph_from_node_edge_set(vertex_set, edge_set)
+	graphSrcFname = '%s.dot'%graphFname
+	graphSrcF = open(graphSrcFname, 'w')
+	graphDotOutput(graphSrcF, subgraph, gene_no2gene_id, gene_no2go_no, centralnode=centralnode,\
+		function=go_no, weighted=0)
+	graphSrcF.close()
+	commandline = '%s -Tpng %s -o %s'%(plot_type_command, graphSrcFname, graphFname)
+	system_call(commandline)
+	os.remove(graphSrcFname)
