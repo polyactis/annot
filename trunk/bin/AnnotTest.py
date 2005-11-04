@@ -47,6 +47,8 @@ Examples:
 	18: Test_cal_gradient_score
 10-26-05
 	19: Test_cc_from_edge_list
+11-03-05
+	20: Test_MpiDifferentialPattern
 """
 import unittest, os, sys, getopt, csv
 
@@ -1151,6 +1153,65 @@ class Test_cc_from_edge_list(unittest.TestCase):
 		for i in range(len(cc_list)):
 			print "component",i,cc_list[i]
 	
+class Test_MpiDifferentialPattern(unittest.TestCase):
+	"""
+	11-03-05
+	"""
+	def setUp(self):
+		from MpiDifferentialPattern import MpiDifferentialPattern
+		self.MpiDifferentialPattern_instance = MpiDifferentialPattern()
+		from codense.common import db_connect, get_gene_id2gene_no
+		hostname='zhoudb'
+		dbname='graphdb'
+		schema = 'hs_fim_92'
+		self.conn, self.curs =  db_connect(hostname, dbname, schema)
+		gene_id2no = get_gene_id2gene_no(self.curs)
+		self.gene2enc_array = self.MpiDifferentialPattern_instance.get_gene2enc_array('/tmp/yuhuang/hs_fim_92.gim', gene_id2no)
+	
+		"""
+		11-03-05 example pattern used below is id=2744211 from pattern_hs_fim_92m5x25bfse2s310l10t2w2x5q0_7strict
+		"""
+		self.vertex_list = [3006,3017,8334,8337,8340,8343,8349,8970,85236]
+		self.edge_set = [[3006, 8334], [3006, 8349], [3006, 8970], [3017, 8343], [3017, 8349], \
+			[3017, 8970], [8334, 8337], [8334, 8343], [8334, 8970], [8334, 85236], [8337, 8349], \
+			[8337, 8970], [8337, 85236], [8340, 8349], [8343, 8349], [8343, 8970], [8970, 85236]]
+		self.original_rec_array = [0,0,0,0.470588235294118,0.117647058823529,0,0,0,0.0588235294117647,\
+			0,0,0,0,0.647058823529412,0.117647058823529,0.0588235294117647,0,0,0,0,0,0.0588235294117647,\
+			0.176470588235294,0.0588235294117647,0,0,0.117647058823529,0,0.176470588235294,0,0,0.0588235294117647,\
+			0,0,0.0588235294117647,0,0,0,0.705882352941177,0,0,0.235294117647059,0.352941176470588,0,0,0,0,\
+			0.0588235294117647,0.176470588235294,0.0588235294117647,0,0,0.0588235294117647,0,0.235294117647059,\
+			0.0588235294117647,0,0,0,0.117647058823529,0,0.117647058823529,0,0,0,0,0.352941176470588,1,\
+			0.235294117647059,0.294117647058824,0.0588235294117647,0.411764705882353,0,0.411764705882353,1,\
+			0,0.588235294117647,1,1,0.235294117647059,0.235294117647059,0.941176470588235,1,0.588235294117647,\
+			1,0.470588235294118,0.235294117647059,0.882352941176471,0.588235294117647,0.823529411764706,0,1]
+	
+	def test_get_effective_vertex_set(self):
+		which_dataset = 4
+		effective_vertex_set = self.MpiDifferentialPattern_instance.get_effective_vertex_set(self.vertex_list, \
+			self.gene2enc_array, which_dataset)
+		print "vertex_list",self.vertex_list
+		print "which_dataset",which_dataset
+		print "effective_vertex_set",effective_vertex_set
+	
+	def test_cal_effective_rec_array(self):
+		effective_rec_array = self.MpiDifferentialPattern_instance.cal_effective_rec_array(self.edge_set, \
+			self.original_rec_array, self.vertex_list, self.gene2enc_array, 1)
+		print "edge_set",self.edge_set
+		print "vertex_list",self.vertex_list
+		print "original_rec_array",self.original_rec_array
+		print "effective_rec_array",effective_rec_array
+		return effective_rec_array
+	
+	def test_cal_get_t_test_p_value(self):
+		from sets import Set
+		interesting_dataset_set = Set([5,6,14,39,41,43,50,55,65,68,73,75,77,78,79,80,81,82,83,84,85,88,89,90,92])
+		effective_rec_array = self.test_cal_effective_rec_array()
+		p_value = self.MpiDifferentialPattern_instance.get_t_test_p_value(effective_rec_array, interesting_dataset_set, 1)
+		print "interesting_dataset_set",interesting_dataset_set
+		print "effective_rec_array",effective_rec_array
+		print "p_value",p_value
+		
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1181,7 +1242,8 @@ if __name__ == '__main__':
 		16: Test_attr_of_mt_no,
 		17: Test_cal_edge_gradient,
 		18: Test_cal_gradient_score,
-		19: Test_cc_from_edge_list}
+		19: Test_cc_from_edge_list,
+		20: Test_MpiDifferentialPattern}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
