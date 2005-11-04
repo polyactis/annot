@@ -10,12 +10,12 @@ Option:
 	-i ...,	the input file, dataset signature output by fim
 	-l ...,	lm_bit of setting1, ('00001', default)
 	-a ...,	acc_cutoff of setting1, (0.6 default)
-	-o ...,	pic_output_dir.
+	-o ...,	pic_output_dir.(output file and graph pictures)
 	-p ...,	p value cutoff(0.01, default)
 	-s ...,	dataset_signature, like '1,3,30'
 	-v ...,	message size(10,000,000, default)
 	-b,	debug version.
-	-r,	enable report flag
+	-r,	enable report flag, WATCH: enable graph drawing
 	-h, --help	Display the usage infomation.
 	
 Examples:
@@ -161,15 +161,17 @@ class MpiDifferentialPattern:
 		"""
 		11-03-05
 			called by common.output_node()
+		11-04-05 graph output is only turned if self.report
 		"""
 		pic_output_dir, cluster_info_instance, gene_no2id, gene_no2go_no, writer = parameter_list
 		good_patterns = cPickle.loads(data)
 		for row in good_patterns:
 			writer.writerow(row)
 			id, vertex_set, edge_set, effective_rec_array, p_value, go_no_list = row
-			for go_no in go_no_list:
-				graphFname = os.path.join(pic_output_dir, '%s_%s.png'%(go_no, id))
-				draw_pattern(vertex_set, edge_set, go_no, gene_no2id, gene_no2go_no, cluster_info_instance, graphFname)
+			if self.report:
+				for go_no in go_no_list:
+					graphFname = os.path.join(pic_output_dir, '%s_%s.png'%(go_no, id))
+					draw_pattern(vertex_set, edge_set, go_no, gene_no2id, gene_no2go_no, cluster_info_instance, graphFname)
 		
 		
 	def run(self):
