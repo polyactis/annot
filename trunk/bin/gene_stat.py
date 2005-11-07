@@ -363,6 +363,7 @@ class gene_stat:
 			getting go_no2distance via node_distance_class
 		03-15-05
 			add a feature to get the lca's between p_go_no and k_functions_set
+		11-07-05 GO node type is 4. some term_id doesn't have go_no.
 		"""
 		if self.debug_common_ancestor_deep_enough:
 			print "\t\t ### Enter common_ancestor_deep_enough() "
@@ -418,7 +419,9 @@ class gene_stat:
 					if self.debug_common_ancestor_deep_enough:
 						print "lca: %s has the max_depth"%self.go_no2go_id[self.go_term_id2go_no[lca]]
 					#map term_id to go_no
-					self.lca_list.append(self.go_term_id2go_no[lca])
+					#self.lca_list.append(self.go_term_id2go_no[lca])
+					#11-07-05 GO node type is 4. some term_id doesn't have go_no.
+					self.lca_list.append(lca)
 			return 1
 		else:
 			if self.debug_common_ancestor_deep_enough:
