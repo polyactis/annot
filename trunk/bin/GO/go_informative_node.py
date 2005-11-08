@@ -378,12 +378,129 @@ class go_informative_node_bfs:
 			informative_node_dict[node] = 1
 		sys.stderr.write("Done getting nodes for node type 4 with %s/%s nodes.\n"%(len(candidates_set), no_of_big_nodes))
 		return informative_node_dict
-		
+	
+	def node_type_5(self, init_candidates_queue, init_candidates_set, go_graph, complement_go_graph, \
+		go_id_descendent2gene_id_dict, max_no_of_nodes, size):
+		"""
+		11-06-05 similar to node_type_4 but, level by level and stop at level 5
+		"""
+		sys.stderr.write("Getting nodes for node type 5...\n")
+		#remove childs among init_candidates_queue, start from the smallest one
+		candidates_queue = []	#a min queue, each entry is (-size, go_id), sorted by -size
+		candidates_set = Set()
+		no_of_big_nodes = 0
+		while init_candidates_queue:
+			node_size, go_id = heappop(init_candidates_queue)
+			parent_set = Set(complement_go_graph.neighbors(go_id))
+			if parent_set&init_candidates_set:	#there's a parent
+				init_candidates_set.remove(go_id)
+			else:
+				if node_size >= size:
+					no_of_big_nodes += 1
+					candidates_queue.append([-node_size, go_id])	#WATCH minus(-) ahead of node_size
+				candidates_set.add(go_id)
+		candidates_queue.sort()	#diff 4
+		if self.debug:
+			print "no_of_big_nodes", no_of_big_nodes
+			print "candidates_queue", candidates_queue
+			print "candidates_set", candidates_set
+		#following two mappings are used to decide whether some childs should be picked back
+		trash_child_node2parent = {}
+		parent2trash_child_node = {}
+		while no_of_big_nodes<max_no_of_nodes and candidates_queue:
+			node_size, go_id = candidates_queue.pop(0)	#diff 4
+			node_size = -node_size	#WATCH minus(-) ahead of node_size
+			if self.debug:
+				sys.stderr.write("Checking %s(size=%s)  no_of_big_nodes:%s...\n"%(go_id, node_size, no_of_big_nodes))
+			neighbor_list = go_graph.neighbors(go_id)
+			valid_neighbor = 0	#a flag to check whether there's a valid child node
+			for neighbor in neighbor_list:
+				neighbor_size = len(go_id_descendent2gene_id_dict[neighbor])
+				if neighbor_size>=size:
+					if self.debug:
+						sys.stderr.write("One child %s exceeds the size %s.\n"%(neighbor, neighbor_size))
+					valid_neighbor = 1
+					break
+			if valid_neighbor:
+				#1st remove this node
+				if self.debug:
+					sys.stderr.write("%s removed from candidates_set.\n"%go_id)
+				no_of_big_nodes -= 1	#previous condition check ensures that its size >self.size
+				candidates_set.remove(go_id)
+				#2nd release trash_child_node if possible
+				if go_id in parent2trash_child_node:
+					if self.debug:
+						sys.stderr.write("%s appears in parent2trash_child_node.\n"%go_id)
+					for trash_child_node in parent2trash_child_node[go_id]:
+						trash_child_node2parent[trash_child_node].remove(go_id)
+						no_of_parents = len(trash_child_node2parent[trash_child_node])
+						if no_of_parents==0:
+							if self.debug:
+								sys.stderr.write("trash_child_node %s  has no parents now and revives.\n"%trash_child_node)
+							del trash_child_node2parent[trash_child_node]
+							trash_child_node_size = len(go_id_descendent2gene_id_dict[trash_child_node])
+							if trash_child_node_size>=size:
+								if self.debug:
+									sys.stderr.write("trash_child_node %s has %s associated genes.\n"%(trash_child_node, trash_child_node_size))
+								no_of_big_nodes += 1
+								#candidates_queue.append([-trash_child_node_size, trash_child_node])	#WATCH minus(-) ahead of trash_child_node_size
+							if trash_child_node_size>0:	#skip empty nodes
+								candidates_set.add(trash_child_node)
+					#remove it
+					del parent2trash_child_node[go_id]
+				#3rd pick good child
+				for neighbor in neighbor_list:
+					neighbor_size = len(go_id_descendent2gene_id_dict[neighbor])
+					if neighbor_size==0:	#skip empty nodes
+						continue
+					parent_set = Set(complement_go_graph.neighbors(neighbor))
+					parent_in_candidates = parent_set&candidates_set
+					if parent_in_candidates:
+						if self.debug:
+							sys.stderr.write("unfortunately, %s 's child %s has parent %s in candidates_set.\n"%(go_id, neighbor, parent_in_candidates))
+						#fill in trash_child_node2parent and parent2trash_child_node
+						if neighbor not in trash_child_node2parent:
+							trash_child_node2parent[neighbor] = Set()
+						trash_child_node2parent[neighbor] |= parent_in_candidates
+						for parent in parent_in_candidates:
+							if parent not in parent2trash_child_node:
+								parent2trash_child_node[parent] = Set()
+							parent2trash_child_node[parent].add(neighbor)
+					else:
+						#good child
+						if self.debug:
+							sys.stderr.write("fortunately, %s 's child %s has no parent in candidates_set.\n"%(go_id, neighbor))
+						if neighbor_size >= size and neighbor not in candidates_set:	#some of them are already checked int by other parents
+							if self.debug:
+								sys.stderr.write("furthermore, %s 's child %s has %s associated genes, into candidates_queue.\n"%(go_id, neighbor, neighbor_size))
+							no_of_big_nodes += 1
+							#candidates_queue.append([-neighbor_size, neighbor])	#WATCH minus(-) ahead of neighbor_size
+						candidates_set.add(neighbor)
+						#deal with trash_child_node
+						neighbor_s_child_set = Set(go_graph.neighbors(neighbor))
+						trash_child_node_set = Set(trash_child_node2parent)
+						neighbor_s_trash_child_set = neighbor_s_child_set&trash_child_node_set
+						if neighbor_s_trash_child_set:
+							if self.debug:
+								sys.stderr.write("oh, %s 's child %s has %s grand_trash_children, update two dicts.\n"%(go_id, neighbor, neighbor_s_trash_child_set))
+							for trash_child_node in neighbor_s_trash_child_set:
+								trash_child_node2parent[trash_child_node].add(neighbor)
+							if neighbor not in parent2trash_child_node:
+								parent2trash_child_node[neighbor] = Set()
+							parent2trash_child_node[neighbor] |= neighbor_s_trash_child_set
+		#finally, come to fruit
+		informative_node_dict = {}
+		for node in candidates_set:
+			informative_node_dict[node] = 1
+		sys.stderr.write("Done getting nodes for node type 4 with %s/%s nodes.\n"%(len(candidates_set), no_of_big_nodes))
+		return informative_node_dict
+	
 	def run(self):
 		"""
 		03-06-05
 			add the node_type=3, level=5
 		11-06-05 add node_type=4
+		11-07-05 add node_type=5
 		"""
 		if self.schema:
 		#input from database	
@@ -392,7 +509,7 @@ class go_informative_node_bfs:
 		#input from files
 			self.dstruc_loadin()
 		#11-06-05
-		if self.node_type==4:
+		if self.node_type==4 or self.node_type==5:
 			init_candidates_queue = []	#a min queue, each entry is (size, go_id), sorted by size
 			init_candidates_set = Set()
 			
@@ -417,7 +534,7 @@ class go_informative_node_bfs:
 					#not biological_process and have >0 genes associated and depth=4(level=4)
 					self.informative_node_dict[go_id] = 1
 			#11-06-05
-			elif self.node_type==4:
+			elif self.node_type==4 or self.node_type==5:
 				node_size = len(self.go_id_descendent2gene_id_dict[go_id])
 				if self.go_id2depth[go_id] == self.level and node_size>0:
 					heappush(init_candidates_queue, [node_size, go_id])	#WATCH NO minus(-) ahead of node_size
@@ -441,6 +558,9 @@ class go_informative_node_bfs:
 						self.informative_node_dict[neighbor] = 1
 		elif self.node_type==4:
 			self.informative_node_dict = self.node_type_4(init_candidates_queue, init_candidates_set,\
+				self.go_graph, self.complement_go_graph, self.go_id_descendent2gene_id_dict, self.max_no_of_nodes, self.size)
+		elif self.node_type==5:
+			self.informative_node_dict = self.node_type_5(init_candidates_queue, init_candidates_set,\
 				self.go_graph, self.complement_go_graph, self.go_id_descendent2gene_id_dict, self.max_no_of_nodes, self.size)
 		self.output()
 	
