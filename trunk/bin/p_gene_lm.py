@@ -265,6 +265,8 @@ class p_gene_lm:
 			add connectivity_2nd
 		07-06-05
 			add logistic
+		11-09-05 extend coeff_list and coeff_p_value_list
+			restructure the list, go_no2lm_results[go_no]
 			
 			--data_prepare
 			--submit
@@ -281,8 +283,9 @@ class p_gene_lm:
 		
 		for (go_no,data) in go_no2prediction_space.iteritems():
 			sys.stderr.write("%s prediction entries from %s.\n"%(len(data), go_no))
-			coeff_list = [0]*6	#intercept, p_value, recurrence, connectivity, cluster_size
-			coeff_p_value_list = [1]*6
+			#11-09-05 extend coeff_list and coeff_p_value_list
+			coeff_list = [0]*7	#intercept, p_value, recurrence, connectivity, cluster_size
+			coeff_p_value_list = [1]*7
 			index = 0	#06-30-05	the pointer for summary_stat
 			
 			if len(data)<=50:
@@ -331,8 +334,8 @@ class p_gene_lm:
 					index+=1
 					coeff_list[i+1] = summary_stat['coefficients'][index][0]	#0 is the coefficient
 					coeff_p_value_list[i+1] = summary_stat['coefficients'][index][-1]	#-1 is the corresponding p-value
-			
-			go_no2lm_results[go_no] = coeff_list + coeff_p_value_list + [1]	#the last entry is score_cut_off, replaced later in get_score_cut_off()
+			#11-09-05 restructure the following list
+			go_no2lm_results[go_no] = [coeff_list, coeff_p_value_list, 1]	#the last entry is score_cut_off, replaced later in get_score_cut_off()
 		sys.stderr.write("done.\n")
 		return go_no2lm_results
 	
@@ -367,7 +370,10 @@ class p_gene_lm:
 			add connectivity_2nd
 		08-08-05
 			add gene_no and go_no to score_list
-		
+		11-09-05 extend coeff_list and coeff_p_value_list
+			restructure the list, go_no2lm_results[go_no]
+			this is for OneParameterCutoffSeeker.py. Itself needs testing.
+			
 			--return_score_cut_off()
 		"""
 		sys.stderr.write("Getting score cutoff for accuracy_cut_off %s...\n"%(accuracy_cut_off))
@@ -376,7 +382,8 @@ class p_gene_lm:
 				#this go_no has too few data, ignored.
 				continue
 			score_list = []
-			coeff_list = go_no2lm_results[go_no]
+			#11-09-05 restructure the list, go_no2lm_results[go_no]
+			coeff_list, coeff_p_value_list, score_cut_off = go_no2lm_results[go_no]
 			for entry in data:
 				#intercept + coeff1*p_value + coeff2*recurrence + coeff3*connectivity + coeff4*cluster_size + coeff5*connectivity_2nd
 				score = coeff_list[0]+ coeff_list[1]*entry[0] + coeff_list[2]*entry[1] + coeff_list[3]*entry[2] + coeff_list[4]*entry[3] + coeff_list[5]*entry[4]
@@ -518,6 +525,7 @@ class p_gene_lm:
 			add  fields for p-values, cluster_size(coeff4)
 		07-04-05
 			add connectivity_2nd and its p-value
+		11-09-05 add coeff6
 		"""
 		sys.stderr.write("Creating Linear Model table...")
 		try:
@@ -529,12 +537,14 @@ class p_gene_lm:
 				coeff3	float,\
 				coeff4	float,\
 				coeff5	float,\
+				coeff6	float,\
 				intercept_p_value	float,\
 				coeff1_p_value	float,\
 				coeff2_p_value	float,\
 				coeff3_p_value	float,\
 				coeff4_p_value	float,\
 				coeff5_p_value	float,\
+				coeff6_p_value	float,\
 				score_cut_off	float)"%lm_table)
 		except:
 			sys.stderr.write("Error occurred when creating table %s\n"%lm_table)
@@ -550,15 +560,17 @@ class p_gene_lm:
 		06-30-05
 			add corresponding p-values and coeff4(cluster_size)
 		07-04-05
-			add connectivity_2nd
+			add connectivity_2nd and restructure the coeff, p_value, score_cut_off list
+		11-09-05 add coeff6
 		"""
 		sys.stderr.write("Submitting Linear model parameters...")
-		for (go_no, coeff_list) in go_no2lm_results.iteritems():
-			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4, coeff5, \
+		for (go_no, coeff_p_value_score_list) in go_no2lm_results.iteritems():
+			coeff_list, p_value_list, score_cut_off = coeff_p_value_score_list
+			curs.execute("insert into %s(go_no, intercept, coeff1, coeff2, coeff3, coeff4, coeff5, coeff6, \
 				intercept_p_value, coeff1_p_value, coeff2_p_value, coeff3_p_value, coeff4_p_value, coeff5_p_value, \
-				score_cut_off) values (%d, %s,%s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,%s,  %s)"%\
-				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4], coeff_list[5],\
-				coeff_list[6], coeff_list[7], coeff_list[8], coeff_list[9], coeff_list[10], coeff_list[11], coeff_list[-1]) )
+				coeff6_p_value, score_cut_off) values (%d, %s,%s,%s,%s,%s,%s,%s,   %s,%s,%s,%s,%s,%s,%s,  %s)"%\
+				(lm_table, go_no, coeff_list[0], coeff_list[1], coeff_list[2], coeff_list[3], coeff_list[4], coeff_list[5], coeff_list[6], \
+				p_value_list[0], p_value_list[1], p_value_list[2], p_value_list[3], p_value_list[4], p_value_list[5], p_value_list[6], score_cut_off) )
 		sys.stderr.write("done.\n")
 
 	def run(self):
