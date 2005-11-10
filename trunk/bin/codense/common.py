@@ -1369,3 +1369,30 @@ def draw_pattern(vertex_set, edge_set, go_no, gene_no2gene_id, gene_no2go_no, cl
 	commandline = '%s -Tpng %s -o %s'%(plot_type_command, graphSrcFname, graphFname)
 	system_call(commandline)
 	os.remove(graphSrcFname)
+
+
+def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no_set, r, debug=0):
+	"""
+	11-10-05 'from rpy import r' should be executed in upper context
+	"""
+	cluster_size = len(vertex_list)
+	no_of_local_associated_genes = 0
+	for vertex in vertex_list:
+		if vertex in go_no2gene_no_set[go_no] and vertex!=gene_no:	#leave one out
+			no_of_local_associated_genes += 1
+	no_of_global_associated_genes = len(go_no2gene_no_set[go_no])
+	if gene_no in go_no2gene_no_set[go_no]:	#leave one out
+		no_of_global_associated_genes -= 1
+	x = no_of_local_associated_genes
+	m = no_of_global_associated_genes
+	n = no_of_total_genes - cluster_size
+	k = cluster_size
+	"""
+	if debug:
+		print "no_of_local_associated_genes",no_of_local_associated_genes
+		print "no_of_global_associated_genes",no_of_global_associated_genes
+		print "no_of_total_genes",no_of_total_genes
+		print "cluster_size", cluster_size
+	"""
+	p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
+	return p_value
