@@ -22,7 +22,7 @@ Description:
 	Calculate the parameter cutoff corresponding to an accuracy_cut_off.
 	Which parameter based on bit_string(e.g. 001, 1, 01, 0001, 00010):
 		1: 'p_value_cut_off'; 2: 'recurrence_cut_off'; 3: 'connectivity_cut_off';
-		4: 'cluster_size_cut_off'; 5: 'edge_gradient'
+		4: 'cluster_size_cut_off'; 5: 'edge_gradient'; 6:'rpart_prob'
 	In MpiStatCluster.py's resulting p_gene table, p_value_cut_off=edge_gradient.
 	10-28-05 memory threshold is 1.5e7
 """
@@ -36,6 +36,9 @@ from heapq import heappush, heappop
 class OneParameterCutoffSeeker:
 	def __init__(self, hostname=None, dbname=None, schema=None, p_gene_table=None, \
 		lm_table=None, accuracy_cut_off=0, judger_type=0, which=0, commit=0, report=0, debug=0):
+		"""
+		11-09-05 add the sixth parameter: rpart_prob(which is vertex_gradient in p_gene_table)
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -51,7 +54,8 @@ class OneParameterCutoffSeeker:
 			1: 'recurrence_cut_off',
 			2: 'connectivity_cut_off',
 			3: 'cluster_size_cut_off',
-			4: 'edge_gradient'}
+			4: 'edge_gradient',
+			5: 'vertex_gradient'}
 	
 	def get_prediction_step(self, curs, table, is_correct_dict, judger_type):
 		"""
@@ -181,8 +185,8 @@ class OneParameterCutoffSeeker:
 		if self.commit and cutoff_row and self.lm_table:	#cutoff_row is not None
 			p_gene_lm_instance.lm_table_create(curs, self.lm_table)
 			go_no2lm_results = {}
-			go_no2lm_results[-1] = [0]*6 + [1]*6 + [cutoff_row[0]]
-			go_no2lm_results[-1][which+1] = 1	#the coeffcient for "which" param is 1, others are 0
+			go_no2lm_results[-1] = [[0]*7, [1]*7, cutoff_row[0]]	#11-09-05 extend the list
+			go_no2lm_results[-1][0][which+1] = 1	#the coeffcient for "which" param is 1, others are 0
 			p_gene_lm_instance.submit(curs, self.lm_table, go_no2lm_results)
 			curs.execute("end")
 
