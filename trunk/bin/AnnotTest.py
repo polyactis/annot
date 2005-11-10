@@ -9,46 +9,27 @@ Option:
 Examples:
 	AnnotTest.py -y 2
 
-02-17-05
-	1: unittest for gene_stat_plot.
-02-20-05
-	2: unittest for subgraph_visualize
-02-20-05
-	3: unittest for gene_stat
-02-25-05
-	4: unittest for CrackSplat
-02-28-05
-	5: unittest for module_cc.linear_model
-02-28-05
-	6: unittest for p_gene_lm
-03-01-05
-	7: unittest for p_gene_analysis
-03-01-05
-	8: unittest for gene_p_map_redundancy
-03-02-05
-	9: graph_modeling
-03-04-05
-	10: codense2db
-03-19-05
-	11: crack_by_modes
-03-19-05
-	12: crack_by_splat
-03-31-05
-	13: p_gene_factor
-04-03-05
-	14: connectivity2homogeneity
-04-03-05
-	15: TestGraphModelingGraphCC
-09-18-05
-	16: Test_attr_of_mt_no
-10-17-05
-	17: Test_cal_edge_gradient
-10-21-05
-	18: Test_cal_gradient_score
-10-26-05
-	19: Test_cc_from_edge_list
-11-03-05
-	20: Test_MpiDifferentialPattern
+02-17-05 1: unittest for gene_stat_plot.
+02-20-05 2: unittest for subgraph_visualize
+02-20-05 3: unittest for gene_stat
+02-25-05 4: unittest for CrackSplat
+02-28-05 5: unittest for module_cc.linear_model
+02-28-05 6: unittest for p_gene_lm
+03-01-05 7: unittest for p_gene_analysis
+03-01-05 8: unittest for gene_p_map_redundancy
+03-02-05 9: graph_modeling
+03-04-05 10: codense2db
+03-19-05 11: crack_by_modes
+03-19-05 12: crack_by_splat
+03-31-05 13: p_gene_factor
+04-03-05 14: connectivity2homogeneity
+04-03-05 15: TestGraphModelingGraphCC
+09-18-05 16: Test_attr_of_mt_no
+10-17-05 17: Test_cal_edge_gradient
+10-21-05 18: Test_cal_gradient_score
+10-26-05 19: Test_cc_from_edge_list
+11-03-05 20: Test_MpiDifferentialPattern
+11-10-05 21: Test_cal_hg_p_value
 """
 import unittest, os, sys, getopt, csv
 
@@ -1211,7 +1192,26 @@ class Test_MpiDifferentialPattern(unittest.TestCase):
 		print "effective_rec_array",effective_rec_array
 		print "p_value",p_value
 		
-		
+class Test_cal_hg_p_value(unittest.TestCase):
+	"""
+	11-10-05
+	"""
+	def test_cal_hg_p_value(self):
+		from codense.common import db_connect, get_go_no2gene_no_set, get_no_of_total_genes,\
+			cal_hg_p_value
+		from rpy import r
+		hostname='zhoudb'
+		dbname='graphdb'
+		schema = 'scfim30'
+		conn, curs =  db_connect(hostname, dbname, schema)
+		go_no2gene_no_set = get_go_no2gene_no_set(curs)
+		no_of_total_genes = get_no_of_total_genes(curs)
+		gene_no = 850652
+		go_no = 1130
+		vertex_list = [850652,850688,850893,850982,853320,853930]	#cluster id=8388
+		p_value = cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no_set, r, debug=1)
+		print "p_value",p_value
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1243,7 +1243,8 @@ if __name__ == '__main__':
 		17: Test_cal_edge_gradient,
 		18: Test_cal_gradient_score,
 		19: Test_cc_from_edge_list,
-		20: Test_MpiDifferentialPattern}
+		20: Test_MpiDifferentialPattern,
+		21: Test_cal_hg_p_value}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
