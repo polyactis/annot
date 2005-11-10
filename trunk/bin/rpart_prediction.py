@@ -12,6 +12,7 @@ Option:
 	-m ...,	lm_bit of setting2, ('00001' default)
 	-f ...,	filter type
 	-y ...,	is_correct type (2 lca, default)
+	-p ...,	rpart cp value(0.01, default)
 	-b,	enable debug flag
 	-c,	commit the database transaction
 	-r,	enable report flag
@@ -34,8 +35,11 @@ from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
 
 class rpart_prediction:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, \
-		lm_bit1=None, fname2=None, lm_bit2=None, filter_type=1, is_correct_type=2, \
+		lm_bit1=None, fname2=None, lm_bit2=None, filter_type=1, is_correct_type=2, rpart_cp=0.01, \
 		debug=0, commit=0, report=0):
+		"""
+		11-09-05 add rpart_cp
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -45,6 +49,7 @@ class rpart_prediction:
 		self.lm_bit2 = lm_bit2
 		self.filter_type = int(filter_type)
 		self.is_correct_type = int(is_correct_type)
+		self.rpart_cp = float(rpart_cp)
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
@@ -106,11 +111,12 @@ class rpart_prediction:
 		sys.stderr.write("Done fetching data.\n")
 		return prediction_ls, all_data, known_data
 	
-	def rpart_fit_and_predict(self, all_data, known_data, bit_string='11111'):
+	def rpart_fit_and_predict(self, all_data, known_data, rpart_cp, bit_string='11111'):
 		"""
 		11-09-05
 			1st use known_data to get the fit model
 			2nd use the fit model to do prediction on all_data, result is prob for each class
+		11-09-05 add rpart_cp
 		"""
 		sys.stderr.write("rpart fitting and predicting...\n")
 		r.library("rpart")
@@ -122,7 +128,7 @@ class rpart_prediction:
 		set_default_mode(NO_CONVERSION)
 		data_frame = r.as_data_frame({"p_value":known_data[:,0], "recurrence":known_data[:,1], "connectivity":known_data[:,2], \
 			"cluster_size":known_data[:,3], "gradient":known_data[:,4], "is_correct":known_data[:,-1]})
-		fit = r.rpart(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, method="class")
+		fit = r.rpart(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, method="class", control=r.rpart_control(cp=rpart_cp))
 		del data_frame
 		all_data_frame = r.as_data_frame({"p_value":all_data[:,0], "recurrence":all_data[:,1], "connectivity":all_data[:,2], \
 			"cluster_size":all_data[:,3], "gradient":all_data[:,4], "is_correct":all_data[:,-1]})
@@ -135,7 +141,7 @@ class rpart_prediction:
 		"""
 		11-09-05
 		"""
-		sys.stderr.write("Recoding prediction...\n")
+		sys.stderr.write("Recording prediction...\n")
 		for i in range(len(prediction_ls)):
 			p_attr_instance = prediction_ls[i]
 			p_attr_instance.vertex_gradient = pred[i][1]
@@ -145,13 +151,14 @@ class rpart_prediction:
 	def run(self):
 		"""
 		11-09-05
+		11-09-05 add rpart_cp
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		old_schema_instance = form_schema_tables(self.fname1, self.lm_bit1)
 		new_schema_instance = form_schema_tables(self.fname2, self.lm_bit2)
 		
 		prediction_ls, all_data, known_data = self.data_fetch(curs, old_schema_instance.p_gene_table, self.filter_type, self.is_correct_type)
-		pred = self.rpart_fit_and_predict(all_data, known_data)
+		pred = self.rpart_fit_and_predict(all_data, known_data, self.rpart_cp)
 		MpiPredictionFilter_instance = MpiPredictionFilter()
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
@@ -167,7 +174,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:l:j:m:f:y:bcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:l:j:m:f:y:p:bcr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -182,6 +189,7 @@ if __name__ == '__main__':
 	lm_bit2 = '00001'
 	filter_type = 1
 	is_correct_type = 2
+	rpart_cp = 0.01
 	debug = 0
 	commit = 0
 	report = 0
@@ -207,6 +215,8 @@ if __name__ == '__main__':
 			filter_type = int(arg)
 		elif opt in ("-y"):
 			is_correct_type = int(arg)
+		elif opt in ("-p"):
+			rpart_cp = float(arg)
 		elif opt in ("-b"):
 			debug = 1
 		elif opt in ("-c"):
@@ -215,7 +225,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, lm_bit1, \
-			fname2, lm_bit2, filter_type, is_correct_type, debug, commit, report)
+			fname2, lm_bit2, filter_type, is_correct_type, rpart_cp, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
