@@ -7,27 +7,29 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
 	-i ...,	fname of setting1
-	-l ...,	lm_bit of setting1, ('00001', default)
+	-l ...,	lm_bit of setting1, ('00001', default, IGNORE)
 	-j ...,	fname of setting2
-	-m ...,	lm_bit of setting2, ('00001' default)
+	-m ...,	lm_bit of setting2, ('00001' default, IGNORE)
 	-f ...,	filter type
 	-y ...,	is_correct type (2 lca, default)
 	-p ...,	rpart cp value(0.01, default)
+	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-b,	enable debug flag
 	-c,	commit the database transaction
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
-	~/script/annot/bin/rpart_prediction.py -k hs_fim_40 -i hs_fim_40m4x40rec0_8 -l 11100
-		-j hs_fim_40m4x40e1s1__1_0l10 -m 11001 -c -r
+	~/script/annot/bin/rpart_prediction.py -k hs_fim_40 -i hs_fim_40m4x40rec0_8
+		-j hs_fim_40m4x40e1s1__1_0l10 -c -r
 
 Description:
 	Program to do rpart fittng and prediction.
 """
 import sys, os, getopt, csv
 sys.path += [os.path.expanduser('~/script/annot/bin')]
-from codense.common import db_connect, form_schema_tables
+from codense.common import db_connect, form_schema_tables, cal_hg_p_value, \
+	get_go_no2gene_no_set, get_no_of_total_genes
 from MpiPredictionFilter import prediction_attributes, MpiPredictionFilter
 from numarray import array
 from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
@@ -36,7 +38,7 @@ from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
 class rpart_prediction:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, \
 		lm_bit1=None, fname2=None, lm_bit2=None, filter_type=1, is_correct_type=2, rpart_cp=0.01, \
-		debug=0, commit=0, report=0):
+		need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
 		11-09-05 add rpart_cp
 		"""
@@ -50,22 +52,26 @@ class rpart_prediction:
 		self.filter_type = int(filter_type)
 		self.is_correct_type = int(is_correct_type)
 		self.rpart_cp = float(rpart_cp)
+		self.need_cal_hg_p_value = int(need_cal_hg_p_value)
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
 	
-	def data_fetch(self, curs, p_gene_table, filter_type, is_correct_type):
+	def data_fetch(self, curs, schema_instance, filter_type, is_correct_type, \
+		no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value):
 		"""
 		11-09-05
 			1st get the data from p_gene_table and remove redundancy given filter_type
 			2nd transform the data to three lists
+		11-10-05 add a chunk of code to get hg p-value(leave one out) for the prediction
+			mcl_id2vertex_list might blow the memory.(?) 
 		"""
 		sys.stderr.write("Fetching data from old p_gene_table...\n")
 		prediction_pair2instance = {}
 		curs.execute("DECLARE crs CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.is_correct, p.is_correct_l1, \
 			p.is_correct_lca, p.avg_p_value, p.no_of_clusters, p.cluster_array, p.p_value_cut_off, p.recurrence_cut_off, \
 			p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.depth_cut_off, p.mcl_id, p.lca_list, p.vertex_gradient,\
-			p.edge_gradient from %s p"%(p_gene_table))
+			p.edge_gradient from %s p"%(schema_instance.p_gene_table))
 		curs.execute("fetch 10000 from crs")
 		rows = curs.fetchall()
 		counter = 0
@@ -99,6 +105,15 @@ class rpart_prediction:
 		known_data = []
 		for prediction_pair,p_attr_instance in prediction_pair2instance.iteritems():
 			prediction_ls.append(p_attr_instance)
+			#11-10-05
+			mcl_id2vertex_list = {}
+			if need_cal_hg_p_value:
+				mcl_id = p_attr_instance.mcl_id
+				if mcl_id not in mcl_id2vertex_list:
+					mcl_id2vertex_list[mcl_id] = self.get_vertex_list(curs, schema_instance, mcl_id)
+				p_attr_instance.p_value_cut_off = cal_hg_p_value(p_attr_instance.gene_no, p_attr_instance.go_no,\
+					mcl_id2vertex_list[mcl_id], no_of_total_genes, go_no2gene_no_set, r)
+			
 			is_correct = p_attr_instance.is_correct_dict[is_correct_type]
 			data_row = [p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off, p_attr_instance.connectivity_cut_off,\
 				p_attr_instance.cluster_size_cut_off, p_attr_instance.edge_gradient, is_correct]
@@ -137,34 +152,62 @@ class rpart_prediction:
 		sys.stderr.write("Done rpart fitting and predicting.\n")
 		return pred
 	
-	def record_data(self, curs, MpiPredictionFilter_instance, prediction_ls, pred, new_p_gene_tablle):
+	def get_vertex_list(self, curs, schema_instance, mcl_id):
+		"""
+		11-10-05 for data_fetch() to cal_hg_p_value
+		"""
+		curs.execute("select vertex_set from %s where id=%s"%(schema_instance.pattern_table, mcl_id))
+		rows = curs.fetchall()
+		vertex_list = rows[0][0]
+		vertex_list = vertex_list[1:-1].split(',')
+		vertex_list = map(int, vertex_list)
+		return vertex_list
+	
+	def record_data(self, curs, MpiPredictionFilter_instance, prediction_ls, pred, schema_instance):
 		"""
 		11-09-05
 		"""
 		sys.stderr.write("Recording prediction...\n")
 		for i in range(len(prediction_ls)):
 			p_attr_instance = prediction_ls[i]
-			p_attr_instance.vertex_gradient = pred[i][1]
-			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, new_p_gene_tablle, p_attr_instance)
+			p_attr_instance.vertex_gradient = pred[i][1]			
+			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, schema_instance.p_gene_table, p_attr_instance)
 		sys.stderr.write("Done recoding prediction...\n")
 	
 	def run(self):
 		"""
 		11-09-05
 		11-09-05 add rpart_cp
+		11-10-05 add need_cal_hg_p_value
+		
+			--db_connect()
+			--form_schema_tables()
+			--form_schema_tables()
+			--get_no_of_total_genes()
+			--get_go_no2gene_no_set()
+			--data_fetch()
+				--get_vertex_list()
+				--cal_hg_p_value()
+			--rpart_fit_and_predict()
+			--MpiPredictionFilter_instance....()
+			--record_data()
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		old_schema_instance = form_schema_tables(self.fname1, self.lm_bit1)
 		new_schema_instance = form_schema_tables(self.fname2, self.lm_bit2)
 		
-		prediction_ls, all_data, known_data = self.data_fetch(curs, old_schema_instance.p_gene_table, self.filter_type, self.is_correct_type)
+		no_of_total_genes = get_no_of_total_genes(curs)
+		go_no2gene_no_set = get_go_no2gene_no_set(curs)
+		
+		prediction_ls, all_data, known_data = self.data_fetch(curs, old_schema_instance, self.filter_type, self.is_correct_type, \
+			no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
 		pred = self.rpart_fit_and_predict(all_data, known_data, self.rpart_cp)
 		MpiPredictionFilter_instance = MpiPredictionFilter()
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
 		MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
-		self.record_data(curs, MpiPredictionFilter_instance, prediction_ls, pred, new_schema_instance.p_gene_table)
+		self.record_data(curs, MpiPredictionFilter_instance, prediction_ls, pred, new_schema_instance)
 		if self.commit:
 			curs.execute("end")
 
@@ -174,7 +217,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:l:j:m:f:y:p:bcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:l:j:m:f:y:p:gbcr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -190,6 +233,7 @@ if __name__ == '__main__':
 	filter_type = 1
 	is_correct_type = 2
 	rpart_cp = 0.01
+	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
 	report = 0
@@ -217,6 +261,8 @@ if __name__ == '__main__':
 			is_correct_type = int(arg)
 		elif opt in ("-p"):
 			rpart_cp = float(arg)
+		elif opt in ("-g"):
+			need_cal_hg_p_value = 1
 		elif opt in ("-b"):
 			debug = 1
 		elif opt in ("-c"):
@@ -225,7 +271,8 @@ if __name__ == '__main__':
 			report = 1
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, lm_bit1, \
-			fname2, lm_bit2, filter_type, is_correct_type, rpart_cp, debug, commit, report)
+			fname2, lm_bit2, filter_type, is_correct_type, rpart_cp, need_cal_hg_p_value, \
+			debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
