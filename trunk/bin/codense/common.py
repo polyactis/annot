@@ -1459,3 +1459,56 @@ def tax_id2org(tax_id):
 	if tax_id in tax_id2org:
 		organism = tax_id2org[tax_id]
 	return organism
+
+
+"""
+11-15-05
+	return a mt_id_set from a profile_filename
+"""
+def get_mt_id_set_from_profile(profile_filename):
+	sys.stderr.write("Getting mt_id_set from %s..."%profile_filename)
+	mt_id_set = Set()
+	profile_inf = open(profile_filename, 'r')
+	#skip the first four lines
+	for i in range(4):
+		profile_inf.readline()
+	for line in profile_inf:
+		line_ls = line.split()
+		if len(line_ls)==5:	#to avoid the last line
+			mt_id = line_ls[4]
+			mt_id_set.add(mt_id)
+	del profile_inf
+	sys.stderr.write("Done.\n")
+	return mt_id_set
+
+"""
+11-15-05
+	the 1st bit of sites_ls determines whether it's consensus(0) or real aligned sites(1)
+"""
+def get_mt_id2sites_ls(curs, mt_id_set=None, matrix_table='transfac.matrix', site_in_matrix_table='transfac.site_in_matrix'):
+	sys.stderr.write("Getting mt_id2sites_ls ...\n")
+	mt_id2sites_ls = {}
+	curs.execute("DECLARE mt_crs CURSOR FOR SELECT mt_id, mt_acc, consensus, site_in_matrix_accs from %s"%matrix_table)
+	curs.execute("fetch 1000 from mt_crs")
+	rows = curs.fetchall()
+	while rows:
+		for row in rows:
+			mt_id, mt_acc, consensus, site_in_matrix_accs = row
+			if mt_id_set:	#if mt_id_set is available
+				if mt_id not in mt_id_set:
+					continue
+			if site_in_matrix_accs:
+				mt_id2sites_ls[mt_id] = [1]
+				curs.execute("select sequence from %s where mt_acc='%s'"%(site_in_matrix_table, mt_acc))
+				sequence_rows = curs.fetchall()
+				for sequence_row in sequence_rows:
+					mt_id2sites_ls[mt_id].append(sequence_row[0])
+			elif consensus:
+				mt_id2sites_ls[mt_id] = [0, consensus]
+			else:
+				sys.stderr.write("mt_id %s has no site_in_matrix_accs and consensus.\n")
+		curs.execute("fetch 1000 from mt_crs")
+		rows = curs.fetchall()
+	curs.execute("close mt_crs")
+	sys.stderr.write("Done getting mt_id2sites_ls.\n")
+	return mt_id2sites_ls
