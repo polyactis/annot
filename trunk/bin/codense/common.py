@@ -1422,7 +1422,8 @@ def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.a
 		curs.execute("select sequence from %s where id=%s"%\
 			(raw_sequence_table, raw_sequence_start_id+i))
 		rows = curs.fetchall()
-		seq += rows[0][0]
+		if rows:	#11/14/05 it's possible to exceed the whole raw_sequence table because the offset adds one more chunk
+			seq += rows[0][0]
 	relative_start = start - no_of_chunks_before*chunk_size
 	segment = seq[relative_start-1:relative_start-1+segment_size]	#WATCH index needs -1
 	if need_reverse:
