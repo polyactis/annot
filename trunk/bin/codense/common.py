@@ -1396,3 +1396,61 @@ def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no
 	"""
 	p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
 	return p_value
+
+"""
+11-12-05 get a specified segment from chomosome sequence table
+	reverse is handled but complement(strand) is not. Upper level function should take care of this.
+"""
+def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.annot_assembly', \
+	raw_sequence_table='sequence.raw_sequence', chunk_size=10000):
+	need_reverse = int(start>stop)
+	if need_reverse:
+		start, stop = stop, start
+	curs.execute("select start, stop, raw_sequence_start_id from %s where gi=%s"%(annot_assembly_table, gi))
+	rows = curs.fetchall()
+	orig_start, orig_stop, raw_sequence_start_id = rows[0][0]
+	if stop>orig_stop:	#11-14-05 to avoid exceeding the boundary
+		stop = orig_stop
+	no_of_chunks_before = start/chunk_size	#how many chunks are before this segment
+	segment_size = stop - start +1
+	no_of_chunks_segment = segment_size/chunk_size + 1	#how many chunks could include this segment
+	raw_sequence_start_id += no_of_chunks_before	#the first chunk which contains teh segment
+	offset = no_of_chunks_segment + 1	#add one more chunk to ensure the segment is within
+	#get the sequence from raw_sequence_table
+	seq = ''
+	for i in range(offset):
+		curs.execute("select sequence from %s where id=%s"%\
+			(raw_sequence_table, raw_sequence_start_id+i))
+		rows = curs.fetchall()
+		seq += rows[0][0]
+	relative_start = start - no_of_chunks_before*chunk_size
+	segment = seq[relative_start-1:relative_start-1+segment_size]	#WATCH index needs -1
+	if need_reverse:
+		segment = list(segment)
+		segment.reverse()	#only 
+		segment = ''.join(segment)
+	return segment
+
+"""
+11-13-05
+"""
+def pg_1d_array2python_ls(pg_array, type_code=int):
+	pg_array = pg_array[1:-1].split(',')
+	pg_array = map(type_code, pg_array)
+	return pg_array
+
+def tax_id2org(tax_id):
+	"""
+	11-14-05 reverse of org2tax_id()
+	"""
+	organism = None
+	tax_id2org = {3702:'Arabidopsis thaliana',
+		6239:'Caenorhabditis elegans',
+		7227:'Drosophila melanogaster',
+		9606:'Homo sapiens',
+		10090:'Mus musculus',
+		4932:'Saccharomyces cerevisiae',
+		10116:'Rattus norvegicus'}
+	if tax_id in tax_id2org:
+		organism = tax_id2org[tax_id]
+	return organism
