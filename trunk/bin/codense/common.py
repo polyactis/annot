@@ -1408,7 +1408,7 @@ def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.a
 		start, stop = stop, start
 	curs.execute("select start, stop, raw_sequence_start_id from %s where gi=%s"%(annot_assembly_table, gi))
 	rows = curs.fetchall()
-	orig_start, orig_stop, raw_sequence_start_id = rows[0][0]
+	orig_start, orig_stop, raw_sequence_start_id = rows[0]
 	if stop>orig_stop:	#11-14-05 to avoid exceeding the boundary
 		stop = orig_stop
 	no_of_chunks_before = start/chunk_size	#how many chunks are before this segment
