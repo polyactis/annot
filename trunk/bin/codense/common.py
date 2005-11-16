@@ -1502,9 +1502,9 @@ def get_mt_id2sites_ls(curs, mt_id_set=None, matrix_table='transfac.matrix', sit
 				curs.execute("select sequence from %s where mt_acc='%s'"%(site_in_matrix_table, mt_acc))
 				sequence_rows = curs.fetchall()
 				for sequence_row in sequence_rows:
-					mt_id2sites_ls[mt_id].append(sequence_row[0])
+					mt_id2sites_ls[mt_id].append(sequence_row[0].upper())
 			elif consensus:
-				mt_id2sites_ls[mt_id] = [0, consensus]
+				mt_id2sites_ls[mt_id] = [0, consensus.upper()]
 			else:
 				sys.stderr.write("mt_id %s has no site_in_matrix_accs and consensus.\n")
 		curs.execute("fetch 1000 from mt_crs")
