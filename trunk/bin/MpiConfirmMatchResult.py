@@ -34,7 +34,6 @@ sys.path += [os.path.expanduser('~/script/transfac/src')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, output_node, \
 	computing_node, input_node, get_mt_id_set_from_profile, get_mt_id2sites_ls
-from transfacdb import match_block_iterator
 from Bio.Seq import Seq
 from Bio.Data import IUPACData
 
@@ -71,14 +70,18 @@ class MpiConfirmMatchResult:
 	def input_handler(self, parameter_list, message_size, report=0):
 		if report:
 			sys.stderr.write("Fetching stuff...\n")
-		iter = parameter_list[0]
+		prom_id, inf = parameter_list
 		block = []
 		string_length = 0
-		for match_block in iter:
-			block.append(match_block)
-			string_length += len(match_block)
-			if string_length>=message_size:
-				break
+		for line in inf:
+			if line[:10]=='Inspecting':
+				prom_id = int(line.split()[-1])	#\n is discarded automatically by split()
+				parameter_list[0] = prom_id	#modify the list
+			elif line[0] == ' ' and line[:6]!=' Total' and line[:6]!=' Frequ':	#the first character is blank, but exclude the end statistic part
+				block.append([prom_id, line])
+				string_length += len(line)
+				if string_length>=message_size:
+					break
 		if report:
 			sys.stderr.write("Fetching done.\n")
 		return block
@@ -200,22 +203,18 @@ class MpiConfirmMatchResult:
 		data = cPickle.loads(data)
 		mt_id2sites_ls, max_mis_match_perc, min_no_of_mismatches, max_esc_length = parameter_list
 		match_confirmed_results = ''
-		for match_block in data:
-			match_block = cStringIO.StringIO(match_block)
-			seq_id_line = match_block.readline()
-			match_confirmed_result = ''
-			for line in match_block:	#now start the binding site info
-				if self.is_site_confirmed(mt_id2sites_ls, line, max_mis_match_perc, min_no_of_mismatches, max_esc_length):
-					match_confirmed_result += line
-			if match_confirmed_result:	#not nothing
-				match_confirmed_results += seq_id_line+match_confirmed_result
+		for prom_id,line in data:
+			seq_id_line = 'Inspecting %s\n'%prom_id
+			if self.is_site_confirmed(mt_id2sites_ls, line, max_mis_match_perc, min_no_of_mismatches, max_esc_length):
+				match_confirmed_results += seq_id_line+line
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return match_confirmed_results
 	
 	def output_handler(self, communicator, parameter_list, data):
 		outf = parameter_list[0]
 		data = cPickle.loads(data)
-		outf.write(data)
+		if data!='':	#not nothing
+			outf.write(data)
 	
 	def run(self):
 		"""
@@ -259,11 +258,10 @@ class MpiConfirmMatchResult:
 		mpi_synchronize(communicator)
 		if node_rank == 0:
 			aggregated_inf = fileinput.input(input_files)
-			iter = match_block_iterator(aggregated_inf)
-			parameter_list = [iter]
+			parameter_list = [0, aggregated_inf]
 			input_node(communicator, parameter_list, free_computing_nodes, self.message_size, self.report, \
 				input_handler=self.input_handler)
-			del iter, aggregated_inf
+			del aggregated_inf
 		elif node_rank in free_computing_nodes:
 			parameter_list = [mt_id2sites_ls, max_mis_match_perc, min_no_of_mismatches, max_esc_length]
 			computing_node(communicator, parameter_list, self.computing_handler, report=self.report)
