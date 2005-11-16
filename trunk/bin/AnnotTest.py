@@ -30,6 +30,7 @@ Examples:
 10-26-05 19: Test_cc_from_edge_list
 11-03-05 20: Test_MpiDifferentialPattern
 11-10-05 21: Test_cal_hg_p_value
+11-15-05 22: Test_is_site_confirmed
 """
 import unittest, os, sys, getopt, csv
 
@@ -1212,6 +1213,32 @@ class Test_cal_hg_p_value(unittest.TestCase):
 		p_value = cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no_set, r, debug=1)
 		print "p_value",p_value
 
+class Test_is_site_confirmed(unittest.TestCase):
+	"""
+	11-15-05
+	"""
+	def test_is_site_confirmed(self):
+		from codense.common import db_connect, get_mt_id2sites_ls
+		from MpiConfirmMatchResult import MpiConfirmMatchResult
+		
+		hostname='zhoudb'
+		dbname='graphdb'
+		schema = 'transfac'
+		conn, curs =  db_connect(hostname, dbname, schema)
+		
+		mt_id2sites_ls = get_mt_id2sites_ls(curs)
+		#following example related sequence prom_seq id = 463960
+		line = ' V$CEBP_Q2              |       51 (+) |  0.944 |  0.915 | ttATTGAaacagat\n'	#this needs consensus
+		#line = ' V$NFAT_Q4_01           |        6 (-) |  1.000 |  0.970 | tatTTTCCct\n'	#this uses sites
+		max_mis_match_perc = 0.1
+		min_no_of_mismatches = 1
+		max_esc_length = 6
+		
+		MpiConfirmMatchResult_instance = MpiConfirmMatchResult(debug=1)
+		result = MpiConfirmMatchResult_instance.is_site_confirmed(mt_id2sites_ls, line, \
+			max_mis_match_perc, min_no_of_mismatches, max_esc_length)
+		print result
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1244,7 +1271,8 @@ if __name__ == '__main__':
 		18: Test_cal_gradient_score,
 		19: Test_cc_from_edge_list,
 		20: Test_MpiDifferentialPattern,
-		21: Test_cal_hg_p_value}
+		21: Test_cal_hg_p_value,
+		22: Test_is_site_confirmed}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
