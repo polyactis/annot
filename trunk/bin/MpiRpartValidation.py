@@ -14,9 +14,10 @@ Option:
 	-l ...,	loss matrix list, 0,1,1,0 (default) i.e. 0,1,1,0=0,2,1,0
 	-o ...,	prior prob list, 0.5 (default)
 	-s ...,	percentage of data selected to do training, 0.8(default)
+	-x ...,	no_of_validations, 10(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-b,	enable debug flag
-	-c,	commit the database transaction
+	-c,	commit the database transaction(IGNORE)
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
@@ -39,10 +40,10 @@ from rpy import r
 
 class MpiRpartValidation(rpart_prediction):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname=None, output_file=None, \
-		filter_type=1, is_correct_type=2, rpart_cp_ls=[0.01], loss_matrix_ls=[[0,1,1,0]], prior_prob_ls=[0.5], training_perc=0.8,\
-		need_cal_hg_p_value=0, debug=0, commit=0, report=0):
+		filter_type=1, is_correct_type=2, rpart_cp_ls=[0.01], loss_matrix_ls=[[0,1,1,0]], prior_prob_ls=[0.5], \
+		training_perc=0.8, no_of_validations=10, need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
-		11-09-05 add rpart_cp
+		11-19-05 add no_of_validations
 		"""
 		rpart_prediction.__init__(self, hostname, dbname, schema, fname, fname, \
 			filter_type, is_correct_type, 0.01, [0,1,1,0], None, training_perc, \
@@ -52,6 +53,7 @@ class MpiRpartValidation(rpart_prediction):
 		self.rpart_cp_ls = rpart_cp_ls
 		self.loss_matrix_ls = loss_matrix_ls
 		self.prior_prob_ls  = prior_prob_ls
+		self.no_of_validations = int(no_of_validations)
 	
 	def form_setting_ls(self, rpart_cp_ls, loss_matrix_ls, prior_prob_ls):
 		setting_ls = []
@@ -61,24 +63,23 @@ class MpiRpartValidation(rpart_prediction):
 					setting_ls.append([rpart_cp, loss_matrix, prior_prob])
 		return setting_ls
 	
-	def get_known_data(self, curs, fname, filter_type, is_correct_type, need_cal_hg_p_value):
+	def get_data(self, curs, fname, filter_type, is_correct_type, need_cal_hg_p_value):
+		"""
+		11-19-05
+			data_fetch() of rpart_prediction.py changed
+			return unknown_data
+		"""
 		schema_instance = form_schema_tables(fname)
 		
 		no_of_total_genes = get_no_of_total_genes(curs)
 		go_no2gene_no_set = get_go_no2gene_no_set(curs)
-		
-		prediction_ls, all_data, known_data = self.data_fetch(curs, schema_instance, filter_type, is_correct_type, \
-			no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
-		del prediction_ls, all_data
-		return known_data
+		unknown_prediction_ls, known_prediction_ls, unknown_data, known_data = self.data_fetch(curs, schema_instance, \
+			filter_type, is_correct_type, no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
+		del unknown_prediction_ls, known_prediction_ls
+		return unknown_data, known_data
 	
 	
 	def input_node(self, communicator, setting_ls, free_computing_nodes, report=0):
-		"""
-		10-20-05
-		10-22-05
-			add input_handler and regard curs as parameter_list
-		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Input node(%s) working...\n"%node_rank)
 		counter = 0
@@ -98,16 +99,25 @@ class MpiRpartValidation(rpart_prediction):
 		sys.stderr.write("Input node(%s) done\n"%(node_rank))
 	
 	def computing_handler(self, communicator, data, parameter_list):
+		"""
+		11-19-05
+			add no_of_validations
+			add unknown_data and do rpart_fit_and_predict on known_data and unknown_data
+		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
 		data = cPickle.loads(data)
-		known_data, training_perc = parameter_list
+		unknown_data, known_data, training_perc, no_of_validations = parameter_list
 		rpart_cp, loss_matrix, prior_prob = data
 		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, training_perc, rpart_cp, \
-			loss_matrix, prior_prob)
+			loss_matrix, prior_prob, no_of_validations)
+		
+		unknown_pred, known_pred = self.rpart_fit_and_predict(unknown_data, known_data, rpart_cp, loss_matrix, prior_prob)
 		result = [[rpart_cp, loss_matrix, prior_prob],\
 			self.summary_stat_of_accuracy_ls(testing_acc_ls),\
-			self.summary_stat_of_accuracy_ls(training_acc_ls)]
+			self.summary_stat_of_accuracy_ls(training_acc_ls),\
+			self.cal_accuracy(unknown_data, unknown_pred),\
+			self.cal_accuracy(known_data, known_pred)]
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
@@ -131,10 +141,15 @@ class MpiRpartValidation(rpart_prediction):
 		return [accuracy_avg,accuracy_std,no_of_predictions_avg,no_of_predictions_std,no_of_genes_avg,no_of_genes_std]
 	
 	def output_handler(self, communicator, parameter_list, data):
+		"""
+		11-19-05 output the result from unknown and known
+		"""
 		writer = parameter_list[0]
 		data = cPickle.loads(data)
 		writer.writerow(data[0] + ['testing']+data[1])	#testing result
 		writer.writerow(data[0] + ['training']+data[2])	#training result
+		writer.writerow(data[0] + ['unknown']+data[3])
+		writer.writerow(data[0] + ['known']+data[4])
 	
 	def run(self):
 		"""
@@ -152,13 +167,18 @@ class MpiRpartValidation(rpart_prediction):
 		free_computing_nodes = range(1,communicator.size-1)	#exclude the last node
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-			known_data = self.get_known_data(curs, self.fname, self.filter_type, self.is_correct_type, self.need_cal_hg_p_value)
+			unknown_data, known_data = self.get_data(curs, self.fname, self.filter_type, self.is_correct_type, self.need_cal_hg_p_value)
 			known_data_pickle = cPickle.dumps(known_data, -1)
 			for node in free_computing_nodes:	#send it to the computing_node
 				communicator.send(known_data_pickle, node, 0)
+			unknown_data_pickle = cPickle.dumps(unknown_data, -1)
+			for node in free_computing_nodes:	#send it to the computing_node
+				communicator.send(unknown_data_pickle, node, 0)
 		elif node_rank in free_computing_nodes:
 			data, source, tag = communicator.receiveString(0, 0)
 			known_data = cPickle.loads(data)	#take the data
+			data, source, tag = communicator.receiveString(0, 0)
+			unknown_data = cPickle.loads(data)	#take the data
 		elif node_rank==communicator.size-1:
 			writer = csv.writer(open(self.output_file, 'w'), delimiter='\t')
 			#write down the header
@@ -170,7 +190,7 @@ class MpiRpartValidation(rpart_prediction):
 			setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls)
 			self.input_node(communicator, setting_ls, free_computing_nodes, self.report)
 		elif node_rank in free_computing_nodes:
-			parameter_list = [known_data, self.training_perc]
+			parameter_list = [unknown_data, known_data, self.training_perc, self.no_of_validations]
 			computing_node(communicator, parameter_list, self.computing_handler, report=self.report)
 		elif node_rank==communicator.size-1:
 			parameter_list = [writer]
@@ -183,7 +203,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:gbcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:x:gbcr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -200,6 +220,7 @@ if __name__ == '__main__':
 	loss_matrix_ls = [[0,1,1,0]]
 	prior_prob_ls = [0.5]
 	training_perc = 0.8
+	no_of_validations = 10
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
@@ -233,6 +254,8 @@ if __name__ == '__main__':
 			prior_prob_ls = map(float, arg.split(','))
 		elif opt in ("-s"):
 			training_perc = float(arg)
+		elif opt in ("-x"):
+			no_of_validations = int(arg)
 		elif opt in ("-g"):
 			need_cal_hg_p_value = 1
 		elif opt in ("-b"):
@@ -244,7 +267,7 @@ if __name__ == '__main__':
 	if schema and fname and output_file:
 		instance = MpiRpartValidation(hostname, dbname, schema, fname, output_file, \
 			filter_type, is_correct_type, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, training_perc, \
-			need_cal_hg_p_value, debug, commit, report)
+			no_of_validations, need_cal_hg_p_value, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
