@@ -66,7 +66,9 @@ class rpart_prediction:
 			1st get the data from p_gene_table and remove redundancy given filter_type
 			2nd transform the data to three lists
 		11-10-05 add a chunk of code to get hg p-value(leave one out) for the prediction
-			mcl_id2vertex_list might blow the memory.(?) 
+			mcl_id2vertex_list might blow the memory.(?)
+		11-19-05
+			separate predictions totally into known and unknown
 		"""
 		sys.stderr.write("Fetching data from old p_gene_table...\n")
 		prediction_pair2instance = {}
@@ -102,11 +104,11 @@ class rpart_prediction:
 				sys.stderr.write("%s%s/%s"%('\x08'*20, counter, real_counter))
 			curs.execute("fetch 10000 from crs")
 			rows = curs.fetchall()
-		prediction_ls = []
-		all_data = []
+		unknown_prediction_ls = []
+		known_prediction_ls = []
+		unknown_data = []	#11-19-05		
 		known_data = []
 		for prediction_pair,p_attr_instance in prediction_pair2instance.iteritems():
-			prediction_ls.append(p_attr_instance)
 			#11-10-05
 			mcl_id2vertex_list = {}
 			if need_cal_hg_p_value:
@@ -120,12 +122,15 @@ class rpart_prediction:
 			data_row = [p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off, p_attr_instance.connectivity_cut_off,\
 				p_attr_instance.cluster_size_cut_off, p_attr_instance.edge_gradient, p_attr_instance.gene_no, p_attr_instance.go_no, \
 				is_correct]
-			all_data.append(data_row)
 			if is_correct!=-1:
 				known_data.append(data_row)	#to do fitting
+				known_prediction_ls.append(p_attr_instance)
+			else:
+				unknown_data.append(data_row)
+				unknown_prediction_ls.append(p_attr_instance)
 		
 		sys.stderr.write("Done fetching data.\n")
-		return prediction_ls, all_data, known_data
+		return unknown_prediction_ls, known_prediction_ls, unknown_data, known_data
 	
 	def rpart_fit_and_predict(self, all_data, known_data, rpart_cp, loss_matrix, prior_prob, bit_string='11111'):
 		"""
@@ -191,7 +196,7 @@ class rpart_prediction:
 		sys.stderr.write("Recording prediction...\n")
 		for i in range(len(prediction_ls)):
 			p_attr_instance = prediction_ls[i]
-			p_attr_instance.vertex_gradient = pred[repr(i+1)]	#WATCH R's index starts from 1
+			p_attr_instance.vertex_gradient = int(pred[repr(i+1)])	#WATCH R's index starts from 1
 			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, schema_instance.p_gene_table, p_attr_instance)
 		sys.stderr.write("Done recoding prediction...\n")
 	
@@ -237,14 +242,15 @@ class rpart_prediction:
 			accuracy = 0
 		return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set)]
 	
-	def rpart_validation(self, known_data, training_perc, rpart_cp, loss_matrix, prior_prob):
+	def rpart_validation(self, known_data, training_perc, rpart_cp, loss_matrix, prior_prob, no_of_validations=10):
 		"""
 		11-17-05
 			for parameter tuning purpose
+		11-18-05 add no_of_validations
 		"""
 		training_acc_ls = []
 		testing_acc_ls = []
-		for i in range(10):
+		for i in range(no_of_validations):
 			training_data, testing_data = self.sample_data(known_data, training_perc)
 			pred_testing, pred_training = self.rpart_fit_and_predict(testing_data, training_data, rpart_cp, loss_matrix, prior_prob)
 			testing_acc_ls.append(self.cal_accuracy(testing_data, pred_testing))
@@ -276,8 +282,8 @@ class rpart_prediction:
 		no_of_total_genes = get_no_of_total_genes(curs)
 		go_no2gene_no_set = get_go_no2gene_no_set(curs)
 		
-		prediction_ls, all_data, known_data = self.data_fetch(curs, old_schema_instance, self.filter_type, self.is_correct_type, \
-			no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
+		unknown_prediction_ls, known_prediction_ls, unknown_data, known_data = self.data_fetch(curs, old_schema_instance,\
+			self.filter_type, self.is_correct_type, no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
 		
 		"""
 		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, self.training_perc, self.rpart_cp, \
@@ -285,17 +291,19 @@ class rpart_prediction:
 		print testing_acc_ls
 		print training_acc_ls
 		"""
-		pred, pred_training = self.rpart_fit_and_predict(all_data, known_data, self.rpart_cp, self.loss_matrix, self.prior_prob)
+		unknown_pred, known_pred = self.rpart_fit_and_predict(unknown_data, known_data, self.rpart_cp, \
+			self.loss_matrix, self.prior_prob)
 		
 		MpiPredictionFilter_instance = MpiPredictionFilter()
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
 		MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
-		self.record_data(curs, MpiPredictionFilter_instance, prediction_ls, pred, new_schema_instance)
+		self.record_data(curs, MpiPredictionFilter_instance, unknown_prediction_ls, unknown_pred, new_schema_instance)
+		self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance)
 		if self.commit:
 			curs.execute("end")
-		"""
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
