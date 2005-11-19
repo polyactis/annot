@@ -1374,6 +1374,7 @@ def draw_pattern(vertex_set, edge_set, go_no, gene_no2gene_id, gene_no2go_no, cl
 def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no_set, r, debug=0):
 	"""
 	11-10-05 'from rpy import r' should be executed in upper context
+	11-18-05 fix a bug in " n=no_of_total_genes - cluster_size"
 	"""
 	cluster_size = len(vertex_list)
 	no_of_local_associated_genes = 0
@@ -1385,7 +1386,7 @@ def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no
 		no_of_global_associated_genes -= 1
 	x = no_of_local_associated_genes
 	m = no_of_global_associated_genes
-	n = no_of_total_genes - cluster_size
+	n = no_of_total_genes - m
 	k = cluster_size
 	"""
 	if debug:
