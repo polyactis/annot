@@ -13,7 +13,7 @@ Option:
 	-p ...,	rpart cp value(0.01, default)
 	-l ...,	loss matrix, 0,1,1,0 (default)
 	-o ...,	prior prob for the 1st class, None (default, i.e. 0.65)
-	-s ...,	percentage of data selected to do training, 0.8(default)
+	-s ...,	no_of_buckets selected to do training, 5(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-b,	enable debug flag
 	-c,	commit the database transaction
@@ -27,7 +27,7 @@ Examples:
 Description:
 	Program to do rpart fittng and prediction.
 """
-import sys, os, getopt, csv, random
+import sys, os, getopt, csv, random, math
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, form_schema_tables, cal_hg_p_value, \
 	get_go_no2gene_no_set, get_no_of_total_genes
@@ -38,7 +38,7 @@ from sets import Set
 
 class rpart_prediction:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, fname2=None, \
-		filter_type=1, is_correct_type=2, rpart_cp=0.01, loss_matrix=[0,1,1,0], prior_prob=None, training_perc=0.8,\
+		filter_type=1, is_correct_type=2, rpart_cp=0.01, loss_matrix=[0,1,1,0], prior_prob=None, no_of_buckets=5,\
 		need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
 		11-09-05 add rpart_cp
@@ -53,7 +53,7 @@ class rpart_prediction:
 		self.rpart_cp = rpart_cp
 		self.loss_matrix = loss_matrix
 		self.prior_prob = prior_prob
-		self.training_perc = float(training_perc)
+		self.no_of_buckets = int(no_of_buckets)
 		self.need_cal_hg_p_value = int(need_cal_hg_p_value)
 		self.debug = int(debug)
 		self.commit = int(commit)
@@ -160,7 +160,7 @@ class rpart_prediction:
 				parms=r.list(loss=r.matrix(loss_matrix) ) )
 		
 		set_default_mode(BASIC_CONVERSION)
-		pred_training = r.predict(fit, data_frame, type=["class"])	
+		pred_training = r.predict(fit, data_frame, type=["class"])
 		del data_frame
 		
 		set_default_mode(NO_CONVERSION)
@@ -191,28 +191,43 @@ class rpart_prediction:
 		sys.stderr.write("Recording prediction...\n")
 		for i in range(len(prediction_ls)):
 			p_attr_instance = prediction_ls[i]
-			p_attr_instance.vertex_gradient = pred[repr(i+1)]	#WATCH R's index starts from 1
+			p_attr_instance.vertex_gradient = int(pred[repr(i+1)])	#WATCH R's index starts from 1
 			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, schema_instance.p_gene_table, p_attr_instance)
 		sys.stderr.write("Done recoding prediction...\n")
 	
-	
-	
 	####11-17-05  for parameter tuning purpose
-	def sample_data(self, data,  training_perc):
+	def random_partition(self, total_no_of_cases, no_of_buckets):
+		"""
+		11-18-05
+			randomly partition the data into several buckets
+		"""
+		case_indices = range(total_no_of_cases)
+		random.shuffle(case_indices)	#shuffle it
+		bucket_size = int(math.ceil(total_no_of_cases/float(no_of_buckets)))	#make it a little bit larger. WATCH int() coersion
+		bucket_ls = []
+		for i in range(no_of_buckets):	#create empty sets
+			#WATCH: don't use [Set()]*no_of_buckets. When you add one item to one of these sets, all of them get it.
+			#They are pointer-copies which all points to the same memory location.
+			bucket_ls.append(Set())
+		for i in range(total_no_of_cases):
+			bucket_ls[i/bucket_size].add(case_indices[i])	#i/bucket_size
+		return bucket_ls
+	
+	def sample_data(self, data,  bucket):
 		"""
 		11-17-05
 			for parameter tuning purpose
+		11-18-05
+			use bucket got from random_partition(), (old way is to use training_perc to sample all data)
 		"""
 		total_no_of_cases = len(data)
-		sample_indices = random.sample(range(total_no_of_cases), int(training_perc*total_no_of_cases))
 		training_data = []
 		testing_data  = []
-		sample_indices_set = Set(sample_indices)
 		for i in range(total_no_of_cases):
-			if i in sample_indices_set:
-				training_data.append(data[i])
-			else:
+			if i in bucket:	#bucket is separated to do validation as testing_data
 				testing_data.append(data[i])
+			else:
+				training_data.append(data[i])
 		return training_data, testing_data
 	
 	def cal_accuracy(self, data, pred):
@@ -237,15 +252,22 @@ class rpart_prediction:
 			accuracy = 0
 		return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set)]
 	
-	def rpart_validation(self, known_data, training_perc, rpart_cp, loss_matrix, prior_prob):
+	def rpart_validation(self, known_data, no_of_buckets, rpart_cp, loss_matrix, prior_prob):
 		"""
 		11-17-05
 			for parameter tuning purpose
+		11-18-05 use random_partition()
+			
+			--random_partition()
+			(loop)
+				--sample_data()
+				--cal_accuracy()
 		"""
 		training_acc_ls = []
 		testing_acc_ls = []
-		for i in range(10):
-			training_data, testing_data = self.sample_data(known_data, training_perc)
+		bucket_ls = self.random_partition(len(known_data), no_of_buckets)
+		for bucket in bucket_ls:
+			training_data, testing_data = self.sample_data(known_data, bucket)
 			pred_testing, pred_training = self.rpart_fit_and_predict(testing_data, training_data, rpart_cp, loss_matrix, prior_prob)
 			testing_acc_ls.append(self.cal_accuracy(testing_data, pred_testing))
 			training_acc_ls.append(self.cal_accuracy(training_data, pred_training))
@@ -280,7 +302,7 @@ class rpart_prediction:
 			no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
 		
 		"""
-		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, self.training_perc, self.rpart_cp, \
+		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, self.no_of_buckets, self.rpart_cp, \
 			self.loss_matrix, self.prior_prob)
 		print testing_acc_ls
 		print training_acc_ls
@@ -295,7 +317,7 @@ class rpart_prediction:
 		self.record_data(curs, MpiPredictionFilter_instance, prediction_ls, pred, new_schema_instance)
 		if self.commit:
 			curs.execute("end")
-		"""
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -319,7 +341,7 @@ if __name__ == '__main__':
 	rpart_cp = 0.01
 	loss_matrix = [0,1,1,0]
 	prior_prob = None
-	training_perc = 0.8
+	no_of_buckets = 5
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
@@ -349,7 +371,7 @@ if __name__ == '__main__':
 		elif opt in ("-o"):
 			prior_prob = float(arg)
 		elif opt in ("-s"):
-			training_perc = float(arg)
+			no_of_buckets = int(arg)
 		elif opt in ("-g"):
 			need_cal_hg_p_value = 1
 		elif opt in ("-b"):
@@ -360,7 +382,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, fname2, \
-			filter_type, is_correct_type, rpart_cp, loss_matrix, prior_prob, training_perc, \
+			filter_type, is_correct_type, rpart_cp, loss_matrix, prior_prob, no_of_buckets, \
 			need_cal_hg_p_value, debug, commit, report)
 		instance.run()
 	else:

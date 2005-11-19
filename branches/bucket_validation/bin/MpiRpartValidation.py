@@ -13,7 +13,7 @@ Option:
 	-p ...,	rpart cp value list (0.01, default)
 	-l ...,	loss matrix list, 0,1,1,0 (default) i.e. 0,1,1,0=0,2,1,0
 	-o ...,	prior prob list, 0.5 (default)
-	-s ...,	percentage of data selected to do training, 0.8(default)
+	-s ...,	no_of_buckets selected to do training, 5(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-b,	enable debug flag
 	-c,	commit the database transaction
@@ -39,13 +39,13 @@ from rpy import r
 
 class MpiRpartValidation(rpart_prediction):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname=None, output_file=None, \
-		filter_type=1, is_correct_type=2, rpart_cp_ls=[0.01], loss_matrix_ls=[[0,1,1,0]], prior_prob_ls=[0.5], training_perc=0.8,\
+		filter_type=1, is_correct_type=2, rpart_cp_ls=[0.01], loss_matrix_ls=[[0,1,1,0]], prior_prob_ls=[0.5], no_of_buckets=5,\
 		need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
 		11-09-05 add rpart_cp
 		"""
 		rpart_prediction.__init__(self, hostname, dbname, schema, fname, fname, \
-			filter_type, is_correct_type, 0.01, [0,1,1,0], None, training_perc, \
+			filter_type, is_correct_type, 0.01, [0,1,1,0], None, no_of_buckets, \
 			need_cal_hg_p_value, debug, commit, report)
 		self.fname = fname
 		self.output_file = output_file
@@ -101,9 +101,9 @@ class MpiRpartValidation(rpart_prediction):
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
 		data = cPickle.loads(data)
-		known_data, training_perc = parameter_list
+		known_data, no_of_buckets = parameter_list
 		rpart_cp, loss_matrix, prior_prob = data
-		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, training_perc, rpart_cp, \
+		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, no_of_buckets, rpart_cp, \
 			loss_matrix, prior_prob)
 		result = [[rpart_cp, loss_matrix, prior_prob],\
 			self.summary_stat_of_accuracy_ls(testing_acc_ls),\
@@ -170,7 +170,7 @@ class MpiRpartValidation(rpart_prediction):
 			setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls)
 			self.input_node(communicator, setting_ls, free_computing_nodes, self.report)
 		elif node_rank in free_computing_nodes:
-			parameter_list = [known_data, self.training_perc]
+			parameter_list = [known_data, self.no_of_buckets]
 			computing_node(communicator, parameter_list, self.computing_handler, report=self.report)
 		elif node_rank==communicator.size-1:
 			parameter_list = [writer]
@@ -199,7 +199,7 @@ if __name__ == '__main__':
 	rpart_cp_ls = [0.01]
 	loss_matrix_ls = [[0,1,1,0]]
 	prior_prob_ls = [0.5]
-	training_perc = 0.8
+	no_of_buckets = 5
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
@@ -232,7 +232,7 @@ if __name__ == '__main__':
 		elif opt in ("-o"):
 			prior_prob_ls = map(float, arg.split(','))
 		elif opt in ("-s"):
-			training_perc = float(arg)
+			no_of_buckets = int(arg)
 		elif opt in ("-g"):
 			need_cal_hg_p_value = 1
 		elif opt in ("-b"):
@@ -243,7 +243,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and fname and output_file:
 		instance = MpiRpartValidation(hostname, dbname, schema, fname, output_file, \
-			filter_type, is_correct_type, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, training_perc, \
+			filter_type, is_correct_type, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, no_of_buckets, \
 			need_cal_hg_p_value, debug, commit, report)
 		instance.run()
 	else:
