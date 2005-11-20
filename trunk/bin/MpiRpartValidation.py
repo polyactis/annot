@@ -29,7 +29,7 @@ Description:
 	Program to do rpart validation. Inherit rpart_prediction.py
 """
 
-import sys, os, getopt, csv, cPickle
+import sys, os, getopt, csv, cPickle, random
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import db_connect, form_schema_tables, \
@@ -220,8 +220,24 @@ class MpiRpartValidation(rpart_prediction):
 		elif node_rank in free_computing_nodes:
 			data, source, tag = communicator.receiveString(0, 0)
 			known_data = cPickle.loads(data)	#take the data
+			"""
+			#11-19-05 shuffle data to check
+			index_ls = range(len(known_data))
+			random.shuffle(index_ls)
+			for i in range(len(index_ls)):
+				index_ls[i] = known_data[i]
+			known_data = index_ls
+			"""
 			data, source, tag = communicator.receiveString(0, 0)
 			unknown_data = cPickle.loads(data)	#take the data
+			"""
+			#11-19-05 shuffle data to check
+			index_ls = range(len(unknown_data))
+			random.shuffle(index_ls)
+			for i in range(len(index_ls)):
+				index_ls[i] = unknown_data[i]
+			unknown_data = index_ls
+			"""
 		elif node_rank==communicator.size-1:
 			writer = csv.writer(open(self.output_file, 'w'), delimiter='\t')
 			#write down the header
