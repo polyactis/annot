@@ -55,12 +55,21 @@ class MpiRpartValidation(rpart_prediction):
 		self.prior_prob_ls  = prior_prob_ls
 		self.no_of_validations = int(no_of_validations)
 	
-	def form_setting_ls(self, rpart_cp_ls, loss_matrix_ls, prior_prob_ls):
+	def form_setting_ls(self, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, no_of_validations):
+		"""
+		11-19-05
+			use no_of_validations to multiply the setting(separate the one setting's validations
+				to different nodes)
+			the extra setting copy  is for a non-validation real model fitting
+		"""
 		setting_ls = []
 		for rpart_cp in rpart_cp_ls:
 			for loss_matrix in loss_matrix_ls:
 				for prior_prob in prior_prob_ls:
-					setting_ls.append([rpart_cp, loss_matrix, prior_prob])
+					setting_ls += [[rpart_cp, loss_matrix, prior_prob, 0]]*no_of_validations
+					#11-19-05 0 is for validation
+					setting_ls.append([rpart_cp, loss_matrix, prior_prob, 1])		#11-19-05 the extra copy
+					#1 is for non-validation
 		return setting_ls
 	
 	def get_data(self, curs, fname, filter_type, is_correct_type, need_cal_hg_p_value):
@@ -103,21 +112,37 @@ class MpiRpartValidation(rpart_prediction):
 		11-19-05
 			add no_of_validations
 			add unknown_data and do rpart_fit_and_predict on known_data and unknown_data
+		11-19-05
+			setting is changed in form_setting_ls()
+			one computing is just for one validation or non-validation
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
 		data = cPickle.loads(data)
 		unknown_data, known_data, training_perc, no_of_validations = parameter_list
-		rpart_cp, loss_matrix, prior_prob = data
+		rpart_cp, loss_matrix, prior_prob, type_code = data	#11-19-05 type_code
+		if type_code==0:
+			training_data, testing_data = self.sample_data(known_data, training_perc)
+			pred_testing, pred_training = self.rpart_fit_and_predict(testing_data, training_data, rpart_cp, loss_matrix, prior_prob)
+			result = [data,\
+				self.cal_accuracy(testing_data, pred_testing),\
+				self.cal_accuracy(training_data, pred_training)]
+		else:
+			unknown_pred, known_pred = self.rpart_fit_and_predict(unknown_data, known_data, rpart_cp, loss_matrix, prior_prob)
+			result = [data,\
+				self.cal_accuracy(unknown_data, unknown_pred),\
+				self.cal_accuracy(known_data, known_pred)]
+		"""
 		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, training_perc, rpart_cp, \
 			loss_matrix, prior_prob, no_of_validations)
 		
 		unknown_pred, known_pred = self.rpart_fit_and_predict(unknown_data, known_data, rpart_cp, loss_matrix, prior_prob)
-		result = [[rpart_cp, loss_matrix, prior_prob],\
+		result = [data,\
 			self.summary_stat_of_accuracy_ls(testing_acc_ls),\
 			self.summary_stat_of_accuracy_ls(training_acc_ls),\
 			self.cal_accuracy(unknown_data, unknown_pred),\
 			self.cal_accuracy(known_data, known_pred)]
+		"""
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
@@ -143,17 +168,35 @@ class MpiRpartValidation(rpart_prediction):
 	def output_handler(self, communicator, parameter_list, data):
 		"""
 		11-19-05 output the result from unknown and known
+		11-19-05
 		"""
-		writer = parameter_list[0]
+		writer, setting2validation_stat, setting2unknown_known_acc_ls, no_of_validations = parameter_list
 		data = cPickle.loads(data)
-		writer.writerow(data[0] + ['testing']+data[1])	#testing result
-		writer.writerow(data[0] + ['training']+data[2])	#training result
-		writer.writerow(data[0] + ['unknown']+data[3])
-		writer.writerow(data[0] + ['known']+data[4])
+		setting = data[0]
+		key = (setting[0], tuple(setting[1]), setting[2])
+		if setting[3] == 0:	#type_code == 0(validation)
+			if key not in setting2validation_stat:
+				setting2validation_stat[key] = [[],[]]	#1st [] is for testing, 2nd [] is for training
+			setting2validation_stat[key][0].append(data[1])	#testing
+			setting2validation_stat[key][1].append(data[2])	#training
+		else:
+			setting2unknown_known_acc_ls[key] = [data[1], data[2]]
+		if len(setting2validation_stat[key][0])==no_of_validations and key in setting2unknown_known_acc_ls:
+			#11-19-05 all validations are done and non-validation is also done
+			testing_sum_stat = self.summary_stat_of_accuracy_ls(setting2validation_stat[key][0])
+			training_sum_stat = self.summary_stat_of_accuracy_ls(setting2validation_stat[key][1])
+			writer.writerow(list(key) +['testing'] + testing_sum_stat)
+			writer.writerow(list(key) +['training'] + training_sum_stat)
+			writer.writerow(list(key) +['unknown']+ setting2unknown_known_acc_ls[key][0])
+			writer.writerow(list(key) +['known']+ setting2unknown_known_acc_ls[key][1])
 	
 	def run(self):
 		"""
 		11-16-05
+		11-19-05
+			use no_of_validations to multiply the setting(separate the one setting's validations
+				to different nodes)
+			the extra setting copy  is for a non-validation real model fitting
 			
 			--computing_handler()
 				--is_site_confirmed()
@@ -187,13 +230,15 @@ class MpiRpartValidation(rpart_prediction):
 			
 		mpi_synchronize(communicator)
 		if node_rank == 0:
-			setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls)
+			setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls, self.no_of_validations)
 			self.input_node(communicator, setting_ls, free_computing_nodes, self.report)
 		elif node_rank in free_computing_nodes:
 			parameter_list = [unknown_data, known_data, self.training_perc, self.no_of_validations]
 			computing_node(communicator, parameter_list, self.computing_handler, report=self.report)
 		elif node_rank==communicator.size-1:
-			parameter_list = [writer]
+			setting2validation_stat = {}
+			setting2unknown_known_acc_ls = {}
+			parameter_list = [writer, setting2validation_stat, setting2unknown_known_acc_ls, self.no_of_validations]
 			output_node(communicator, free_computing_nodes, parameter_list, self.output_handler, self.report)
 			del writer
 
