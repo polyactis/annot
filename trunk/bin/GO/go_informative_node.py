@@ -12,7 +12,8 @@ Option:
 	-s ..., --size=...	the size of the informative node, 60(default)
 	-m ...,	max_no_of_nodes, only nodes bigger than size above, 150(default), node_type=4
 	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
-	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 4), 4(control no of nodes)
+	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 4), 4(biggest-first-break 
+		control no of nodes), 5(biggest-first-break-level-by-level, similar to 4)
 	-l ..., --level=...	for node_type=3 or 4, this determines the level of a qualified go, 4(default)
 	-b, --bfs	construct by BFS instead of index(IGNORE)
 	-u,	debug
