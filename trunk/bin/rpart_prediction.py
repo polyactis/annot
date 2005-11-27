@@ -58,7 +58,9 @@ class rpart_prediction:
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
-	
+		#11-23-05 library loading here
+		r.library("rpart")
+
 	def data_fetch(self, curs, schema_instance, filter_type, is_correct_type, \
 		no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value=0):
 		"""
@@ -132,7 +134,7 @@ class rpart_prediction:
 		sys.stderr.write("Done fetching data.\n")
 		return unknown_prediction_ls, known_prediction_ls, unknown_data, known_data
 	
-	def rpart_fit_and_predict(self, all_data, known_data, rpart_cp, loss_matrix, prior_prob, bit_string='11111'):
+	def rpart_fit(self, known_data, rpart_cp, loss_matrix, prior_prob, bit_string='11111'):
 		"""
 		11-09-05
 			1st use known_data to get the fit model
@@ -141,16 +143,16 @@ class rpart_prediction:
 		11-17-05
 			add loss_matrix, prior_prob
 			return two pred
+		11-23-05
+			split fit and predict. rpart_fit_and_predict() is split into rpart_fit() and rpart_predict()
 		"""
-		sys.stderr.write("rpart fitting and predicting...\n")
-		r.library("rpart")
+		sys.stderr.write("Doing rpart_fit...\n")
 		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'gradient']
 		formula_list = []
 		for i in range(len(bit_string)):
 			if bit_string[i] == '1':
 				formula_list.append(coeff_name_list[i])
 		#11-17-05 transform into array
-		all_data = array(all_data)
 		known_data = array(known_data)
 		
 		set_default_mode(NO_CONVERSION)
@@ -163,19 +165,25 @@ class rpart_prediction:
 		else:
 			fit = r.rpart(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, method="class", control=r.rpart_control(cp=rpart_cp),\
 				parms=r.list(loss=r.matrix(loss_matrix) ) )
-		
-		set_default_mode(BASIC_CONVERSION)
-		pred_training = r.predict(fit, data_frame, type=["class"])	
 		del data_frame
-		
+		sys.stderr.write("Done rpart_fit.\n")
+		return fit
+	
+	def rpart_predict(self, fit_model, data):
+		"""
+		11-23-05
+			split from rpart_fit_and_predict()
+		"""
+		sys.stderr.write("Doing rpart_predict...\n")
+		data = array(data)
 		set_default_mode(NO_CONVERSION)
-		all_data_frame = r.as_data_frame({"p_value":all_data[:,0], "recurrence":all_data[:,1], "connectivity":all_data[:,2], \
-			"cluster_size":all_data[:,3], "gradient":all_data[:,4], "is_correct":all_data[:,-1]})
+		data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
+			"cluster_size":data[:,3], "gradient":data[:,4], "is_correct":data[:,-1]})
 		set_default_mode(BASIC_CONVERSION)
-		pred = r.predict(fit, all_data_frame, type=["class"])	#11-17-05 type=c("class")
-		del all_data_frame
-		sys.stderr.write("Done rpart fitting and predicting.\n")
-		return pred, pred_training
+		pred = r.predict(fit_model, data_frame, type=["class"])	#11-17-05 type=c("class")
+		del data_frame
+		sys.stderr.write("Done rpart_predict.\n")
+		return pred
 	
 	def get_vertex_list(self, curs, schema_instance, mcl_id):
 		"""
@@ -198,7 +206,7 @@ class rpart_prediction:
 			p_attr_instance = prediction_ls[i]
 			p_attr_instance.vertex_gradient = int(pred[repr(i+1)])	#WATCH R's index starts from 1
 			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, schema_instance.p_gene_table, p_attr_instance)
-		sys.stderr.write("Done recoding prediction...\n")
+		sys.stderr.write("Done recording prediction...\n")
 	
 	
 	
@@ -220,33 +228,41 @@ class rpart_prediction:
 				testing_data.append(data[i])
 		return training_data, testing_data
 	
-	def cal_accuracy(self, data, pred):
+	def cal_accuracy(self, data, pred, need_prediction_set=0):
 		"""
 		11-17-05
 			for parameter tuning purpose
+		11-23-05
+			When doing validation on unknown data, need_prediction_set=1
 		"""
-		no_of_total_predictions = 0
 		no_of_correct_predictions = 0
 		gene_set = Set()
+		prediction_set = Set()	#11-23-05
 		for i in range(len(data)):
 			p_value, recurrence, connectivity, cluster_size, edge_gradient, gene_no, go_no, is_correct = data[i]
 			key_in_pred = repr(i+1)	#WATCH R's index starts from 1
 			if pred[key_in_pred] == '1':
-				no_of_total_predictions += 1
+				prediction_set.add((gene_no, go_no))	#11-23-05
 				gene_set.add(gene_no)
 				if is_correct==1:
 					no_of_correct_predictions += 1
+		no_of_total_predictions = len(prediction_set)	#11-23-05
 		if no_of_total_predictions>0:
 			accuracy = float(no_of_correct_predictions)/no_of_total_predictions
 		else:
 			accuracy = 0
-		return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set)]
+		if need_prediction_set:	#11-23-05
+			return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set), prediction_set]
+		else:
+			return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set)]
 	
 	def rpart_validation(self, known_data, training_perc, rpart_cp, loss_matrix, prior_prob, no_of_validations=10):
 		"""
 		11-17-05
 			for parameter tuning purpose
 		11-18-05 add no_of_validations
+		11-23-05
+			defunct, MpiRpartValidation.py is specifically for validation purpose
 		"""
 		training_acc_ls = []
 		testing_acc_ls = []
@@ -262,6 +278,8 @@ class rpart_prediction:
 		11-09-05
 		11-09-05 add rpart_cp
 		11-10-05 add need_cal_hg_p_value
+		11-23-05
+			rpart_fit_and_predict() is split
 		
 			--db_connect()
 			--form_schema_tables()
@@ -271,7 +289,9 @@ class rpart_prediction:
 			--data_fetch()
 				--get_vertex_list()
 				--cal_hg_p_value()
-			--rpart_fit_and_predict()
+			--rpart_fit()
+			--rpart_predict()
+			--rpart_predict()
 			--MpiPredictionFilter_instance....()
 			--record_data()
 		"""
@@ -291,8 +311,9 @@ class rpart_prediction:
 		print testing_acc_ls
 		print training_acc_ls
 		"""
-		unknown_pred, known_pred = self.rpart_fit_and_predict(unknown_data, known_data, self.rpart_cp, \
-			self.loss_matrix, self.prior_prob)
+		fit_model = self.rpart_fit(known_data, self.rpart_cp, self.loss_matrix, self.prior_prob)
+		known_pred = self.rpart_predict(fit_model, known_data)
+		unknown_pred = self.rpart_predict(fit_model, unknown_data)
 		
 		MpiPredictionFilter_instance = MpiPredictionFilter()
 		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
