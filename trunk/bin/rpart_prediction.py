@@ -58,8 +58,6 @@ class rpart_prediction:
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
-		#11-23-05 library loading here
-		r.library("rpart")
 
 	def data_fetch(self, curs, schema_instance, filter_type, is_correct_type, \
 		no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value=0):
@@ -145,8 +143,15 @@ class rpart_prediction:
 			return two pred
 		11-23-05
 			split fit and predict. rpart_fit_and_predict() is split into rpart_fit() and rpart_predict()
+		11-27-05
+			r cleanup
 		"""
-		sys.stderr.write("Doing rpart_fit...\n")
+		if self.debug:
+			sys.stderr.write("Doing rpart_fit...\n")
+		#11-27-05 r cleanup
+		from rpy import r
+		r.library('rpart')
+		
 		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'gradient']
 		formula_list = []
 		for i in range(len(bit_string)):
@@ -166,7 +171,8 @@ class rpart_prediction:
 			fit = r.rpart(r("is_correct~%s"%'+'.join(formula_list)), data=data_frame, method="class", control=r.rpart_control(cp=rpart_cp),\
 				parms=r.list(loss=r.matrix(loss_matrix) ) )
 		del data_frame
-		sys.stderr.write("Done rpart_fit.\n")
+		if self.debug:
+			sys.stderr.write("Done rpart_fit.\n")
 		return fit
 	
 	def rpart_predict(self, fit_model, data):
@@ -174,7 +180,8 @@ class rpart_prediction:
 		11-23-05
 			split from rpart_fit_and_predict()
 		"""
-		sys.stderr.write("Doing rpart_predict...\n")
+		if self.debug:
+			sys.stderr.write("Doing rpart_predict...\n")
 		data = array(data)
 		set_default_mode(NO_CONVERSION)
 		data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
@@ -182,7 +189,8 @@ class rpart_prediction:
 		set_default_mode(BASIC_CONVERSION)
 		pred = r.predict(fit_model, data_frame, type=["class"])	#11-17-05 type=c("class")
 		del data_frame
-		sys.stderr.write("Done rpart_predict.\n")
+		if self.debug:
+			sys.stderr.write("Done rpart_predict.\n")
 		return pred
 	
 	def get_vertex_list(self, curs, schema_instance, mcl_id):
