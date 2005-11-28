@@ -1513,3 +1513,16 @@ def get_mt_id2sites_ls(curs, mt_id_set=None, matrix_table='transfac.matrix', sit
 	curs.execute("close mt_crs")
 	sys.stderr.write("Done getting mt_id2sites_ls.\n")
 	return mt_id2sites_ls
+
+"""
+11-28-05
+	draw grid to an Image object.
+"""
+def draw_grid(image_object, draw_object, region_to_draw, x_gap, y_gap, color='black'):
+	start_x, start_y, stop_x, stop_y = region_to_draw
+	#draw horizontal 1st
+	for i in range(start_y, stop_y, y_gap):
+		draw_object.line((start_x, i+y_gap, stop_x, i+y_gap), fill=color)
+	#draw vertical 2nd
+	for i in range(start_x, stop_x, x_gap):
+		draw_object.line((i+x_gap, start_y, i+x_gap, stop_y), fill=color)
