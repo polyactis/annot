@@ -25,7 +25,7 @@ import os, sys, csv, getopt
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from codense.common import get_char_dimension, get_text_region, db_connect,\
 	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name, \
-	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name
+	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid
 from sets import Set
 import Image, ImageDraw
 from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv, decodeOccurrenceToBv, decodeOccurrence
@@ -79,6 +79,7 @@ class DrawMaps:
 		output_fname, function_name_length, char_dimension, no_of_functions):
 		"""
 		10-31-05
+		11-28-05 draw_grid
 		"""
 		sys.stderr.write("Drawing gene_function_map...\n")
 		char_width, char_height = char_dimension
@@ -125,6 +126,9 @@ class DrawMaps:
 			text_region = get_text_region(repr(no_of_p_funcs), no_of_p_funcs_repr_dimension, rotate=0)
 			box = (x_offset2, y_offset_upper, whole_dimension[0], y_offset_lower)
 			im.paste(text_region, box)
+		#11-28-05
+		draw_grid(im, draw, [x_offset1, y_offset1, x_offset2, whole_dimension[1]], char_height, char_height)
+		
 		im = im.rotate(270)
 		im.save(output_fname)
 		del im
@@ -181,6 +185,7 @@ class DrawMaps:
 		output_fname, function_name_length, char_dimension, no_of_functions):
 		"""
 		10-31-05 from misc.py. make it independent and return something for draw_gene_function_map()
+		11-28-05 add grid
 		"""
 		sys.stderr.write("Drawing function_map...\n")
 		
@@ -236,6 +241,10 @@ class DrawMaps:
 			box = (x_offset_left, y_offset3, x_offset_right, whole_dimension[1])
 			im.paste(text_region, box)
 		function_name_region = im.crop(function_name_box)	#10-31-05
+		
+		#11-28-05
+		draw_grid(im, draw, [x_offset1, y_offset1, whole_dimension[0], y_offset2], char_height, char_height)
+		
 		im = im.rotate(270)
 		im.save(output_fname)
 		del im
@@ -290,6 +299,9 @@ class DrawMaps:
 	
 	def draw_tf_map(self, recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
 		output_fname, function_name_length, char_dimension):
+		"""
+		11-28-05 add grid
+		"""
 		sys.stderr.write("Drawing tf_map...\n")
 		
 		no_of_tfs = len(recurrence_rec_array_bs_no_list)
@@ -335,6 +347,9 @@ class DrawMaps:
 			text_region = get_text_region(repr(recurrence), dataset_no_dimension)	#rotate
 			box = (x_offset_left, y_offset2, x_offset_right, y_offset3)
 			im.paste(text_region, box)
+		#11-28-05
+		draw_grid(im, draw, [x_offset1, y_offset1, whole_dimension[0], y_offset2], char_height, char_height)
+		
 		im = im.rotate(270)
 		im.save(output_fname)
 		del im
@@ -362,13 +377,13 @@ class DrawMaps:
 		schema_instance = form_schema_tables(self.inputfname, self.acc_cutoff, self.lm_bit)
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		char_dimension = get_char_dimension()
-		
+		"""
 		recurrence_rec_array_bs_no_list, no_of_datasets = self.get_recurrence_rec_array_bs_no_list(curs, schema_instance)
 		mt_no2tf_name = get_mt_no2tf_name()
 		tf_map_output_fname = '%s.tf_map.png'%self.output_prefix
 		self.draw_tf_map(recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
 			tf_map_output_fname, self.function_name_length, char_dimension)
-		
+		"""
 		recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets = self.get_recurrence_go_no_rec_array_cluster_id_ls(curs, \
 			schema_instance.good_cluster_table)
 		go_no2name = get_go_no2name(curs)
