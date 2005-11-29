@@ -6,12 +6,14 @@ Option:
 	-i ...,	inputfname
 	-o ...,	outputfname prefix
 	-p ...,	parameter list: cp,loss_ratio,prior(0.01,-1,0.5, default)
+		for loss_ratio, use a(2nd in loss_matrix)/b(3rd) to denote a ratio
 	-b,	enable debug flag
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
-	
+	DrawRpartValidationCurves.py -i MpiRpartValidation.py_output
+	-o /tmp/yuhuang/test -p -1,1/10,0.5
 
 Description:
 	Program to draw acc2cp and no_of_genes2cp plots.
@@ -143,6 +145,9 @@ if __name__ == '__main__':
 		elif opt in ("-p"):
 			parameter_list = arg
 			parameter_list = parameter_list.split(',')
+			if parameter_list[1]!='-1':	#11-28-05 parse the a/b into float
+				numerator, denominator = parameter_list[1].split('/')
+				parameter_list[1] = float(numerator)/float(denominator)
 			parameter_list = map(float, parameter_list)
 		elif opt in ("-b"):
 			debug = 1
