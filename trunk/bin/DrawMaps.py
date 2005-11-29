@@ -186,6 +186,7 @@ class DrawMaps:
 		"""
 		10-31-05 from misc.py. make it independent and return something for draw_gene_function_map()
 		11-28-05 add grid
+		11-28-05 include go_no in go_name
 		"""
 		sys.stderr.write("Drawing function_map...\n")
 		
@@ -221,7 +222,7 @@ class DrawMaps:
 			x_offset_left = x_offset1+i*function_name_dimension[1]
 			x_offset_right = x_offset1+(i+1)*function_name_dimension[1]
 			#function_name
-			go_name = go_no2name[go_no]
+			go_name = '%s %s'%(go_no, go_no2name[go_no])	#11-28-05 include go_no
 			if len(go_name)>function_name_length:
 				go_name = go_name[:function_name_length]
 			text_region = get_text_region(go_name, function_name_dimension)	#rotate
@@ -358,6 +359,9 @@ class DrawMaps:
 	def run(self):
 		"""
 		10-31-05
+		11-28-05
+			draw_tf_map() is off
+		
 			--form_schema_tables()
 			--db_connect()
 			--get_char_dimension()
