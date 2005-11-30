@@ -37,6 +37,7 @@ from codense.common import db_connect, form_schema_tables, \
 	computing_node, mpi_synchronize
 from rpart_prediction import rpart_prediction
 from rpy import r
+from sets import Set
 
 class MpiRpartValidation(rpart_prediction):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname=None, output_file=None, \
@@ -63,15 +64,16 @@ class MpiRpartValidation(rpart_prediction):
 			the extra setting copy  is for a non-validation real model fitting
 		11-26-05
 			make prior_prob None (proportional to observed data)
+		11-29-05 add back prior_prob
 		"""
 		setting_ls = []
 		for rpart_cp in rpart_cp_ls:
 			for loss_matrix in loss_matrix_ls:
-				#for prior_prob in prior_prob_ls:	#11-26-05
-				setting_ls += [[rpart_cp, loss_matrix, None, 0]]*no_of_validations	#11-26-05	None for prior_prob
-				#11-19-05 0 is for validation
-				setting_ls.append([rpart_cp, loss_matrix, None, 1])		#11-19-05 the extra copy
-				#1 is for non-validation
+				for prior_prob in prior_prob_ls:
+					setting_ls += [[rpart_cp, loss_matrix, prior_prob, 0]]*no_of_validations
+					#11-19-05 0 is for validation
+					setting_ls.append([rpart_cp, loss_matrix, prior_prob, 1])		#11-19-05 the extra copy
+					#1 is for non-validation
 		return setting_ls
 	
 	def get_data(self, curs, fname, filter_type, is_correct_type, need_cal_hg_p_value):
@@ -195,10 +197,20 @@ class MpiRpartValidation(rpart_prediction):
 			setting2validation_stat[key][0].append(data[1])	#testing
 			setting2validation_stat[key][1].append(data[2])	#training
 			setting2validation_stat[key][2].append(data[3][:4])	#unknown, only the 1st 4 entries, the 5th entry is below	11-23-05
-			#for gene_no_go_no_pair in data[3][4]:	#11-23-05	#11-26-05
-				#if gene_no_go_no_pair not in setting2validation_stat[key][3]:
-					#setting2validation_stat[key][3][gene_no_go_no_pair] = 0
-				#setting2validation_stat[key][3][gene_no_go_no_pair] += 1
+			"""
+			gene_no_ls = [row[0] for row in data[3][4]]	#11-27-05 check the frequency of unknown genes in all models
+			gene_no_set = Set(gene_no_ls)
+			for gene_no in gene_no_set:
+				if gene_no not in setting2validation_stat[key][3]:
+					setting2validation_stat[key][3][gene_no] = 0
+				setting2validation_stat[key][3][gene_no] += 1
+			"""
+			"""
+			for gene_no_go_no_pair in data[3][4]:	#11-23-05	#11-26-05
+				if gene_no_go_no_pair not in setting2validation_stat[key][3]:	#11-23-05 check the frequency of unknown prediction-pairs
+					setting2validation_stat[key][3][gene_no_go_no_pair] = 0
+				setting2validation_stat[key][3][gene_no_go_no_pair] += 1
+			"""
 		else:
 			setting2unknown_known_acc_ls[key] = [data[1], data[2]]
 		if len(setting2validation_stat[key][0])==no_of_validations and key in setting2unknown_known_acc_ls:
