@@ -1339,12 +1339,18 @@ def cluster_bs_id_set_from_good_bs_table(curs, good_bs_table):
 
 """
 11-01-05
+11-29-05
+	modify it to read ensembl2no_of_events_table and ensembl_id2gene_id_table
 """
-def get_gene_no2no_of_events(curs, source_table='graph.gene_id2no_of_events', gene_table='gene', schema=None):
+def get_gene_no2no_of_events(curs, ensembl2no_of_events_table='graph.ensembl2no_of_events', \
+	ensembl_id2gene_id_table='graph.ensembl_id2gene_id', source_table='graph.gene_id2no_of_events', gene_table='gene', schema=None):
 	sys.stderr.write("Getting gene_no2no_of_events...\n")
 	gene_no2no_of_events = {}
-	curs.execute("select distinct g.gene_no, e.no_of_events from %s g, %s e where g.gene_id=e.gene_id"%\
-		(gene_table, source_table))
+	curs.execute("SELECT g.gene_no,avg(e2.no_of_events) as no_of_events from %s e1, %s e2, %s g \
+		where e1.ensembl_id=e2.ensembl_id and e1.gene_id=g.gene_id group by g.gene_no"%(ensembl_id2gene_id_table,\
+		ensembl2no_of_events_table, gene_table))
+	#curs.execute("select distinct g.gene_no, e1.no_of_events from %s g, %s e1, %s e2 where g.gene_id=e.gene_id"%\
+		#(gene_table, source_table))
 	rows = curs.fetchall()
 	for row in rows:
 		gene_no, no_of_events = row
