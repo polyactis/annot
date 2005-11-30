@@ -1360,6 +1360,36 @@ def get_gene_no2no_of_events(curs, ensembl2no_of_events_table='graph.ensembl2no_
 
 
 """
+11-29-05
+	if one gene belongs to >1 families, take the bigger family size
+"""
+def get_gene_no2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ensembl_id2family_id', ensembl_id2gene_id_table='graph.ensembl_id2gene_id', \
+	gene_table='gene', schema=None):
+	sys.stderr.write("Getting gene_no2family_size...\n")
+	#1st, get the family_id2size
+	family_id2size = {}
+	curs.execute("select count(ensembl_id), family_id from %s where tax_id=%s group by family_id"%\
+		(ensembl_id2family_id_table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		size, family_id = row
+		family_id2size[family_id] = size
+	#2nd, get the gene_no2family_size
+	gene_no2family_size = {}
+	curs.execute("select distinct g.gene_no, ef.family_id from %s ef,  %s eg, %s g where ef.ensembl_id=eg.ensembl_id\
+		and eg.gene_id=g.gene_id"%(ensembl_id2family_id_table, ensembl_id2gene_id_table, gene_table))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_no, family_id = row
+		if gene_no not in gene_no2family_size:
+			gene_no2family_size[gene_no] = 0
+		if family_id2size[family_id] > gene_no2family_size[gene_no]:	#always take the larger one
+			gene_no2family_size[gene_no]  = family_id2size[family_id]
+	sys.stderr.write("End getting gene_no2family_size.\n")
+	return gene_no2family_size
+
+
+"""
 11-03-05
 	Draw a pattern via graphviz commands.
 	1st call graphDotOutput() to output the input file.
