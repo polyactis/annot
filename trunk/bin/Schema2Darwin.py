@@ -11,6 +11,7 @@ Option:
 	-a ...,	accuracy cutoff used to prediction, 0.6(default)
 	-o ...,	output_dir
 	-g ...,	organism
+	-n,	running bit, (tf_darwin_format, cluster_darwin_format, prediction_darwin_format), 111(default)
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
@@ -184,6 +185,9 @@ class prediction_darwin_format(Thread):
 	
 	def _prediction_darwin_format(self, curs, p_gene_table, gene_p_table, gene_no2id, go_no2id, output_fname):
 		"""
+		12-01-05
+			deal with lca_list={}
+		
 		format:
 			r:=[
 			[gene_id, go_id, is_correct_lca, p_value, mcl_id, lca_list],
@@ -200,7 +204,7 @@ class prediction_darwin_format(Thread):
 		while rows:
 			for row in rows:
 				gene_no, go_no, is_correct_lca, p_value, mcl_id, lca_list = row
-				if lca_list:
+				if lca_list and len(lca_list)>2:	#12-01-05 lca_list={} just blank
 					lca_list = lca_list[1:-1].split(',')
 					lca_list = map(int, lca_list)
 					lca_list = dict_map(go_no2id, lca_list, type=2)
@@ -228,7 +232,11 @@ class prediction_darwin_format(Thread):
 	
 class Schema2Darwin:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111',\
-		acc_cut_off=None, output_dir=None, organism=None, debug=0, report=0):
+		acc_cut_off=None, output_dir=None, organism=None, running_bit='111', debug=0, report=0):
+		"""
+		12-01-05
+			add running_bit
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
@@ -237,6 +245,7 @@ class Schema2Darwin:
 		self.acc_cut_off = float(acc_cut_off)
 		self.output_dir = output_dir
 		self.organism = org_short2long(organism)
+		self.running_bit = running_bit
 		self.debug = int(debug)
 		self.report = int(report)
 	
@@ -267,18 +276,25 @@ class Schema2Darwin:
 		go_no2name = get_go_no2name(curs)	#09-28-05 Jasmine wants the go_name, not go_id
 		mt_no2tf_name = get_mt_no2tf_name()
 		
-		instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-			tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-			cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-			prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-		instance1.start()
-		instance2.start()
-		instance3.start()
-		instance1.join()
-		instance2.join()
-		instance3.join()
+		if self.running_bit[0] == '1':
+			instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
+				tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
+			instance1.start()
+		if self.running_bit[1] == '1':
+			instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
+				cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
+			instance2.start()
+		if self.running_bit[2] == '1':
+			instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
+				prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
+			instance3.start()
+		
+		if self.running_bit[0] == '1':
+			instance1.join()
+		if self.running_bit[1] == '1':
+			instance2.join()
+		if self.running_bit[2] == '1':
+			instance3.join()
 
 
 if __name__ == '__main__':
@@ -287,7 +303,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:l:a:o:g:br", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:f:l:a:o:g:n:br", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -301,6 +317,7 @@ if __name__ == '__main__':
 	acc_cut_off = 0.6
 	output_dir = None
 	organism = None
+	running_bit = '111'
 	debug = 0
 	report = 0
 	for opt, arg in opts:
@@ -316,20 +333,22 @@ if __name__ == '__main__':
 		elif opt in ("-f"):
 			ofname = arg
 		elif opt in ("-l"):
-			lm_bit = float(arg)
+			lm_bit = arg
 		elif opt in ("-a"):
 			acc_cut_off = float(arg)
 		elif opt in ("-o"):
 			output_dir = arg
 		elif opt in ("-g"):
 			organism = arg
+		elif opt in ("-n"):
+			running_bit = arg
 		elif opt in ("-b"):
 			debug = 1
 		elif opt in ("-r"):
 			report = 1
 	if schema and ofname and lm_bit and acc_cut_off and output_dir and organism:
 		instance = Schema2Darwin(hostname, dbname, schema, ofname, lm_bit, acc_cut_off, output_dir,\
-			organism, debug, report)
+			organism, running_bit, debug, report)
 		instance.run()
 		
 	else:
