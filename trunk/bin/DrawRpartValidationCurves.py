@@ -109,14 +109,21 @@ class DrawRpartValidationCurves:
 	def run(self):
 		"""
 		11-28-05
+		11-30-05
+			add training_accuracy and known_accuracy
 		"""
 		fix_index_ls, var_index, variant_ls, data_dict = self.get_data_structure(self.inputfname, self.parameter_list)
 		self.plot(self.outputfname, fix_index_ls, self.parameter_list, var_index, variant_ls, self.parameter_index2label, \
-			data_dict['testing'][0], 'accuracy')
+			data_dict['testing'][0], 'testing_accuracy')
+		self.plot(self.outputfname, fix_index_ls, self.parameter_list, var_index, variant_ls, self.parameter_index2label, \
+			data_dict['training'][0], 'training_accuracy')	#11-30-05
 		self.plot(self.outputfname, fix_index_ls, self.parameter_list, var_index, variant_ls, self.parameter_index2label, \
 			data_dict['known'][2], 'known_no_genes')
 		self.plot(self.outputfname, fix_index_ls, self.parameter_list, var_index, variant_ls, self.parameter_index2label, \
+			data_dict['known'][0], 'known_accuracy')	#11-30-05
+		self.plot(self.outputfname, fix_index_ls, self.parameter_list, var_index, variant_ls, self.parameter_index2label, \
 			data_dict['unknown'][2], 'unknown_no_genes')
+		
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
