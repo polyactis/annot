@@ -31,6 +31,8 @@ Examples:
 11-03-05 20: Test_MpiDifferentialPattern
 11-10-05 21: Test_cal_hg_p_value
 11-15-05 22: Test_is_site_confirmed
+11-30-05 23: Test_get_neighbor_set
+11-30-05 24: Test_distinct_go_no_list_based_on_neighbor_set_graph
 """
 import unittest, os, sys, getopt, csv
 
@@ -1239,6 +1241,69 @@ class Test_is_site_confirmed(unittest.TestCase):
 			max_mis_match_perc, min_no_of_mismatches, max_esc_length)
 		print result
 
+class Test_get_neighbor_set(unittest.TestCase):
+	"""
+	11-30-05
+	"""
+	def test_get_neighbor_set(self):
+		from codense.common import db_connect, form_schema_tables, get_neighbor_set
+		
+		hostname='zhoudb'
+		dbname='graphdb'
+		schema ='hs_fim_92'
+		conn, curs = db_connect(hostname, dbname, schema)
+		
+		input_fname = 'hs_fim_92m5x25bfsdfl10q0_7gf1p0_0001'
+		lm_bit = '000001'
+		acc_cut_off  = 0.6
+		schema_instance = form_schema_tables(input_fname, acc_cut_off, lm_bit)
+		pattern_id = 1
+		gene_no = 4172
+		distance = 2
+		neighbor_set = get_neighbor_set(curs, pattern_id, schema_instance.pattern_table, gene_no, distance)
+		
+		print "gene_no %s in pattern %s has neighbor_set: %s within distance %s."%(gene_no,\
+			pattern_id, neighbor_set, distance)
+		
+
+
+class Test_distinct_go_no_list_based_on_neighbor_set_graph(unittest.TestCase):
+	"""
+	11-30-05
+	"""
+	def test_distinct_go_no_list_based_on_neighbor_set_graph(self):
+		from codense.common import distinct_go_no_list_based_on_neighbor_set_graph
+		from codense.common import db_connect, form_schema_tables, get_neighbor_set
+		
+		hostname='zhoudb'
+		dbname='graphdb'
+		schema ='hs_fim_92'
+		conn, curs = db_connect(hostname, dbname, schema)
+		
+		input_fname = 'hs_fim_92m5x25bfsdfl10q0_7gf1p0_0001'
+		lm_bit = '000001'
+		acc_cut_off  = 0.6
+		schema_instance = form_schema_tables(input_fname, acc_cut_off, lm_bit)
+		gene_no = 4172
+		distance = 2
+		curs.execute("SELECT p.p_gene_id, p.gene_no, p.go_no, p.mcl_id from %s p, %s g where p.gene_no=%s\
+			and g.p_gene_id=p.p_gene_id"%\
+			(schema_instance.p_gene_table, schema_instance.gene_p_table, gene_no))
+		go_no_ls = []
+		neighbor_set_ls = []
+		rows = curs.fetchall()
+		for row in rows:
+			p_gene_id, gene_no, go_no, mcl_id = row
+			go_no_ls.append(p_gene_id)
+			neighbor_set_ls.append(get_neighbor_set(curs, mcl_id, schema_instance.pattern_table, gene_no, distance))
+		
+		similarity_cutoff = 0.8
+		cc_list, singleton_go_no_list = distinct_go_no_list_based_on_neighbor_set_graph(neighbor_set_ls, go_no_ls, similarity_cutoff, debug =1)
+		print "gene_no %s with distance %s has such:"%(gene_no, distance)
+		print "original %s go_nos in go_no_ls, %s"%(len(go_no_ls), go_no_ls)
+		print "%s go_no groups in cc_list, %s"%(len(cc_list),cc_list)
+		print "%s singleton go_nos in singleton_go_no_list, %s"%(len(singleton_go_no_list),singleton_go_no_list)
+
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1272,7 +1337,9 @@ if __name__ == '__main__':
 		19: Test_cc_from_edge_list,
 		20: Test_MpiDifferentialPattern,
 		21: Test_cal_hg_p_value,
-		22: Test_is_site_confirmed}
+		22: Test_is_site_confirmed,
+		23: Test_get_neighbor_set,
+		24: Test_distinct_go_no_list_based_on_neighbor_set_graph}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
