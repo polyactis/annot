@@ -1670,3 +1670,33 @@ def get_gene_no2no_of_topologies(curs, schema_instance, similarity_cutoff, dista
 		"""
 	sys.stderr.write("Done getting gene_no2no_of_topologies.\n")
 	return gene_no2no_of_topologies
+
+"""
+12-06-05
+"""
+def get_gene_no2incidence_array(gim_inputfname, gene_id2no):
+	sys.stderr.write("Getting gene_no2incidence_array...\n")
+	reader = csv.reader(open(gim_inputfname), delimiter='\t')
+	gene_no2incidence_array = {}
+	for row in reader:
+		no_of_occurrences, occ_array, gene_id = row[0], row[1:-1], row[-1]
+		if gene_id in gene_id2no:
+			gene_no = gene_id2no[gene_id]
+			occ_array = map(int, occ_array)
+			gene_no2incidence_array[gene_no] = occ_array
+	sys.stderr.write("End getting gene_no2incidence_array.\n")
+	return gene_no2incidence_array
+
+"""
+12-06-05
+"""
+def get_vertex_set_gim_array(gene_no2incidence_array, vertex_set):
+	gim_array = [0]*len(gene_no2incidence_array[vertex_set[0]])
+	total_no_of_genes = float(len(vertex_set))
+	for i in range(len(gim_array)):
+		no_of_incident_genes = 0
+		for gene_no in vertex_set:
+			if gene_no2incidence_array[gene_no][i] == 1:
+				no_of_incident_genes += 1
+		gim_array[i] = no_of_incident_genes/total_no_of_genes
+	return gim_array
