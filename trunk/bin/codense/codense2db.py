@@ -12,6 +12,7 @@ Option:
 	-o ...,	the output table, pattern_table(both vertex_set and edge_set)
 	-p ..., --mapping_file=...	the file to get the mapping between haiyan's index and my gene_no
 		(02-19-05)if not given, regard the input graph uses gene_no instead of haiyan's index
+	-g ...,	gim(gene incidence matrix) inputfile(-y=4 only)
 	-f ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim), 4(fimbfs)
@@ -36,7 +37,9 @@ Description:
 
 
 import sys, os, psycopg, getopt, csv, numarray, re
-from common import db_connect, get_haiyan_no2gene_no, get_known_genes_dict	#10-14-05	used to get unknown_gene_ratio
+from common import db_connect, get_haiyan_no2gene_no, get_gene_id2gene_no, \
+	get_gene_no2incidence_array, get_vertex_set_gim_array, \
+	get_known_genes_dict	#10-14-05	used to get unknown_gene_ratio
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	graph is visible in upper directory
 from graph import graph_modeling
 from graph.cc_from_edge_list import cc_from_edge_list
@@ -67,13 +70,15 @@ class cluster_dstructure:
 		self.cooccurrent_cluster_id=None
 		#10-28-05
 		self.d_matrix = None
+		#12-06-05
+		self.gim_array = None
 		
 class codense2db:
 	'''
 
 	'''
 	def __init__(self, infname=None, hostname='zhoudb', dbname='graphdb', schema=None, \
-			table=None, mcl_table=None, pattern_table=None, mapping_file=None, cor_cut_off=0,\
+			table=None, mcl_table=None, pattern_table=None, mapping_file=None, gim_inputfname=None, cor_cut_off=0,\
 			parser_type=1, min_cluster_size=5, delimiter='\t', debug=0, needcommit=0, report=0):
 		"""
 		02-25-05
@@ -88,6 +93,7 @@ class codense2db:
 		self.mcl_table = mcl_table
 		self.pattern_table = pattern_table
 		self.mapping_file = mapping_file
+		self.gim_inputfname = gim_inputfname
 		self.cor_cut_off = float(cor_cut_off)
 		self.parser_type = int(parser_type)
 		self.min_cluster_size = int(min_cluster_size)
@@ -352,9 +358,13 @@ class codense2db:
 		"""
 		10-28-05 similar to fim_parser(), but no sort for vertex_set and edge_set.
 			and has d_matrix. Output of MpiBFSCluster.py
+		12-06-05
+			add gene_no2incidence_array
+			calculate cluster.gim_array
 		"""
 		
 		cluster_list = []
+		gene_no2incidence_array = argument	#12-06-05
 		curs = argument2
 		cluster = cluster_dstructure()
 		#initialize two sets
@@ -381,12 +391,15 @@ class codense2db:
 		
 		cluster.d_matrix = row[3]	#10-28-05 string form
 		
+		cluster.gim_array = get_vertex_set_gim_array(gene_no2incidence_array, cluster.vertex_set)	#12-06-05
+		
 		if self.debug:
 			print "cluster vertex_set: ", cluster.vertex_set
 			print "cluster edge_set: ", cluster.edge_set
 			print "cluster splat_connectivity: ", cluster.splat_connectivity
 			print "cluster recurrence_array: ", cluster.recurrence_array
 			print "cluster.d_matrix:", cluster.d_matrix
+			print "cluster.gim_array:", cluster.gim_array	#12-06-05
 			raw_input("Continue?(Y/n)")
 		cluster_list.append(cluster)
 			
@@ -434,6 +447,8 @@ class codense2db:
 		10-14-05
 			add no_of_vertices, recurrence
 		10-28-05 add d_matrix
+		12-06-05
+			add gim_array
 		"""
 		if pattern_table!='pattern':
 			curs.execute("create table %s(\
@@ -449,6 +464,7 @@ class codense2db:
 				recurrence_array	float[],\
 				recurrence	float,\
 				d_matrix	integer[][],\
+				gim_array	float[],\
 				comment	varchar)"%pattern_table)
 		
 		#create tables if necessary
@@ -473,16 +489,18 @@ class codense2db:
 		10-14-05
 			add no_of_vertices, unknown_gene_ratio and recurrence to pattern_table
 		10-28-05 handle d_matrix
+		12-06-05
+			add gim_array
 		"""
 		#try:
 		#inserting into the pattern_table
 		if cluster.d_matrix:
 			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
-			connectivity, unknown_gene_ratio, recurrence_array, recurrence, d_matrix) values (ARRAY%s, \
-			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s, ARRAY%s)"%\
+			connectivity, unknown_gene_ratio, recurrence_array, recurrence, d_matrix, gim_array) values (ARRAY%s, \
+			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s, ARRAY%s, ARRAY%s)"%\
 			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
 			cluster.splat_connectivity, cluster.unknown_gene_ratio, repr(cluster.recurrence_array), \
-			sum(cluster.recurrence_array), cluster.d_matrix))
+			sum(cluster.recurrence_array), cluster.d_matrix, repr(cluster.gim_array)))
 		else:
 			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
 			connectivity, unknown_gene_ratio, recurrence_array, recurrence) values (ARRAY%s, \
@@ -529,10 +547,13 @@ class codense2db:
 			construct graph_modeling's cor_cut_off vector first
 		10-14-05
 			add calculate_unknown_gene_ratio()
+		12-06-05
+			add gene_no2incidence_array to parser_type ==4
 			
 			--db_connect()
 			--get_haiyan_no2gene_no()
 			--get_known_genes_dict()
+			--get_gene_id2gene_no()
 			--create_tables()
 			--graph_modeling.cor_cut_off_vector_construct()
 			(loop over inf)
@@ -540,6 +561,7 @@ class codense2db:
 					--get_combined_cor_vector
 					--parse_recurrence
 					--parse_connectivity
+					--get_vertex_set_gim_array() (parser_type=4 only)
 				--calculate_unknown_gene_ratio()
 				--db_submit()
 		"""
@@ -553,10 +575,20 @@ class codense2db:
 		else:
 			haiyan_no2gene_no = {}	#a blank dictionary, 
 		known_gene_no2go_no_set = get_known_genes_dict(curs)	#10-14-05	used to get unknown_gene_ratio
+		
+		if self.parser_type == 4:	#12-06-05
+			if self.gim_inputfname == None:
+				sys.stderr.write("\n parser_type = 4 needs gim_inputfname.\n")
+				sys.exit(3)
+			gene_id2gene_no = get_gene_id2gene_no(curs)
+			gene_no2incidence_array = get_gene_no2incidence_array(self.gim_inputfname, gene_id2gene_no)
+		else:
+			gene_no2incidence_array = None
+		
 		mapping_dict = {1:haiyan_no2gene_no,
 			2:haiyan_no2gene_no,
 			3:None,
-			4:None}
+			4:gene_no2incidence_array}
 		self.create_tables(curs, self.table, self.mcl_table, self.pattern_table)
 		no = 0
 		
@@ -587,7 +619,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:o:p:f:y:s:l:bcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:m:o:p:g:f:y:s:l:bcr", ["help", "hostname=", \
 			"dbname=", "schema=", "table=", "mcl_table=", "mapping_file=", "cor_cut_off=",\
 			"parser_type=", "min_cluster_size=", "delimiter=", "debug", "commit", "report"])
 	except:
@@ -601,6 +633,7 @@ if __name__ == '__main__':
 	mcl_table = 'mcl_result'
 	pattern_table = None
 	mapping_file = None
+	gim_inputfname = None
 	cor_cut_off = 0
 	parser_type = 1
 	min_cluster_size = 5
@@ -626,6 +659,8 @@ if __name__ == '__main__':
 			pattern_table = arg
 		elif opt in ("-p", "--mapping_file"):
 			mapping_file = arg
+		elif opt in ("-g"):
+			gim_inputfname = arg
 		elif opt in ("-f", "--cor_cut_off"):
 			cor_cut_off = float(arg)
 		elif opt in ("-y", "--parser_type"):
@@ -641,8 +676,9 @@ if __name__ == '__main__':
 		elif opt in ("-r", "--report"):
 			report = 1
 	if schema and pattern_table and len(args)==1:
-		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, pattern_table, mapping_file, \
-			cor_cut_off, parser_type, min_cluster_size, delimiter, debug, commit, report)
+		instance = codense2db(args[0], hostname, dbname, schema, table, mcl_table, pattern_table, \
+			mapping_file, gim_inputfname, cor_cut_off, parser_type, min_cluster_size, \
+			delimiter, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
