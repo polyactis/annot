@@ -1562,3 +1562,111 @@ def draw_grid(image_object, draw_object, region_to_draw, x_gap, y_gap, color='bl
 	#draw vertical 2nd
 	for i in range(start_x, stop_x, x_gap):
 		draw_object.line((i+x_gap, start_y, i+x_gap, stop_y), fill=color)
+
+
+"""
+11-30-05
+	prerequisite: from sets import Set
+
+	given the pattern id and gene_no, return the neighbor genes within the given distance
+"""
+def get_neighbor_set(curs, pattern_id, pattern_table, gene_no, distance):
+	curs.execute("SELECT vertex_set, d_matrix from %s where id=%s"%(pattern_table, pattern_id))
+	rows = curs.fetchall()
+	vertex_set, d_matrix = rows[0]
+	vertex_set = vertex_set[1:-1].split(',')
+	vertex_set = map(int, vertex_set)
+	gene_index = vertex_set.index(gene_no)
+	d_matrix = d_matrix[2:-2].split('},{')
+	d_row = d_matrix[gene_index]
+	d_row = d_row.split(',')
+	d_row = map(int, d_row)
+	neighbor_set = Set()
+	for i in range(len(d_row)):
+		if d_row[i] <= distance and d_row[i]>0:	#not itself
+			neighbor_set.add(vertex_set[i])
+	return neighbor_set
+
+
+"""
+11-30-05
+	
+	Each neighbor_set, represented by a go_no is a vertex. Two vertices are connected by an edge if
+	the two neighbor_sets are similar enough.
+"""
+from graph.cc_from_edge_list import cc_from_edge_list
+def distinct_go_no_list_based_on_neighbor_set_graph(neighbor_set_ls, go_no_ls, similarity_cutoff, debug=0):
+	no_of_go_nos = len(go_no_ls)
+	edge_list = []
+	go_no_in_graph_flag_ls = [0]*no_of_go_nos	#corresponding to go_no_ls, a flag of whether go_no is in the graph or not
+	for i in range(no_of_go_nos):
+		"""
+		if debug:
+			sys.stderr.write("Examining go_no %s with neighbor_set %s.\n"%(go_no_ls[i], neighbor_set_ls[i]))
+		"""
+		for j in range(i+1, no_of_go_nos):
+			intersection_set = neighbor_set_ls[i]&neighbor_set_ls[j]
+			intersection_set_len = float(len(intersection_set))
+			if intersection_set_len/len(neighbor_set_ls[i])>=similarity_cutoff or intersection_set_len/len(neighbor_set_ls[j])>=similarity_cutoff:
+				"""
+				if debug:
+					sys.stderr.write("\t go_no %s with neighbor_set %s connected to it.\n"%(go_no_ls[j], neighbor_set_ls[j]))
+				"""
+				#either one of them is very close to the intersection_set
+				edge_list.append([go_no_ls[i], go_no_ls[j]])
+				#these two go_nos are in the graph
+				go_no_in_graph_flag_ls[i] = 1
+				go_no_in_graph_flag_ls[j] = 1
+	#handle the singleton go_no first
+	singleton_go_no_list = []
+	for i in range(no_of_go_nos):
+		if go_no_in_graph_flag_ls[i] ==0:
+			singleton_go_no_list.append(go_no_ls[i])
+	#check the edge_list
+	if len(edge_list)>0:
+		cf_instance = cc_from_edge_list()
+		cf_instance.run(edge_list)
+		cc_list = cf_instance.cc_list
+	else:
+		cc_list = []
+	
+	return cc_list, singleton_go_no_list
+
+"""
+11-30-05
+
+	--get_neighbor_set()
+	--distinct_go_no_list_based_on_neighbor_set_graph()
+"""
+def get_gene_no2no_of_topologies(curs, schema_instance, similarity_cutoff, distance, debug=0):
+	sys.stderr.write("Getting gene_no2no_of_topologies...\n")
+	curs.execute("DECLARE gncrs  CURSOR FOR SELECT p.p_gene_id, p.gene_no, p.go_no, p.mcl_id from %s p, %s g\
+		where g.p_gene_id=p.p_gene_id"%\
+		(schema_instance.p_gene_table, schema_instance.gene_p_table))
+	curs.execute("fetch 5000 from gncrs")
+	rows = curs.fetchall()
+	gene_no2mcl_id_ls = {}
+	while rows:
+		for row in rows:
+			p_gene_id, gene_no, go_no, mcl_id = row
+			if gene_no not in gene_no2mcl_id_ls:
+				gene_no2mcl_id_ls[gene_no] = []
+			gene_no2mcl_id_ls[gene_no].append(mcl_id)
+		curs.execute("fetch 5000 from gncrs")
+		rows = curs.fetchall()
+	curs.execute("close gncrs")
+	
+	gene_no2no_of_topologies = {}
+	for gene_no, mcl_id_list in gene_no2mcl_id_ls.iteritems():
+		neighbor_set_ls = []
+		for mcl_id in mcl_id_list:
+			neighbor_set_ls.append(get_neighbor_set(curs, mcl_id, schema_instance.pattern_table, gene_no, distance))
+		cc_list, singleton_go_no_list = distinct_go_no_list_based_on_neighbor_set_graph(neighbor_set_ls, mcl_id_list, similarity_cutoff, debug)
+		gene_no2no_of_topologies[gene_no] = len(cc_list)+len(singleton_go_no_list)
+		"""
+		if debug:
+			sys.stderr.write("gene_no: %s, with %s topologies.\n"%(gene_no, len(cc_list)+len(singleton_go_no_list)))
+			raw_input("continue?(Y/n)")
+		"""
+	sys.stderr.write("Done getting gene_no2no_of_topologies.\n")
+	return gene_no2no_of_topologies
