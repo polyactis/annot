@@ -8,6 +8,10 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-t ..., --p_gene_table=...	the p_gene table
 	-n ..., --gene_p_table=...	update the gene_p table, needed if needcommit
+	-y ..., type, 1(default, use GO parent-child relationship), 2(use network topology similarity)
+	-p ...,	pattern_table, (-y=2 only)
+	-s ...,	similarity_cut_off, 0.8(default) (-y=2 only)
+	-x ...,	maximum_distance, 2(default) (-y=2 only)
 	-c, --commit	commit this database transaction
 	-r, --report	report flag
 	-u, --debug debug flag
@@ -17,13 +21,18 @@ Examples:
 	gene_p_map_redundancy.py -k sc_54 -t p_gene_repos_2_e5
 		-n gene_p_repos_2_e5
 	
+	gene_p_map_redundancy.py -k sc_54 -t p_gene_repos_2_e5
+		-n gene_p_repos_2_e5 -p pattern_table -y 2
+	
+	
 Description:
 	This module merges the p_gene_ids whose predicted functions are
 	parent-child, for each gene in the gene_p table
 """
 
 import sys, os, getopt
-from codense.common import db_connect, get_go_no2term_id
+from codense.common import db_connect, get_go_no2term_id, \
+	distinct_go_no_list_based_on_neighbor_set_graph, get_neighbor_set
 from sets import Set
 
 class gene_p_map_redundancy:
@@ -33,29 +42,30 @@ class gene_p_map_redundancy:
 		parent-child, for each gene in the gene_p table
 	03-03-05
 		fix an important bug
-		
-
-	run()
-		--db_connect()
-		--get_go_no2term_id()		#for get_distance(), needs self.go_no2term_id
-		--data_fetch()
-			--gene_no2p_gene_setup()
-		--p_gene_id_map()
-			--_p_gene_map()
-				--get_distance()		#touches self.go_no2distance
-		--submit()		
-	
+			
 	"""
 	def __init__(self, hostname=None, dbname=None, schema=None, p_gene_table=None, \
-		gene_p_table=None, needcommit=0, report=0, debug=0):
-		
+		gene_p_table=None, type=1, pattern_table=None, similarity_cut_off=0.8, maximum_distance=2, \
+		needcommit=0, report=0, debug=0):
+		"""
+		12-02-05
+			add similarity_cut_off and maximum_distance
+		12-04-05
+			add pattern_table
+		12-05-05
+			add type
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.p_gene_table = p_gene_table
 		self.gene_p_table = gene_p_table
+		self.type = int(type)	#12-05-05
+		self.pattern_table = pattern_table
+		self.similarity_cut_off = float(similarity_cut_off)	#12-02-05
+		self.maximum_distance = int(maximum_distance)	#12-02-05
 		self.needcommit = int(needcommit)
-		self.report = int(report)		
+		self.report = int(report)
 		self.debug = int(debug)
 
 		self.gene_no2p_gene = {}	#key is gene_no, value is p_gene_id2go_no
@@ -70,11 +80,14 @@ class gene_p_map_redundancy:
 		"""
 		03-01-05
 			borrowed from p_gene_lm.py
+		12-02-05
+			replace the p_value_cut_off with mcl_id
+			add depth_cut_off
 			
 			--gene_no2p_gene_setup()
 		"""
-		curs.execute("DECLARE crs CURSOR FOR select g.p_gene_id, p.gene_no, p.go_no, p.p_value_cut_off\
-			from %s g, %s p where g.p_gene_id=p.p_gene_id"%(gene_p_table, p_gene_table))
+		curs.execute("DECLARE crs CURSOR FOR select p.p_gene_id, p.gene_no, p.go_no, p.mcl_id, p.depth_cut_off \
+			from %s g, %s p where g.p_gene_id=p.p_gene_id"%(gene_p_table, p_gene_table))	#12-02-05
 		no_of_records = 0
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
@@ -94,11 +107,16 @@ class gene_p_map_redundancy:
 		"""
 		03-01-05
 			initial
+		12-02-05
+			replace the p_value_cut_off with mcl_id
+			add depth_cut_off
+			
 		"""
 		p_gene_id = row[0]
 		gene_no = row[1]
 		go_no = row[2]
-		p_value_cut_off = row[3]
+		mcl_id = row[3]
+		depth_cut_off = row[4]
 		if gene_no not in self.gene_no2p_gene:
 			self.gene_no2p_gene[gene_no] = {}
 		
@@ -106,23 +124,73 @@ class gene_p_map_redundancy:
 		p_gene_id2go_no = self.gene_no2p_gene[gene_no]
 		
 		if p_gene_id not in p_gene_id2go_no:
-			p_gene_id2go_no[p_gene_id] = [go_no, p_value_cut_off]
+			p_gene_id2go_no[p_gene_id] = [go_no, mcl_id, depth_cut_off]	#12-02-05
 		else:
 			sys.stderr.write("Error, duplicate p_gene_id:%s found in gene_p_table\n"%p_gene_id)
 			sys.exit(127)
 			
-	def p_gene_map(self, gene_no2p_gene, p_gene_id_map, curs, distance_table, go_no2distance, go_no2term_id):
+	def p_gene_map(self, gene_no2p_gene, p_gene_id_map, curs, distance_table, go_no2distance, go_no2term_id, type):
 		"""
 		03-01-05
 			initial
+		12-02-05 replace _p_gene_map() with _p_gene_map_network_topology()
+		12-05-05 add type and p_gene_map_dict
 		"""
 		sys.stderr.write("Computing the p_gene_id_map...")
+		p_gene_map_dict = {1:self._p_gene_map,
+			2:self._p_gene_map_network_topology}
 		for (gene_no, p_gene_id2go_no) in gene_no2p_gene.iteritems():
-			self._p_gene_map(p_gene_id2go_no, p_gene_id_map, curs, distance_table, \
-				go_no2distance, go_no2term_id)
+			p_gene_map_dict[type](p_gene_id2go_no, p_gene_id_map, curs, distance_table, \
+				go_no2distance, go_no2term_id, gene_no)
 		sys.stderr.write("Done\n")
 	
-	def _p_gene_map(self, p_gene_id2go_no, p_gene_id_map, curs, distance_table, go_no2distance, go_no2term_id):
+	def _p_gene_map_network_topology(self, p_gene_id2go_no, p_gene_id_map, curs, distance_table, go_no2distance, \
+		go_no2term_id, gene_no):
+		"""
+		12-02-05
+			based on network topology to group predictions
+		
+			--self.similarity_cut_off
+			--self.maximum_distance
+			--self.pattern_table
+		"""
+		neighbor_set_ls = []
+		p_gene_id_list = []
+		for p_gene_id, go_no_mcl_id_ls in p_gene_id2go_no.iteritems():
+			p_gene_id_list.append(p_gene_id)
+			go_no, mcl_id, depth_cut_off = go_no_mcl_id_ls
+			neighbor_set_ls.append(get_neighbor_set(curs, mcl_id, self.pattern_table, gene_no, self.maximum_distance))
+		#get the connected components from the p_gene_id graph
+		cc_list, singleton_p_gene_id_list = distinct_go_no_list_based_on_neighbor_set_graph(neighbor_set_ls, p_gene_id_list, self.similarity_cut_off)
+		"""
+		if self.debug:
+			print "gene_no:",gene_no
+			print "cc_list:",cc_list
+			print "singleton_p_gene_id_list:",singleton_p_gene_id_list
+		"""
+		
+		#for cc_list, get the p_gene_id with highest level GO as p_gene_id_src
+		for cc in cc_list:
+			p_gene_id_group = Set()
+			p_gene_id_src = cc[0][0]	#default source is the first p_gene_id in the cc
+			for edge in cc:
+				for p_gene_id in edge:
+					if p_gene_id not in p_gene_id_group:
+						p_gene_id_group.add(p_gene_id)
+						e1_depth = p_gene_id2go_no[p_gene_id][2]
+						if e1_depth<p_gene_id2go_no[p_gene_id_src][2]:
+							p_gene_id_src = p_gene_id
+			for p_gene_id in p_gene_id_group:
+				p_gene_id_map[p_gene_id] = [p_gene_id_src, p_gene_id2go_no[p_gene_id][1]]	#2nd entry is mcl_id
+			"""
+			if self.debug:
+				print "p_gene_id_src:", p_gene_id_src
+				print "p_gene_id_group:", p_gene_id_group
+			"""
+		for p_gene_id in singleton_p_gene_id_list:
+			p_gene_id_map[p_gene_id] = [p_gene_id, p_gene_id2go_no[p_gene_id][1]]
+	
+	def _p_gene_map(self, p_gene_id2go_no, p_gene_id_map, curs, distance_table, go_no2distance, go_no2term_id, gene_no=None):
 		"""
 		03-01-05
 			initial, modeled after return_distinct_functions() of gene_stat_plot.py
@@ -157,7 +225,6 @@ class gene_p_map_redundancy:
 							p_gene_id_map[p_gene_id2] = [p_gene_id1, p_value_cut_off]
 							if self.debug:
 								print "%s not in p_gene_id_map, mapped to %s"%(p_gene_id2, p_gene_id1)
-
 					
 			
 			
@@ -237,13 +304,25 @@ class gene_p_map_redundancy:
 		"""
 		03-01-05
 			initial
+		
+		--db_connect()
+		--get_go_no2term_id()		#for get_distance(), needs self.go_no2term_id
+		--data_fetch()
+			--gene_no2p_gene_setup()
+		--p_gene_id_map()
+			--_p_gene_map()  or --_p_gene_map_network_topology()
+				--get_distance()		#touches self.go_no2distance
+		--submit()		
 		"""	
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		curs.execute("begin")	#because of cursor usage
 		self.go_no2term_id = get_go_no2term_id(curs, self.schema, self.term_table)
 		self.data_fetch(curs, self.p_gene_table, self.gene_p_table)
+		if self.type == 2 and self.pattern_table == None:
+			sys.stderr.write("\n type=2 needs pattern_table.\n")
+			sys.exit(3)
 		self.p_gene_map(self.gene_no2p_gene, self.p_gene_id_map, curs,\
-			self.distance_table, self.go_no2distance, self.go_no2term_id)
+			self.distance_table, self.go_no2distance, self.go_no2term_id, self.type)
 		if self.needcommit:
 			self.submit(curs, self.gene_p_table, self.p_gene_id_map)
 			curs.execute("end")
@@ -254,8 +333,8 @@ if __name__ == '__main__':
 		print __doc__
 		sys.exit(2)	
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:n:cru", ["help", "hostname=", \
-			"dbname=", "schema=", "p_gene_table=", "gene_p_table=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:n:y:p:s:x:cru", ["help", "hostname=", \
+			"dbname=", "schema=", "p_gene_table=", "gene_p_table=",\
 			"commit", "report", "debug"])
 	except:
 		print __doc__
@@ -266,6 +345,10 @@ if __name__ == '__main__':
 	schema = ''
 	p_gene_table = None
 	gene_p_table = None
+	type = 1
+	pattern_table = None
+	similarity_cut_off = 0.8
+	maximum_distance = 2
 	commit = 0
 	report = 0
 	debug = 0
@@ -283,6 +366,14 @@ if __name__ == '__main__':
 			p_gene_table = arg
 		elif opt in ("-n", "--gene_p_table"):
 			gene_p_table = arg
+		elif opt in ("-y"):
+			type = int(arg)
+		elif opt in ("-p"):
+			pattern_table = arg
+		elif opt in ("-s"):
+			similarity_cut_off = float(arg)
+		elif opt in ("-x"):
+			maximum_distance = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1
 		elif opt in ("-r", "--report"):
@@ -291,7 +382,7 @@ if __name__ == '__main__':
 			debug = 1
 	if schema and p_gene_table and gene_p_table:
 		instance = gene_p_map_redundancy(hostname, dbname, schema, p_gene_table, gene_p_table,\
-			commit, report, debug)
+			type, pattern_table, similarity_cut_off, maximum_distance, commit, report, debug)
 		instance.run()
 	else:
 		print __doc__
