@@ -1700,3 +1700,48 @@ def get_vertex_set_gim_array(gene_no2incidence_array, vertex_set):
 				no_of_incident_genes += 1
 		gim_array[i] = no_of_incident_genes/total_no_of_genes
 	return gim_array
+
+"""
+12-07-05
+	get the edge2encodedOccurrence from the database
+"""
+def fill_edge2encodedOccurrence(curs, min_sup, max_sup, edge_table='edge_cor_vector'):
+	sys.stderr.write("Getting edge2encodedOccurrence...\n")
+	sys.path += [os.path.expanduser('~/script/annot/bin')]
+	from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv
+	edge2encodedOccurrence = {}
+	curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
+		from %s"%(edge_table))
+	curs.execute("fetch 5000 from crs")
+	rows = curs.fetchall()
+	no_of_datasets = 0
+	counter = 0
+	while rows:
+		for row in rows:
+			edge = row[0][1:-1].split(',')
+			edge = map(int, edge)
+			sig_vector = row[1][1:-1].split(',')
+			sig_vector = map(int, sig_vector)
+			if no_of_datasets==0:
+				no_of_datasets = len(sig_vector)
+			if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+				edge2encodedOccurrence[tuple(edge)] = encodeOccurrenceBv(sig_vector)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+	curs.execute("close crs")
+	sys.stderr.write("Done.\n")
+	return edge2encodedOccurrence, no_of_datasets
+
+def get_gene_symbol2gene_id(curs, tax_id, table='gene.gene_symbol2id'):
+	"""
+	12-09-05
+		reverse of get_gene_id2gene_symbol()
+	"""
+	sys.stderr.write("Getting gene_symbol2gene_id...")
+	gene_symbol2gene_id = {}
+	curs.execute("select gene_id, gene_symbol from %s where tax_id=%s"%(table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_symbol2gene_id[row[1]] = row[0]
+	sys.stderr.write("Done.\n")
+	return gene_symbol2gene_id
