@@ -1435,7 +1435,7 @@ def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no
 	return p_value
 
 """
-11-12-05 get a specified segment from chomosome sequence table
+11-12-05 get a specified segment from chromosome sequence table
 	reverse is handled but complement(strand) is not. Upper level function should take care of this.
 11-15-05 improve it to be more robust, add acc_ver and report if not found in raw_sequence_table
 """
@@ -1745,3 +1745,40 @@ def get_gene_symbol2gene_id(curs, tax_id, table='gene.gene_symbol2id'):
 		gene_symbol2gene_id[row[1]] = row[0]
 	sys.stderr.write("Done.\n")
 	return gene_symbol2gene_id
+
+
+def get_ensembl_id2gene_id(curs, tax_id, table='graph.ensembl_id2gene_id'):
+	"""
+	12-11-05
+	"""
+	sys.stderr.write("Getting ensembl_id2gene_id...")
+	ensembl_id2gene_id = {}
+	curs.execute("select ensembl_id, gene_id from %s where tax_id=%s"%(table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		ensembl_id, gene_id = row
+		gene_id = int(gene_id)	#convert it to integer
+		if ensembl_id not in ensembl_id2gene_id:
+			ensembl_id2gene_id[ensembl_id] = []
+		ensembl_id2gene_id[ensembl_id].append(gene_id)
+	sys.stderr.write("Done.\n")
+	return ensembl_id2gene_id
+
+def get_entrezgene_coord(curs, gene_id, entrezgene_mapping_table='sequence.entrezgene_mapping',\
+	annot_assembly_table='sequence.annot_assembly'):
+	"""
+	12-11-05
+	"""
+	curs.execute("select e.genomic_gi, a.chromosome, e.strand, e.start, e.stop from %s e, %s a \
+		where e.genomic_gi = a.gi and e.gene_id=%s"%(entrezgene_mapping_table, \
+		annot_assembly_table, gene_id))
+	rows = curs.fetchall()
+	if rows:
+		genomic_gi, chromosome, strand, start, stop = rows[0]
+		if strand=='1':
+			strand = '+'
+		else:
+			strand = '-'
+		return genomic_gi, chromosome, strand, start, stop
+	else:
+		return None
