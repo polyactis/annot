@@ -94,10 +94,15 @@ class HomologeneTax_idRelation:
 		sys.stderr.write("Done.\n")
 	
 	def common_ancestor_of_2indices(self, index1, index2):
+		"""
+		12-12-05 correct a bug when for loop is not breaked
+		"""
 		length = min(len(index1), len(index2))
 		for i in range(length):
 			if index1[i] != index2[i]:
 				break
+		if index1[i] == index2[i]:	#the for loop is not breaked
+			i = i+1
 		return index1[:i], i	#common ancestor and its depth
 	
 	def submit_common_ancestor(self, src_tax_id, tax_id2index, curs, \
