@@ -5,6 +5,7 @@ functions or classes common to all programs
 """
 
 import csv, os, sys, cPickle
+sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 import psycopg
 from sets import Set
 
@@ -1782,3 +1783,87 @@ def get_entrezgene_coord(curs, gene_id, entrezgene_mapping_table='sequence.entre
 		return genomic_gi, chromosome, strand, start, stop
 	else:
 		return None
+
+"""
+12-12-05
+"""
+def get_gene_no2no_of_components_given_gene_id_set(curs, gene_id2gene_no, organism, table='graph.cc_association'):
+	sys.stderr.write("Getting gene_no2no_of_components...")
+	gene_no2no_of_components = {}
+	curs.execute("SELECT go_id, gene_id from %s where organism='%s'"%(table, organism))
+	rows = curs.fetchall()
+	for row in rows:
+		go_id, gene_id = row
+		if gene_id in gene_id2gene_no:
+			gene_no = gene_id2gene_no[gene_id]
+			if gene_no not in gene_no2no_of_components:
+				gene_no2no_of_components[gene_no] = 0
+			gene_no2no_of_components[gene_no] += 1
+	sys.stderr.write("Done.\n")
+	return gene_no2no_of_components
+
+"""
+12-12-05
+"""
+def get_tg_tax_id2ca_depth(curs, src_tax_id, tax_id_relationship_table = 'homologene.tax_id_relationship'):
+	sys.stderr.write("Getting tg_tax_id2ca_depth ...")
+	tg_tax_id2ca_depth = {}
+	curs.execute("SELECT tg_tax_id, common_ancestor_depth from %s where src_tax_id=%s"%\
+		(tax_id_relationship_table, src_tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		tg_tax_id, common_ancestor_depth = row
+		tg_tax_id2ca_depth[tg_tax_id] = common_ancestor_depth
+	sys.stderr.write("Done.\n")
+	return tg_tax_id2ca_depth
+
+"""
+12-12-05
+"""
+def get_gene_id2ca_depth(curs, src_tax_id, tg_tax_id2ca_depth, homologene_table='homologene.homologene'):
+	sys.stderr.write("Getting gene_id2ca_depth ...")
+	gene_id2ca_depth = {}
+	curs.execute("SELECT hid, tax_id, gene_id from %s order by hid"%homologene_table)
+	rows = curs.fetchall()
+	prev_hid = None
+	prev_src_gene_id_ls = []
+	prev_depth = 100
+	for row in rows:
+		hid, tax_id, gene_id = row
+		if hid!=prev_hid:	#not the 1st row, prev_src_gene_id_ls not empty
+			for gene_id in prev_src_gene_id_ls:
+				gene_id2ca_depth[gene_id] = prev_depth
+			prev_hid = hid
+			prev_src_gene_id_ls = []
+			prev_depth = 100
+		if tax_id == src_tax_id:
+			prev_src_gene_id_ls.append(gene_id)
+		prev_depth = min(tg_tax_id2ca_depth[tax_id], prev_depth)
+	#don't forget the last block
+	for gene_id in prev_src_gene_id_ls:
+		gene_id2ca_depth[gene_id] = prev_depth
+	sys.stderr.write("Done.\n")
+	return gene_id2ca_depth
+
+"""
+12-12-05
+"""
+def get_gene_no2no_of_promoters(curs, schema='harbison2004'):
+	sys.stderr.write("Getting gene_no2no_of_promoters ... ")
+	gene_no2no_of_promoters = {}
+	curs.execute("DECLARE motif_crs CURSOR FOR SELECT mt_id, prom_id from %s.binding_site"%\
+		(schema))
+	curs.execute("fetch 5000 from motif_crs")
+	rows = curs.fetchall()
+	while rows:
+		for row in rows:
+			mt_id, prom_id = row
+			prom_id = int(prom_id)
+			if prom_id not in gene_no2no_of_promoters:
+				gene_no2no_of_promoters[prom_id] = 0
+			gene_no2no_of_promoters[prom_id] += 1
+		curs.execute("fetch 5000 from motif_crs")
+		rows = curs.fetchall()
+	curs.execute("close motif_crs")
+	sys.stderr.write("Done.\n")
+	return gene_no2no_of_promoters
