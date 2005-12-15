@@ -1848,9 +1848,9 @@ def get_gene_id2ca_depth(curs, src_tax_id, tg_tax_id2ca_depth, homologene_table=
 """
 12-12-05
 """
-def get_gene_no2no_of_promoters(curs, schema='harbison2004'):
-	sys.stderr.write("Getting gene_no2no_of_promoters ... ")
-	gene_no2no_of_promoters = {}
+def get_gene_no2no_of_tfbs(curs, schema='harbison2004'):
+	sys.stderr.write("Getting gene_no2no_of_tfbs ... ")
+	gene_no2no_of_tfbs = {}
 	curs.execute("DECLARE motif_crs CURSOR FOR SELECT mt_id, prom_id from %s.binding_site"%\
 		(schema))
 	curs.execute("fetch 5000 from motif_crs")
@@ -1859,11 +1859,11 @@ def get_gene_no2no_of_promoters(curs, schema='harbison2004'):
 		for row in rows:
 			mt_id, prom_id = row
 			prom_id = int(prom_id)
-			if prom_id not in gene_no2no_of_promoters:
-				gene_no2no_of_promoters[prom_id] = 0
-			gene_no2no_of_promoters[prom_id] += 1
+			if prom_id not in gene_no2no_of_tfbs:
+				gene_no2no_of_tfbs[prom_id] = 0
+			gene_no2no_of_tfbs[prom_id] += 1
 		curs.execute("fetch 5000 from motif_crs")
 		rows = curs.fetchall()
 	curs.execute("close motif_crs")
 	sys.stderr.write("Done.\n")
-	return gene_no2no_of_promoters
+	return gene_no2no_of_tfbs
