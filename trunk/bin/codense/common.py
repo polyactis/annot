@@ -1867,3 +1867,26 @@ def get_gene_no2no_of_tfbs(curs, schema='harbison2004'):
 	curs.execute("close motif_crs")
 	sys.stderr.write("Done.\n")
 	return gene_no2no_of_tfbs
+
+
+"""
+12-15-05
+"""
+def get_gene_no2tf_set(curs, binding_site_table='harbison2004.binding_site', matrix_table='harbison2004.matrix'):
+	sys.stderr.write("Getting gene_no2tf_set ... \n")
+	gene_no2tf_set = {}
+	curs.execute("DECLARE gt_crs CURSOR FOR SELECT b.prom_id, m.entrezgene_id from %s b, %s m \
+		where b.mt_id=m.mt_id and m.entrezgene_id is not null"%(binding_site_table, matrix_table))
+	curs.execute("fetch 5000 from gt_crs")
+	rows = curs.fetchall()
+	while rows:
+		for row in rows:
+			gene_no, tf = row
+			if gene_no not in gene_no2tf_set:
+				gene_no2tf_set[gene_no] = Set()
+			gene_no2tf_set[gene_no].add(tf)
+		curs.execute("fetch 5000 from gt_crs")
+		rows = curs.fetchall()
+	curs.execute("close gt_crs")
+	sys.stderr.write("Done getting gene_no2tf_set.\n")
+	return gene_no2tf_set
