@@ -148,15 +148,18 @@ def hq_add(hq_list, row, top_number):
 		sys.stderr.write("The hq is %s.\n"%repr(hq_list))
 		sys.exit(2)
 
-def cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff=1.0/3, top_number=5):
+def cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff=1.0/3, \
+	top_number=5, p_value_cut_off=0.001):
 	"""
 	09-19-05
 		three kinds of analysis
 		1. single hypergeometric
 		2. combo hypergeometric
 		3. combo binomial log likelihood ratio
-		
+	
 		all just retain the top 5
+	12-15-05
+		add p_value_cut_off
 	"""
 	#construct local dictionary and records the genes with no bs_no
 	local_bs_no2gene_no_set = {}
@@ -193,13 +196,14 @@ def cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, rati
 		n = no_of_total_genes - m
 		k = cluster_size
 		p_value = r.phyper(x-1,m,n,k,lower_tail = r.FALSE)
-		score = -p_value	#Watch minus, heapq is a min-heap
-		bs_no_list = [bs_no1]
-		global_ratio = float(m)/no_of_total_genes
-		local_ratio = float(x)/cluster_size
-		expected_ratio = global_ratio
-		row = [score, 1, bs_no_list, list(gene_no_set1), global_ratio, local_ratio, expected_ratio, unknown_ratio]
-		hq_add(hq_list1, row, top_number)
+		if p_value<=p_value_cut_off:	#12-15-05
+			score = -p_value	#Watch minus, heapq is a min-heap
+			bs_no_list = [bs_no1]
+			global_ratio = float(m)/no_of_total_genes
+			local_ratio = float(x)/cluster_size
+			expected_ratio = global_ratio
+			row = [score, 1, bs_no_list, list(gene_no_set1), global_ratio, local_ratio, expected_ratio, unknown_ratio]
+			hq_add(hq_list1, row, top_number)
 		for j in range(i+1, len(local_bs_no_and_gene_no_set)):
 			bs_no2, gene_no_set2 = local_bs_no_and_gene_no_set[j]
 			combo_set_local = gene_no_set1&gene_no_set2
@@ -214,15 +218,16 @@ def cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, rati
 			#first hypergeometric
 			n = no_of_total_genes - combo_size_global
 			p_value = r.phyper(combo_size_local-1,combo_size_global,n,cluster_size,lower_tail = r.FALSE)
-			
-			score = -p_value	#Watch minus, heapq is a min-heap
-			bs_no_list = [bs_no1, bs_no2]
-			global_ratio = float(combo_size_global)/no_of_total_genes
-			local_ratio = float(combo_size_local)/cluster_size
-			expected_ratio = global_ratio
-			row = [score, 1, bs_no_list, list(combo_set_local), global_ratio, local_ratio, expected_ratio, unknown_ratio]
-			hq_add(hq_list2, row, top_number)
-			
+			if p_value<=p_value_cut_off:	#12-15-05
+				score = -p_value	#Watch minus, heapq is a min-heap
+				bs_no_list = [bs_no1, bs_no2]
+				global_ratio = float(combo_size_global)/no_of_total_genes
+				local_ratio = float(combo_size_local)/cluster_size
+				expected_ratio = global_ratio
+				row = [score, 1, bs_no_list, list(combo_set_local), global_ratio, local_ratio, expected_ratio, unknown_ratio]
+				hq_add(hq_list2, row, top_number)
+			"""
+			#12-15-05 comment this block out
 			#second binomial log ratio
 			likeli1 = r.dbinom(combo_size_local, cluster_size, prob_combo,log=r.TRUE)
 			likeli2 = r.dbinom(combo_size_global, no_of_total_genes, prob_combo, log=r.TRUE)
@@ -232,6 +237,7 @@ def cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, rati
 			expected_ratio = prob_combo	#only this is different
 			row = [score, 2, bs_no_list, list(combo_set_local), global_ratio, local_ratio, expected_ratio, unknown_ratio]	#Watch: 2
 			hq_add(hq_list3, row, top_number)
+			"""
 			
 	ls_to_return = []
 	while hq_list1:

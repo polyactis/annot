@@ -12,6 +12,7 @@ Option:
 	-s ...,	no of clusters per transmission, 2000(default)
 	-a ...,	min ratio of #associated genes for one bs_no vs cluster size, 1/3(default)
 	-t ...,	top_number of scores to be kept, 5(default)
+	-p ...,	p_value_cut_off, 0.001(default)
 	-n,	CLUSTER_BS_TABLE is new
 	-c,	commit the database transaction
 	-b,	debug version.
@@ -40,8 +41,10 @@ class MpiClusterBsStat:
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
 		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, \
-		top_number=5, new_table=0, commit=0, debug=0, report=0):
+		top_number=5, p_value_cut_off=0.001, new_table=0, commit=0, debug=0, report=0):
 		"""
+		12-15-05
+			add p_value_cut_off
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -51,6 +54,7 @@ class MpiClusterBsStat:
 		self.size = int(size)
 		self.ratio_cutoff = float(ratio_cutoff)
 		self.top_number = int(top_number)
+		self.p_value_cut_off = float(p_value_cut_off)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
@@ -170,9 +174,12 @@ class MpiClusterBsStat:
 			block += row
 		return Numeric.array(block, Numeric.Float)
 	
-	def node_fire(self, communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number):
+	def node_fire(self, communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+		top_number, p_value_cut_off):
 		"""
 		09-19-05
+		12-15-05
+			add p_value_cut_off
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -181,7 +188,8 @@ class MpiClusterBsStat:
 			if no==-1:
 				mcl_id = gene_no_list[0]
 				gene_no_list = gene_no_list[1:]
-				ls_to_return = cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number)
+				ls_to_return = cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+					top_number, p_value_cut_off)
 				result_block = self.encode_result_block(mcl_id, ls_to_return)
 				communicator.send(result_block, communicator.size-1, 1)
 				gene_no_list = []
@@ -189,11 +197,14 @@ class MpiClusterBsStat:
 				gene_no_list.append(no)
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 	
-	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number):
+	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+		top_number, p_value_cut_off):
 		"""
 		09-19-05
 		10-21-05
 			stop_signal's dimension is 1. In fact, dimension (1,1) is same as (1).
+		12-15-05
+			add p_value_cut_off
 		"""
 		node_rank = communicator.rank
 		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
@@ -203,7 +214,8 @@ class MpiClusterBsStat:
 					sys.stderr.write("node %s breaked.\n"%node_rank)
 				break
 			else:
-				self.node_fire(communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, top_number)
+				self.node_fire(communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+					top_number, p_value_cut_off)
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
 		#tell the last node to stop
 		stop_signal = Numeric.zeros((1), Numeric.Float)
@@ -289,7 +301,8 @@ class MpiClusterBsStat:
 		if node_rank == 0:
 			self.input_node(communicator, curs, self.good_cluster_table, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
-			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, self.top_number)
+			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
+				self.top_number, self.p_value_cut_off)	#12-15-05 add p_value_cut_off
 		elif node_rank==communicator.size-1:
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
@@ -305,7 +318,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:p:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -319,6 +332,7 @@ if __name__ == '__main__':
 	size = 2000
 	ratio_cutoff = 1.0/3
 	top_number = 5
+	p_value_cut_off = 0.001
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -343,6 +357,8 @@ if __name__ == '__main__':
 			ratio_cutoff = float(arg)
 		elif opt in ("-t"):
 			top_number = int(arg)
+		elif opt in ("-p"):
+			p_value_cut_off = float(arg)
 		elif opt in ("-n"):
 			new_table = 1
 		elif opt in ("-c"):
@@ -353,7 +369,8 @@ if __name__ == '__main__':
 			report = 1
 	if schema and good_cluster_table and cluster_bs_table:
 		instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
-			cluster_bs_table, size, ratio_cutoff, top_number, new_table, commit, debug, report)
+			cluster_bs_table, size, ratio_cutoff, top_number, p_value_cut_off, \
+			new_table, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
