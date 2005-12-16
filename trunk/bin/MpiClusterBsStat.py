@@ -347,25 +347,25 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			good_cluster_table = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			cluster_bs_table = arg
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			size = int(arg)
-		elif opt in ("-a"):
+		elif opt in ("-a",):
 			ratio_cutoff = float(arg)
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			top_number = int(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			p_value_cut_off = float(arg)
-		elif opt in ("-n"):
+		elif opt in ("-n",):
 			new_table = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and good_cluster_table and cluster_bs_table:
 		instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
