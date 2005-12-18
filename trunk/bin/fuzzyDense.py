@@ -11,7 +11,8 @@ class fuzzyDense:
 	12-16-05
 		unsolved problem: when >=2 vertices have same degree, the choice is arbitrary
 	"""
-	def __init__(self, debug=0):
+	def __init__(self, edge2encodedOccurrence, debug=0):
+		self.edge2encodedOccurrence = edge2encodedOccurrence
 		self.debug=int(debug)
 	
 	def init_graph_from_vertex_set(self, vertex_list):
@@ -62,9 +63,12 @@ class fuzzyDense:
 		return degree_percentage
 	
 	
-	def get_core_vertex_set(self, edge2encodedOccurrence, vertex_list, recurrence_array, degree_cut_off):
+	def get_core_vertex_set(self, vertex_list, recurrence_array, degree_cut_off):
 		"""
 		12-16-05
+			global structures used:
+				--self.edge2encodedOccurrence
+		
 			--init_graph_from_vertex_set()
 			--decodeOccurrence()
 			--remove_loose_part_of_graph()
@@ -87,8 +91,8 @@ class fuzzyDense:
 				if self.debug:
 					print "checking", edge_tuple
 				"""
-				if edge_tuple in edge2encodedOccurrence:
-					edge_recurrence = decodeOccurrence(edge2encodedOccurrence[edge_tuple])	#starting from 1
+				if edge_tuple in self.edge2encodedOccurrence:
+					edge_recurrence = decodeOccurrence(self.edge2encodedOccurrence[edge_tuple])	#starting from 1
 					"""
 					if self.debug:
 						print "edge_recurrence", edge_recurrence
@@ -157,5 +161,5 @@ if __name__ == '__main__':
 	0.0, 0.066666666666666666, 0.0, 0.46666666666666667, 0.0, 0.13333333333333333, \
 	0.20000000000000001, 0.26666666666666666, 1.0]
 	degree_cut_off = 0.3
-	fuzzyDense_instance = fuzzyDense(debug=1)
-	print fuzzyDense_instance.get_core_vertex_set(edge2encodedOccurrence, vertex_list, recurrence_array, degree_cut_off)
+	fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence, debug=1)
+	print fuzzyDense_instance.get_core_vertex_set(vertex_list, recurrence_array, degree_cut_off)
