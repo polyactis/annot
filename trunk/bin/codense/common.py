@@ -1255,8 +1255,8 @@ def get_edge2occurrence(curs, min_sup=0, max_sup=200, edge_table='edge_cor_vecto
 """
 10-31-05 basic functions to draw images
 """
-import Image, ImageDraw
 def get_char_dimension():
+	import Image, ImageDraw
 	im = Image.new('RGB', (50,50))
 	draw = ImageDraw.Draw(im)
 	char_dimension = draw.textsize('a')
@@ -1268,6 +1268,7 @@ def get_text_region(text, dimension, rotate=1, foreground=(0,0,255), background=
 	"""
 	10-31-05 add background and foreground
 	"""
+	import Image, ImageDraw
 	text_im = Image.new('RGB', dimension, background)
 	text_draw = ImageDraw.Draw(text_im)
 	text_draw.text((0,0), text, fill=foreground)
@@ -1595,8 +1596,8 @@ def get_neighbor_set(curs, pattern_id, pattern_table, gene_no, distance):
 	Each neighbor_set, represented by a go_no is a vertex. Two vertices are connected by an edge if
 	the two neighbor_sets are similar enough.
 """
-from graph.cc_from_edge_list import cc_from_edge_list
 def distinct_go_no_list_based_on_neighbor_set_graph(neighbor_set_ls, go_no_ls, similarity_cutoff, debug=0):
+	from graph.cc_from_edge_list import cc_from_edge_list
 	no_of_go_nos = len(go_no_ls)
 	edge_list = []
 	go_no_in_graph_flag_ls = [0]*no_of_go_nos	#corresponding to go_no_ls, a flag of whether go_no is in the graph or not
@@ -1890,3 +1891,67 @@ def get_gene_no2tf_set(curs, binding_site_table='harbison2004.binding_site', mat
 	curs.execute("close gt_crs")
 	sys.stderr.write("Done getting gene_no2tf_set.\n")
 	return gene_no2tf_set
+
+"""
+12-17-05
+	for TFBindingSiteParse.py
+"""
+def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='sequence.entrezgene_mapping',\
+	annot_assembly_table='sequence.annot_assembly'):
+	"""
+	12-11-05
+	"""
+	sys.stderr.write("Getting entrezgene_annotated_anchor ...")
+	chromosome2anchor_gene_tuple_ls = {}
+	gene_id2coord = {}
+	curs.execute("DECLARE eaa_crs CURSOR FOR select e.genomic_gi, a.chromosome, e.gene_id, e.strand, \
+		e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s"%(entrezgene_mapping_table, \
+		annot_assembly_table, tax_id))
+	curs.execute("fetch 5000 from eaa_crs")
+	rows = curs.fetchall()
+	while rows:
+		for row in rows:
+			genomic_gi, chromosome, gene_id, strand, start, stop = row
+			gene_id = int(gene_id)
+			if strand=='1':
+				strand = '+'
+			else:
+				strand = '-'
+			if chromosome not in chromosome2anchor_gene_tuple_ls:
+				chromosome2anchor_gene_tuple_ls[chromosome] = []
+			chromosome2anchor_gene_tuple_ls[chromosome].append((start, gene_id))
+			chromosome2anchor_gene_tuple_ls[chromosome].append((stop, gene_id))
+			gene_id2coord[gene_id] = (start, stop, strand, genomic_gi)
+		curs.execute("fetch 5000 from eaa_crs")
+		rows = curs.fetchall()
+	for chromosome in chromosome2anchor_gene_tuple_ls:	#sort the list
+		chromosome2anchor_gene_tuple_ls[chromosome].sort()
+	curs.execute("close eaa_crs")
+	sys.stderr.write("Done.\n")
+	return chromosome2anchor_gene_tuple_ls, gene_id2coord
+	
+"""
+12-18-05
+"""
+def calculate_rome_number(rome_number):
+	s = 0
+	unit_dict = {'I':1,
+		'V':5,
+		'X':10}
+	total_length = len(rome_number)
+	try:
+		for i in range(total_length):
+			number1 = rome_number[i]
+			number1 = unit_dict[number1]
+			if i+1 < total_length:
+				number2 = rome_number[i+1]
+				number2 = unit_dict[number2]
+				if number1>=number2:
+					s+= number1
+				else:	#if the number to its right is larger, subtract it
+					s-= number1
+			else:
+				s += number1
+	except:
+		return None
+	return s
