@@ -1955,3 +1955,19 @@ def calculate_rome_number(rome_number):
 	except:
 		return None
 	return s
+
+
+"""
+12-18-05
+"""
+def get_dataset_no2desc(curs, dataset_no2id_table='dataset_no2id', dataset_desc_table='graph.dataset_desc'):
+	sys.stderr.write("Getting dataset_no2desc ...")
+	dataset_no2desc = {}
+	curs.execute("select d.dataset_no, dd.description from %s d, %s dd where d.dataset_id=dd.dataset_id"%\
+		(dataset_no2id_table, dataset_desc_table))
+	rows = curs.fetchall()
+	for row in rows:
+		dataset_no, description = row
+		dataset_no2desc[dataset_no] = description
+	sys.stderr.write("Done.\n")
+	return dataset_no2desc
