@@ -11,7 +11,8 @@ Option:
 	-a ...,	accuracy cutoff used to prediction, 0.6(default)
 	-o ...,	output_dir
 	-g ...,	organism
-	-n,	running bit, (tf_darwin_format, cluster_darwin_format, prediction_darwin_format), 111(default)
+	-n,	running bit, (tf_darwin_format, cluster_darwin_format, prediction_darwin_format, 
+		pattern_darwin_format), 1111(default)
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
@@ -166,6 +167,71 @@ class cluster_darwin_format(Thread):
 		del conn, curs
 
 
+class pattern_darwin_format(Thread):
+	"""
+	12-19-05
+		output all patterns from pattern_table into darwin format
+	"""
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
+		output_fname=None, gene_no2id=None, go_no2id=None, mt_no2tf_name=None, debug=0, report=0):
+		Thread.__init__(self)
+		self.hostname = hostname
+		self.dbname = dbname
+		self.schema = schema
+		self.ofname = ofname
+		self.lm_bit = lm_bit
+		self.acc_cut_off = float(acc_cut_off)
+		self.output_fname = output_fname
+		self.gene_no2id = gene_no2id
+		self.go_no2id = go_no2id
+		self.mt_no2tf_name = mt_no2tf_name
+		self.debug = int(debug)
+		self.report = int(report)
+
+	
+	def _pattern_darwin_format(self, curs, pattern_table, gene_no2id, go_no2id, output_fname):
+		"""
+		format:
+			r:=[
+			[mcl_id, vertex_set, recurrence_array, recurrence, connectivity, unknown_ratio]
+			[...],
+			...
+			[]]:
+			
+		"""
+		sys.stderr.write("pattern...\n")
+		of = open(output_fname, 'w')
+		of.write('r:=[\n')
+		curs.execute("DECLARE crs CURSOR FOR select id, vertex_set, recurrence_array, recurrence, \
+			connectivity, unknown_gene_ratio from %s"%pattern_table)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		while rows:
+			for row in rows:
+				mcl_id, vertex_set, recurrence_array, recurrence, connectivity, unknown_ratio = row
+				vertex_set = vertex_set[1:-1].split(',')
+				vertex_set = map(int, vertex_set)
+				vertex_set = dict_map(gene_no2id, vertex_set, type=2)
+				recurrence_array = '[' + recurrence_array[1:-1] + ']'
+				of.write('[%s, %s, %s, %s, %s, %s],\n'%(mcl_id, repr(vertex_set), recurrence_array,\
+					recurrence, connectivity, unknown_ratio))
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		of.write('[]]:\n')	#add the last blank list
+		del of
+		sys.stderr.write("pattern darwin format done.\n")
+		
+	def run(self):
+		if self.ofname and self.acc_cut_off and self.lm_bit:
+			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
+			
+		else:
+			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
+			sys.exit(2)
+		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
+		self._pattern_darwin_format(curs, schema_instance.pattern_table, self.gene_no2id, self.go_no2id, self.output_fname)
+		del conn, curs
+
 class prediction_darwin_format(Thread):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
 		output_fname=None, gene_no2id=None, go_no2id=None, mt_no2tf_name=None, debug=0, report=0):
@@ -252,6 +318,8 @@ class Schema2Darwin:
 	def run(self):
 		"""
 		09-28-05
+		12-19-05
+			use class_list and output_fname_list to ease program writing
 		"""
 		if self.ofname and self.acc_cut_off and self.lm_bit:
 			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
@@ -259,6 +327,8 @@ class Schema2Darwin:
 			tf_darwin_ofname = os.path.join(self.output_dir, '%s.tf.darwin'%schema_instance.lm_suffix)
 			cluster_darwin_ofname = os.path.join(self.output_dir, '%s.cluster.darwin'%schema_instance.lm_suffix)
 			prediction_darwin_ofname = os.path.join(self.output_dir, '%s.prediction.darwin'%schema_instance.lm_suffix)
+			pattern_darwin_ofname = os.path.join(self.output_dir, '%s.pattern.darwin'%schema_instance.lm_suffix)
+			
 		else:
 			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
@@ -276,25 +346,18 @@ class Schema2Darwin:
 		go_no2name = get_go_no2name(curs)	#09-28-05 Jasmine wants the go_name, not go_id
 		mt_no2tf_name = get_mt_no2tf_name()
 		
-		if self.running_bit[0] == '1':
-			instance1 =tf_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-				tf_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-			instance1.start()
-		if self.running_bit[1] == '1':
-			instance2 = cluster_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-				cluster_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-			instance2.start()
-		if self.running_bit[2] == '1':
-			instance3 = prediction_darwin_format(self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
-				prediction_darwin_ofname, gene_id2symbol, go_no2name, mt_no2tf_name, debug, report)
-			instance3.start()
-		
-		if self.running_bit[0] == '1':
-			instance1.join()
-		if self.running_bit[1] == '1':
-			instance2.join()
-		if self.running_bit[2] == '1':
-			instance3.join()
+		class_list = [tf_darwin_format, cluster_darwin_format, prediction_darwin_format, pattern_darwin_format]
+		output_fname_list = [tf_darwin_ofname, cluster_darwin_ofname, prediction_darwin_ofname, pattern_darwin_ofname]
+			#self.ofname is schema table's ofname.
+		darwin_instance_list = []
+		for i in range(len(self.running_bit)):
+			if self.running_bit[i] == '1':
+				darwin_instance_list.append(class_list[i](self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
+					output_fname_list[i], gene_id2symbol, go_no2name, mt_no2tf_name, debug, report))
+				darwin_instance_list[i].start()
+			
+		for i in range(len(darwin_instance_list)):
+			darwin_instance_list[i].join()
 
 
 if __name__ == '__main__':
@@ -330,21 +393,21 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-f"):
+		elif opt in ("-f",):
 			ofname = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			lm_bit = arg
-		elif opt in ("-a"):
+		elif opt in ("-a",):
 			acc_cut_off = float(arg)
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			output_dir = arg
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			organism = arg
-		elif opt in ("-n"):
+		elif opt in ("-n",):
 			running_bit = arg
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and ofname and lm_bit and acc_cut_off and output_dir and organism:
 		instance = Schema2Darwin(hostname, dbname, schema, ofname, lm_bit, acc_cut_off, output_dir,\
