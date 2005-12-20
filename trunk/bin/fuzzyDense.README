@@ -1,0 +1,18 @@
+
+1. Simplest Usage: fuzzyDense.py -i pattern_id
+
+output goest to ./fuzzyDense.out
+
+To see more options, type './fuzzyDense.py' without any option. i.e. -o to specify
+the output file.
+
+
+2. output format:
+
+out:=[
+[{gene1, gene2,...},{tf1, tf2, ...},{[dataset_no1, description], [dataset_no2, description], ... }],
+...
+
+]:
+
+
