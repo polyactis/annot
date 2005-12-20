@@ -28,12 +28,14 @@ Description:
 	
 """
 
-import sys, os, getopt, csv, math, Numeric
+import sys, os, getopt, csv, math, Numeric, cPickle
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, output_node
 from sets import Set
 from TF_functions import cluster_bs_analysis
+from MpiCrackSplat import MpiCrackSplat	#12-18-05	for fill_edge2encodedOccurrence()
+from fuzzyDense import fuzzyDense	#12-18-05	for fuzzyDense()
 
 class MpiClusterBsStat:
 	"""
@@ -117,20 +119,31 @@ class MpiClusterBsStat:
 	def fetch_cluster_block(self, curs, size):
 		"""
 		09-19-05
+		12-18-05
+			add recurrence_array
+			
 			format:
-				[mcl_id1, gene_no, gene_no, ..., -1, mcl_id2, gene_no, gene_no, ...]
+				[mcl_id1, gene_no, gene_no, ..., -1, recurrence, recurrence, ..., -2, mcl_id2, gene_no, gene_no, ...]
 		"""
 		curs.execute("fetch %s from crs"%(size))
 		rows = curs.fetchall()
 		cluster_block = []
 		for row in rows:
-			mcl_id, vertex_list = row
+			mcl_id, vertex_list, recurrence_array = row
 			vertex_list = vertex_list[1:-1].split(',')
 			vertex_list = map(int, vertex_list)
+			recurrence_array = recurrence_array[1:-1].split(',')
+			recurrence_array = map(int, recurrence_array)
+			
 			cluster_block.append(mcl_id)
 			for vertex in vertex_list:
 				cluster_block.append(vertex)
 			cluster_block.append(-1)
+			
+			for recurrence in recurrence_array:
+				cluster_block.append(recurrence)
+			cluster_block.append(-2)
+			
 		cluster_block = Numeric.array(cluster_block)
 		return cluster_block
 	
@@ -141,7 +154,7 @@ class MpiClusterBsStat:
 		"""
 		sys.stderr.write("Reading clusters from tables...\n")
 		node_rank = communicator.rank
-		curs.execute("DECLARE crs CURSOR FOR select distinct mcl_id, vertex_set\
+		curs.execute("DECLARE crs CURSOR FOR select distinct mcl_id, vertex_set, recurrence_array\
 			from %s "%(good_cluster_table))
 		cluster_block = self.fetch_cluster_block(curs, size)
 		counter = 0	#10-19-05
@@ -175,36 +188,46 @@ class MpiClusterBsStat:
 		return Numeric.array(block, Numeric.Float)
 	
 	def node_fire(self, communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-		top_number, p_value_cut_off):
+		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off):
 		"""
 		09-19-05
 		12-15-05
 			add p_value_cut_off
+		12-18-05
+			fuzzyDense
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
-		gene_no_list =[]
+		tmp_list =[]
 		for no in data:
 			if no==-1:
-				mcl_id = gene_no_list[0]
-				gene_no_list = gene_no_list[1:]
-				ls_to_return = cluster_bs_analysis(gene_no_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-					top_number, p_value_cut_off)
+				mcl_id = tmp_list[0]
+				gene_no_list = tmp_list[1:]
+				tmp_list = []
+			elif no==-2:
+				recurrence_array = tmp_list
+				core_vertex_list, on_dataset_index_ls =  fuzzyDense_instance.get_core_vertex_set(gene_no_list, recurrence_array, degree_cut_off)
+				if core_vertex_list:
+					ls_to_return = cluster_bs_analysis(core_vertex_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+						top_number, p_value_cut_off)
+				else:
+					ls_to_return = []
 				result_block = self.encode_result_block(mcl_id, ls_to_return)
 				communicator.send(result_block, communicator.size-1, 1)
-				gene_no_list = []
+				tmp_list = []
 			else:
-				gene_no_list.append(no)
+				tmp_list.append(no)
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 	
 	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-		top_number, p_value_cut_off):
+		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off):
 		"""
 		09-19-05
 		10-21-05
 			stop_signal's dimension is 1. In fact, dimension (1,1) is same as (1).
 		12-15-05
 			add p_value_cut_off
+		12-18-05
 		"""
 		node_rank = communicator.rank
 		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
@@ -215,7 +238,7 @@ class MpiClusterBsStat:
 				break
 			else:
 				self.node_fire(communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-					top_number, p_value_cut_off)
+					top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off)
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
 		#tell the last node to stop
 		stop_signal = Numeric.zeros((1), Numeric.Float)
@@ -286,14 +309,30 @@ class MpiClusterBsStat:
 		"""
 		communicator = MPI.world.duplicate()
 		node_rank = communicator.rank
+		free_computing_nodes = range(1,communicator.size-1)
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 			gene_no2bs_no_block = self.get_gene_no2bs_no_block(curs)
 			for node in range(1, communicator.size-1):	#send it to the computing_node
 				communicator.send(gene_no2bs_no_block, node, 0)
+			#12-18-05 get edge2encodedOccurrence
+			MpiCrackSplat_instance = MpiCrackSplat()
+			edge2encodedOccurrence = {}
+			min_sup = 3	#need to expose them
+			max_sup = 30
+			no_of_datasets = MpiCrackSplat_instance.fill_edge2encodedOccurrence(self.hostname, self.dbname, \
+				self.schema, edge2encodedOccurrence, min_sup, max_sup)
+			edge2encodedOccurrence_pickle = cPickle.dumps(edge2encodedOccurrence, -1)
+			for node in free_computing_nodes:	#send it to the computing_node
+				communicator.send(edge2encodedOccurrence_pickle, node, 0)
+			
 		elif node_rank>0 and node_rank<communicator.size-1:
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)
 			gene_no2bs_no_set, bs_no2gene_no_set = self.construct_two_dicts(node_rank, data)
+			#12-18-05
+			data, source, tag = communicator.receiveString(0, 0)
+			edge2encodedOccurrence = cPickle.loads(data)
+			
 		elif node_rank==communicator.size-1:	#establish connection before pursuing
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		mpi_synchronize(communicator)
@@ -301,12 +340,16 @@ class MpiClusterBsStat:
 		if node_rank == 0:
 			self.input_node(communicator, curs, self.good_cluster_table, self.size)
 		elif node_rank<=communicator.size-2:	#exclude the last node
+			#12-18-05
+			fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
+			degree_cut_off = 0.3
+			
 			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
-				self.top_number, self.p_value_cut_off)	#12-15-05 add p_value_cut_off
+				self.top_number, self.p_value_cut_off, fuzzyDense_instance, degree_cut_off)				#12-15-05 add p_value_cut_off
+			
 		elif node_rank==communicator.size-1:
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
-			free_computing_nodes = range(1,communicator.size-1)
 			parameter_list = [curs, self.cluster_bs_table]
 			output_node(communicator, free_computing_nodes, parameter_list, self.submit_cluster_bs_table, report=self.report, type=Numeric.Float)
 			if self.commit:
