@@ -38,6 +38,8 @@ from netmine_wrapper import netmine_wrapper
 from codense.codense2db import codense2db
 from sets import Set
 from MpiFromDatasetSignatureToPattern import decodeOccurrenceToBv, encodeOccurrenceBv, MpiFromDatasetSignatureToPattern
+if sys.version_info[:2] < (2, 3):	#python2.2 or lower needs some extra
+	from python2_3 import *
 
 class MpiCrackSplat:
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
