@@ -15,4 +15,10 @@ out:=[
 
 ]:
 
+3. 12-20-05 MpiClusterBsStat.py (wrapper of fuzzyDense.py to do TFBS analysis on all clusters) output format.
 
+out:=[
+[id, [fuzzyDense gene list], { [ [TF gene list1], [TF target gene list1], p-value], [ [TF gene list2], [TF target gene list2], p-value], ...}, {[dataset_no1, description], [dataset_no2, description], ... }  ],
+[...],
+...
+[]]:
