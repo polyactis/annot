@@ -24,6 +24,8 @@ from microarraydb import microarraydb
 from MA import array, average, maximum
 from Preprocess import PreprocessEdgeData
 from sets import Set
+if sys.version_info[:2] < (2, 3):	#python2.2 or lower needs some extra
+	from python2_3 import *
 
 class MergeGenes:
 	def __init__(self, file_list, outputdir, delimiter, debug=0):
