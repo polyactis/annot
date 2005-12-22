@@ -19,8 +19,7 @@ Examples:
 
 Description:
 	Program to filter datasets based on std or std/mean.
-	geo: log +std/mean, smd: std
-	GEO datasets will be logged(base = 2, <=10 truncated to 10).
+
 """
 
 import sys, os, re, getopt, csv, math
