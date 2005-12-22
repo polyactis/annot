@@ -30,7 +30,7 @@ from Preprocess import PreprocessEdgeData
 from sets import Set
 
 class LogAffyDatasets:
-	def __init__(self, file_list, outputdir, delimiter, threshold, top_percentage=0.90 no_of_valids=8, take_log=0, divide_mean=0, debug=0):
+	def __init__(self, file_list, outputdir, delimiter, threshold, top_percentage=0.90, no_of_valids=8, take_log=0, divide_mean=0, debug=0):
 		""" 
 		07-31-05
 		08-09-05
