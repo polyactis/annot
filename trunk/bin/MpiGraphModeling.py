@@ -1,4 +1,4 @@
-#!/usr/bin/env mpipython.lam
+#!/usr/bin/env mpipython
 """
 Usage: MpiGraphModeling.py -i INPUT_DIR -o OUTPUT_DIR [OPTION]
 
