@@ -16,6 +16,7 @@ Examples:
 
 Description:
 	DrawHistStd.py is usd to draw histogram of standard deviations for each microarray dataset.
+	type=1 will take log (<10 truncated to 10), but no division over mean.
 """
 
 import sys, os, re, getopt, csv, math
