@@ -196,13 +196,13 @@ if __name__ == '__main__':
 			delimiter = arg
 		elif opt in ("-s", "--threshold"):
 			threshold = float(arg)
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			top_percentage = float(arg)
 		elif opt in ("-n", "--no_of_valids"):
 			no_of_valids = int(arg)
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			take_log = 1
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			divide_mean = 1
 		elif opt in ("-u", "--debug"):
 			debug = 1
