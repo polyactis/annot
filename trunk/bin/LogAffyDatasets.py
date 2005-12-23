@@ -27,6 +27,7 @@ import MLab
 from MA import array
 from Preprocess import PreprocessEdgeData
 from sets import Set
+import random	#12-22-05
 
 class LogAffyDatasets:
 	def __init__(self, file_list, outputdir, delimiter, threshold, top_percentage=0.90, no_of_valids=8, take_log=0, divide_mean=0, debug=0):
@@ -64,9 +65,11 @@ class LogAffyDatasets:
 			qualified_counter_set.add(std_counter_ls[i][1])
 		return qualified_counter_set
 	
-	def get_ma_array_out_of_list(self, expr_list, take_log):
+	def get_ma_array_out_of_list(self, expr_list, take_log, round_one=0):
 		"""
 		12-22-05
+		12-22-05
+			in the second round, take random to avoid high correlation caused by a series of 10
 		"""
 		new_row = []
 		mask_ls = []
@@ -81,7 +84,10 @@ class LogAffyDatasets:
 				value = float(expr_list[i])
 				if take_log:	#12-22-05
 					if value<=10:
-						value = 10
+						if round_one:
+							value = 10
+						else:
+							value = random.uniform(math.e, 10)	#12-22-05 to avoid high correlation caused by a series of 10
 					value = math.log(value)	#12-22-05
 				new_row.append(value)
 				mask_ls.append(0)
@@ -106,7 +112,7 @@ class LogAffyDatasets:
 		for row in reader:
 			counter += 1
 			gene_id = row[0]
-			ma_array = self.get_ma_array_out_of_list(row[1:], take_log)
+			ma_array = self.get_ma_array_out_of_list(row[1:], take_log, round_one=1)	#12-22-05
 			"""
 			if self.debug:
 				print "The data vector is ",ma_array
