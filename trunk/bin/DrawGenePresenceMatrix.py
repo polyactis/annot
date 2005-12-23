@@ -25,6 +25,8 @@ sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from graph.complete_cor_vector import complete_cor_vector
 from sets import Set
 import Image, ImageDraw
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+        from python2_3 import *
 
 class DrawGenePresenceMatrix:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None,\
@@ -57,12 +59,18 @@ class DrawGenePresenceMatrix:
 		del reader
 	
 	def write_gene_incidence_matrix(self, dir, output_fname):
+		"""
+		12-23-05
+			no complete_cor_vector_instance.files_sort(), just simple sort()
+			return files
+		"""
 		sys.stderr.write("Writing gene presence_vector into %s...\n"%output_fname)
 		complete_cor_vector_instance = complete_cor_vector()
 		gene_id2presence_vector = {}
 		
 		files = os.listdir(dir)
-		files = complete_cor_vector_instance.files_sort(files)
+		#files = complete_cor_vector_instance.files_sort(files)	#12-23-05
+		files.sort()
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
 		
 		for i in range(len(files)):
@@ -84,6 +92,7 @@ class DrawGenePresenceMatrix:
 			writer.writerow(row)
 		del writer
 		sys.stderr.write("Done.\n")
+		return files	#12-23-05
 		
 	def get_char_dimension(self):
 		im = Image.new('RGB', (50,50))
@@ -103,7 +112,7 @@ class DrawGenePresenceMatrix:
 		return text_reg
 	
 	
-	def draw_incidence_matrix(self, input_fname, output_fname):
+	def draw_incidence_matrix(self, files, input_fname, output_fname):
 		"""
 		09-26-05
 			xlength is no of datasets
@@ -113,20 +122,30 @@ class DrawGenePresenceMatrix:
 		09-26-05
 			each cell's height reduced to 1, too big to use char_height,
 			gene_id is not drawn, frequency drawn every 2000 genes
+		12-23-05
+			add a file list as input, files
+			#12-23-05 replace the dataset_no with dataset name
 		"""
 		sys.stderr.write("Drawing gene presence_vector...")
 		ylength_output = os.popen('wc %s'%input_fname)
 		ylength_output = ylength_output.read()
 		ylength = int(ylength_output.split()[0])
 		
-		xlength_output = os.popen('%s %s'%(os.path.expanduser('~/script/shell/count_columns.py'), input_fname))
-		xlength_output = xlength_output.read()
-		xlength = int(xlength_output.split()[-1])-2	#the first column is frequency and last column is gene_id
+		#12-23-05  discontinue to get xlength from the input_fname
+		#xlength_output = os.popen('%s %s'%(os.path.expanduser('~/script/shell/count_columns.py'), input_fname))
+		#xlength_output = xlength_output.read()
+		#xlength = int(xlength_output.split()[-1])-2	#the first column is frequency and last column is gene_id
+		
+		#12-23-05
+		xlength = len(files)
 		
 		char_width, char_height = self.get_char_dimension()
-		dataset_no_dimension = (char_width*len(repr(xlength)), char_height)
+		#12-23-05 replace the dataset_no with dataset name
+		filename_length_ls  = map(len, files)
+		dataset_no_dimension = (char_width*max(filename_length_ls), char_height)
+		frequency_dimension = (char_width*len(repr(xlength)), char_height)
 		x_offset0 = 0
-		x_offset1 = x_offset0 + dataset_no_dimension[0]
+		x_offset1 = x_offset0 + char_width*len(repr(xlength))	#12-23-05
 		y_offset0 = 0
 		y_offset1 = y_offset0 + dataset_no_dimension[0]
 		
@@ -136,8 +155,10 @@ class DrawGenePresenceMatrix:
 		im = Image.new('RGB',whole_dimension,(255,255,255))
 		draw = ImageDraw.Draw(im)
 		
+		#12-23-05write out the dataset name
 		for i in range(xlength):	#write the text to a region and rotate anti-clockwise and paste it back
-			text_region = self.get_text_region(repr(i+1), dataset_no_dimension)	#rotate
+			filename = files[i].ljust(dataset_no_dimension[0])	#12-23-05	
+			text_region = self.get_text_region(filename, dataset_no_dimension)	#rotate	#12-23-05 replace the dataset_no with dataset name
 			box = (x_offset1+i*dataset_no_dimension[1], y_offset0, x_offset1+(i+1)*dataset_no_dimension[1], y_offset1)
 			im.paste(text_region, box)
 		
@@ -159,8 +180,8 @@ class DrawGenePresenceMatrix:
 						x_offset1+(i+1)*dataset_no_dimension[1], y_offset_lower), fill=(0,255,0))
 			if counter%2000 == 0:
 				#draw the frequency every 2000 genes
-				text_region = self.get_text_region(frequency, dataset_no_dimension, rotate=0)	#no rotate
-				box = (x_offset0, y_offset_upper, x_offset1, y_offset_upper+dataset_no_dimension[1])
+				text_region = self.get_text_region(frequency, frequency_dimension, rotate=0)	#no rotate
+				box = (x_offset0, y_offset_upper, x_offset1, y_offset_upper+frequency_dimension[1])
 				im.paste(text_region, box)
 			counter += 1
 		del reader
@@ -172,14 +193,15 @@ class DrawGenePresenceMatrix:
 	def run(self):
 		"""
 		09-26-05
+		
 			--write_gene_incidence_matrix()
 				--expand_gene_id2presence_vector()
 			--draw_incidence_matrix()
 				--get_char_dimension()
 				--get_text_region()
 		"""
-		self.write_gene_incidence_matrix(self.input_dir, self.output_fname)
-		self.draw_incidence_matrix(self.output_fname, self.jpg_ofname)
+		files = self.write_gene_incidence_matrix(self.input_dir, self.output_fname)
+		self.draw_incidence_matrix(files, self.output_fname, self.jpg_ofname)
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -208,15 +230,15 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			input_dir = arg
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			output_fname = arg
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			jpg_ofname = arg
 		elif opt in ("-b", "--debug"):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 		
 	if input_dir and output_fname and jpg_ofname:
