@@ -53,6 +53,8 @@ shell/datasets_filter.sh
 database schema sql/graph.sql loadin on zhoudb
 annot/gene_id_to_no.py to construct table graph.gene_id_to_no
 
+create symbolic links for $organism in ~/datasets and ~/gph_result
+
 ~/mapping/$schema_name file containing all selected datasets
 
 shell/annot.sh
@@ -68,7 +70,7 @@ shell/annot.sh
 		annot/bin/graph_reorganize.py (transform gph files into gspan format)
 		annot/prepare_gene_id2no.py
 	shell/graph_merge.sh
-		annot/graph_merge.py or graph_merge_lam.py
+		annot/graph_merge.py(**use version 1.2**)  or graph_merge_lam.py
 		annot/bin/graph/complete_cor_vector.py
 		shell/clustering_test.sh(convert the summary graph(gspan format) into matrix format(netmine), it calls clustering_test.py)
 		annot/bin/codense/haiyan_cor_vector2db.py(dump cor_vector and sig_vector files into database)
