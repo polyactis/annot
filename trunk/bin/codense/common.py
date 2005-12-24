@@ -8,7 +8,9 @@ import csv, os, sys, cPickle
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 import psycopg
 from sets import Set
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 def index_plus_one(i):
 	'''
 	This small function is used in map() to increase the indices by 1.
