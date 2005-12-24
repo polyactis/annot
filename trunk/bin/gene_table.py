@@ -142,11 +142,11 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			output_table = arg
 		elif opt in ("-g", "--organism"):
 			organism = arg
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			min_frequency = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1

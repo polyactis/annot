@@ -256,19 +256,19 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			inputfile = arg
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			outputfile = arg
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			size = int(arg)
-		elif opt in ("-n"):
+		elif opt in ("-n",):
 			new_table = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if inputfile and outputfile:
 		instance = MpiBFSCluster(hostname, dbname, schema, inputfile, outputfile,\

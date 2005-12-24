@@ -621,7 +621,7 @@ if __name__ == '__main__':
 			go_index = arg
 		elif opt in ("-s", "--size"):
 			size = int(arg)
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			max_no_of_nodes = int(arg)
 		elif opt in ("-t", "--type"):
 			type = int(arg)
@@ -631,7 +631,7 @@ if __name__ == '__main__':
 			level = int(arg)
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
-		elif opt in ("-u"):
+		elif opt in ("-u",):
 			debug = 1
 	if schema or (go_association and go_index):
 		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, \
