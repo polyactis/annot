@@ -12,7 +12,10 @@ Option:
 	-s ...,	no of clusters per transmission, 2000(default)
 	-a ...,	min ratio of #associated genes for one bs_no vs cluster size, 1/3(default)
 	-t ...,	top_number of scores to be kept, 5(default)
+	-e ...,	degree_cut_off, 0.3(default), for fuzzyDense
 	-p ...,	p_value_cut_off, 0.001(default)
+	-o ...,	output_file, fuzzyDense.out(default)
+	-x ...,	tax_id, 4932(default, yeast), for get_gene_id2gene_symbol
 	-n,	CLUSTER_BS_TABLE is new
 	-c,	commit the database transaction
 	-b,	debug version.
@@ -31,7 +34,8 @@ Description:
 import sys, os, getopt, csv, math, Numeric, cPickle
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
-from codense.common import mpi_synchronize, db_connect, output_node
+from codense.common import mpi_synchronize, db_connect, output_node, get_gene_id2gene_symbol, \
+	dict_map, get_dataset_no2desc, input_node, computing_node
 from sets import Set
 from TF_functions import cluster_bs_analysis
 from MpiCrackSplat import MpiCrackSplat	#12-18-05	for fill_edge2encodedOccurrence()
@@ -42,11 +46,13 @@ class MpiClusterBsStat:
 	09-19-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
-		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, \
-		top_number=5, p_value_cut_off=0.001, new_table=0, commit=0, debug=0, report=0):
+		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, top_number=5, degree_cut_off=0.3, p_value_cut_off=0.001, \
+		output_file='fuzzyDense.out', tax_id=4932, new_table=0, commit=0, debug=0, report=0):
 		"""
 		12-15-05
 			add p_value_cut_off
+		12-20-05
+			add output_file and tax_id, degree_cut_off
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -56,7 +62,10 @@ class MpiClusterBsStat:
 		self.size = int(size)
 		self.ratio_cutoff = float(ratio_cutoff)
 		self.top_number = int(top_number)
+		self.degree_cut_off = float(degree_cut_off)
 		self.p_value_cut_off = float(p_value_cut_off)
+		self.output_file = output_file
+		self.tax_id = int(tax_id)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
@@ -219,6 +228,32 @@ class MpiClusterBsStat:
 				tmp_list.append(no)
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 	
+	def computing_node_handler(self, communicator, data, parameter_list):
+		"""
+		12-20-05
+			called common's computing_node()
+		"""
+		node_rank = communicator.rank
+		sys.stderr.write("Node no.%s working...\n"%node_rank)
+		data = cPickle.loads(data)
+		gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off = parameter_list
+		result = []
+		for row in data:
+			id, vertex_set, recurrence_array = row
+			vertex_set = vertex_set[1:-1].split(',')
+			vertex_set = map(int, vertex_set)
+			recurrence_array = recurrence_array[1:-1].split(',')
+			recurrence_array = map(float, recurrence_array)
+			core_vertex_list, on_dataset_index_ls =  fuzzyDense_instance.get_core_vertex_set(vertex_set, recurrence_array, degree_cut_off)
+			if core_vertex_list:
+				ls_to_return = cluster_bs_analysis(core_vertex_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+					top_number, p_value_cut_off)
+				if ls_to_return:
+					result.append([id, core_vertex_list, on_dataset_index_ls, ls_to_return])
+		sys.stderr.write("Node no.%s done.\n"%node_rank)
+		return result
+	
 	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
 		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off):
 		"""
@@ -290,6 +325,40 @@ class MpiClusterBsStat:
 		if len(data)==1:	#no cluster_bs_analysis result
 			curs.execute("insert into %s(mcl_id) values(%s)"%(cluster_bs_table, mcl_id))
 	
+	def output_cluster_bs_data(self, communicator, parameter_list, data):
+		"""
+		12-20-05 for darwin output
+		
+			out:=[
+			[id, [fuzzyDense gene list], { [ [TF gene list1], [TF target gene list1], p-value], [ [TF gene list2], [TF target gene list2], p-value], ...}, \
+				{[dataset_no1, description], [dataset_no2, description], ... }  ],
+			[...],
+			...
+			[]]:
+			
+		"""
+		outf, gene_id2symbol, dataset_no2desc = parameter_list
+		data = cPickle.loads(data)
+		for row in data:
+			id, core_vertex_ls, on_dataset_index_ls, ls_to_return = row
+			#prepare the dataset_no_desc_ls
+			dataset_no_desc_ls = []
+			for dataset_index in on_dataset_index_ls:
+				dataset_no = dataset_index +1
+				dataset_no_desc_ls.append([dataset_no, dataset_no2desc[dataset_no]])
+			#prepare the tfbs_row_darwin_ls
+			tfbs_row_darwin_ls = []
+			for tfbs_row in ls_to_return:
+				score, score_type, bs_no_list, target_gene_no_list, global_ratio, local_ratio, expected_ratio, unknown_ratio = tfbs_row
+				bs_no_symbol_list = dict_map(gene_id2symbol, bs_no_list)
+				target_gene_no_symbol_list = dict_map(gene_id2symbol, target_gene_no_list)
+				tfbs_row_darwin_ls.append([bs_no_symbol_list, target_gene_no_symbol_list, score])
+			#translate the core_vertex_ls
+			core_vertex_symbol_ls = dict_map(gene_id2symbol, core_vertex_ls)
+			
+			#output them all
+			outf.write('[%s, %s,{%s},{%s}],\n'%(id, repr(core_vertex_symbol_ls), repr(tfbs_row_darwin_ls)[1:-1], repr(dataset_no_desc_ls)[1:-1]))
+	
 	def run(self):
 		"""
 		09-05-05
@@ -310,6 +379,7 @@ class MpiClusterBsStat:
 		communicator = MPI.world.duplicate()
 		node_rank = communicator.rank
 		free_computing_nodes = range(1,communicator.size-1)
+		
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 			gene_no2bs_no_block = self.get_gene_no2bs_no_block(curs)
@@ -335,25 +405,55 @@ class MpiClusterBsStat:
 			
 		elif node_rank==communicator.size-1:	#establish connection before pursuing
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+			
+			#12-20-05 for darwin output
+			gene_id2symbol = get_gene_id2gene_symbol(curs, self.tax_id)
+			dataset_no2desc = get_dataset_no2desc(curs)
+			
+			
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			self.input_node(communicator, curs, self.good_cluster_table, self.size)
+			#self.input_node(communicator, curs, self.good_cluster_table, self.size)
+			
+			#12-20-05
+			curs.execute("DECLARE crs CURSOR FOR select distinct id, vertex_set, recurrence_array\
+				from %s "%(self.good_cluster_table))
+			input_node(communicator, curs, free_computing_nodes, self.size, self.report)
+			curs.execute("close crs")
+			
 		elif node_rank<=communicator.size-2:	#exclude the last node
 			#12-18-05
-			fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
-			degree_cut_off = 0.3
+			#fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
+			#degree_cut_off = 0.3
 			
-			self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
-				self.top_number, self.p_value_cut_off, fuzzyDense_instance, degree_cut_off)				#12-15-05 add p_value_cut_off
+			#self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
+				#self.top_number, self.p_value_cut_off, fuzzyDense_instance, degree_cut_off)				#12-15-05 add p_value_cut_off
+			
+			#12-20-05
+			fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
+			parameter_list = [gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
+				self.top_number, self.p_value_cut_off, fuzzyDense_instance, self.degree_cut_off]
+			computing_node(communicator, parameter_list, self.computing_node_handler, report=self.report)
 			
 		elif node_rank==communicator.size-1:
+			"""
+			#12-20-05 comment out
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
 			parameter_list = [curs, self.cluster_bs_table]
 			output_node(communicator, free_computing_nodes, parameter_list, self.submit_cluster_bs_table, report=self.report, type=Numeric.Float)
 			if self.commit:
 				curs.execute("end")
+			"""
+			outf = open(self.output_file, 'w')
+			outf.write("out:=[\n")
+			parameter_list = [outf, gene_id2symbol, dataset_no2desc]
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_cluster_bs_data, report=self.report)
+			
+			outf.write('[]]:\n')
+			outf.close()
+
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -361,7 +461,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:p:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -375,7 +475,10 @@ if __name__ == '__main__':
 	size = 2000
 	ratio_cutoff = 1.0/3
 	top_number = 5
+	degree_cut_off = 0.3
 	p_value_cut_off = 0.001
+	output_file = 'fuzzyDense.out'
+	tax_id = 4932
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -400,21 +503,28 @@ if __name__ == '__main__':
 			ratio_cutoff = float(arg)
 		elif opt in ("-t",):
 			top_number = int(arg)
+		elif opt in ("-e",):
+			degree_cut_off = float(arg)
 		elif opt in ("-p",):
 			p_value_cut_off = float(arg)
 		elif opt in ("-n",):
 			new_table = 1
+		elif opt in ("-o",):
+			output_file = arg
+		elif opt in ("-x",):
+			tax_id = int(arg)
 		elif opt in ("-c",):
 			commit = 1
 		elif opt in ("-b",):
 			debug = 1
 		elif opt in ("-r",):
 			report = 1
-	if schema and good_cluster_table and cluster_bs_table:
-		instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
-			cluster_bs_table, size, ratio_cutoff, top_number, p_value_cut_off, \
-			new_table, commit, debug, report)
-		instance.run()
+	if schema and good_cluster_table:
+		if cluster_bs_table or output_file:
+			instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
+				cluster_bs_table, size, ratio_cutoff, top_number, degree_cut_off, p_value_cut_off, output_file, \
+				tax_id, new_table, commit, debug, report)
+			instance.run()
 	else:
 		print __doc__
 		sys.exit(2)
