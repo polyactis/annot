@@ -44,7 +44,9 @@ sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]	#07-03-05	g
 from graph import graph_modeling
 from graph.cc_from_edge_list import cc_from_edge_list
 from sets import Set
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class cluster_dstructure:
 	def __init__(self):
 		self.cluster_id = None
@@ -655,11 +657,11 @@ if __name__ == '__main__':
 			table = arg
 		elif opt in ("-m", "--mcl_table"):
 			mcl_table = arg
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			pattern_table = arg
 		elif opt in ("-p", "--mapping_file"):
 			mapping_file = arg
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			gim_inputfname = arg
 		elif opt in ("-f", "--cor_cut_off"):
 			cor_cut_off = float(arg)

@@ -48,7 +48,9 @@ from sets import Set
 from MpiPredictionFilter import prediction_attributes, gradient_class, MpiPredictionFilter
 from gene_stat import gene_stat
 from heapq import heappush, heappop
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class MpiSetupGo_no2Edges:
 	"""
 	10-20-05
@@ -859,45 +861,45 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			input_fname = arg
-		elif opt in ("-j"):
+		elif opt in ("-j",):
 			jnput_fname = arg
-		elif opt in ("--de"):
+		elif opt in ("--de",):
 			depth = int(arg)
-		elif opt in ("-u"):
+		elif opt in ("-u",):
 			min_layer1_associated_genes = int(arg)
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			min_layer1_ratio = float(arg)
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			min_layer2_associated_genes = int(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			min_layer2_ratio = float(arg)
-		elif opt in ("-e"):
+		elif opt in ("-e",):
 			exponent = int(arg)
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			score_list = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			max_layer = int(arg)
-		elif opt in ("-q"):
+		elif opt in ("-q",):
 			norm_exp = float(arg)
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			eg_d_type = int(arg)
-		elif opt in ("-x"):
+		elif opt in ("-x",):
 			recurrence_x = float(arg)
-		elif opt in ("-w"):
+		elif opt in ("-w",):
 			recurrence_x_type = int(arg)
-		elif opt in ("-v"):
+		elif opt in ("-v",):
 			message_size = int(arg)
-		elif opt in ("-f"):
+		elif opt in ("-f",):
 			go_no2edge_counter_list_fname = arg
-		elif opt in ("-n"):
+		elif opt in ("-n",):
 			new_table = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and input_fname and jnput_fname:
 		instance = MpiStatCluster(hostname, dbname, schema, input_fname, jnput_fname, depth, min_layer1_associated_genes, \

@@ -371,29 +371,29 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			fname1 = arg
-		elif opt in ("-j"):
+		elif opt in ("-j",):
 			fname2 = arg
-		elif opt in ("-f"):
+		elif opt in ("-f",):
 			filter_type = int(arg)
-		elif opt in ("-y"):
+		elif opt in ("-y",):
 			is_correct_type = int(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			rpart_cp = float(arg)
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			loss_matrix = map(float, arg.split(','))
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			prior_prob = float(arg)
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			training_perc = float(arg)
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			need_cal_hg_p_value = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, fname2, \

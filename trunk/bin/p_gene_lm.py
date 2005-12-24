@@ -46,7 +46,9 @@ from codense.common import *
 from numarray import *
 from Numeric import average
 from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class p_gene_lm:
 	"""
 	02-28-05

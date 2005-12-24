@@ -223,24 +223,24 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			p_gene_table = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			lm_table = arg
-		elif opt in ("-a"):
+		elif opt in ("-a",):
 			accuracy_cut_off = float(arg)
-		elif opt in ("-j"):
+		elif opt in ("-j",):
 			judger_type = int(arg)
-		elif opt in ("-w"):
+		elif opt in ("-w",):
 			for i in range(len(arg)):	#10-27-05 find the first index which is not 0
 				if arg[i] == '1':
 					break
 			which = i
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
-		elif opt in ("-u"):
+		elif opt in ("-u",):
 			debug = 1
 	
 	if schema and p_gene_table:

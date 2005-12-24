@@ -38,6 +38,8 @@ from codense.common import db_connect, form_schema_tables, \
 from rpart_prediction import rpart_prediction
 from rpy import r
 from sets import Set
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+        from python2_3 import *
 
 class MpiRpartValidation(rpart_prediction):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname=None, output_file=None, \
@@ -331,34 +333,34 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			fname = arg
-		elif opt in ("-j"):
+		elif opt in ("-j",):
 			output_file = arg
-		elif opt in ("-f"):
+		elif opt in ("-f",):
 			filter_type = int(arg)
-		elif opt in ("-y"):
+		elif opt in ("-y",):
 			is_correct_type = int(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			rpart_cp_ls = arg.split(',')
 			rpart_cp_ls = map(float, rpart_cp_ls)
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			loss_matrix_ls = arg.split('=')
 			for i in range(len(loss_matrix_ls)):
 				loss_matrix_ls[i] = map(float, loss_matrix_ls[i].split(','))
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			prior_prob_ls = map(float, arg.split(','))
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			training_perc = float(arg)
-		elif opt in ("-x"):
+		elif opt in ("-x",):
 			no_of_validations = int(arg)
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			need_cal_hg_p_value = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and fname and output_file:
 		instance = MpiRpartValidation(hostname, dbname, schema, fname, output_file, \

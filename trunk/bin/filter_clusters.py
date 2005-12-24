@@ -35,7 +35,9 @@ from codense.common import db_connect, p_gene_id_set_from_gene_p_table
 from sets import Set
 from Queue import Queue
 from threading import *
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class submit_clusters(Thread):
 	def __init__(self, cluster_queue, hostname='zhoudb', dbname='graphdb', schema=None, gene_p_table=None,\
 		p_gene_table=None, mcl_table=None, good_cluster_table=None,  occurrence_cutoff=0.8, \
@@ -227,25 +229,25 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-g"):
+		elif opt in ("-g",):
 			gene_p_table = arg
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			p_gene_table = arg
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			mcl_table = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			good_cluster_table = arg
-		elif opt in ("-o"):
+		elif opt in ("-o",):
 			occurrence_cutoff = float(arg)
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			qsize = int(arg)
-		elif opt in ("-n"):
+		elif opt in ("-n",):
 			new_table = 1
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and gene_p_table and p_gene_table and mcl_table and good_cluster_table:
 		q = Queue(qsize)

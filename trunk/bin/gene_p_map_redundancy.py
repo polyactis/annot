@@ -366,13 +366,13 @@ if __name__ == '__main__':
 			p_gene_table = arg
 		elif opt in ("-n", "--gene_p_table"):
 			gene_p_table = arg
-		elif opt in ("-y"):
+		elif opt in ("-y",):
 			type = int(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			pattern_table = arg
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			similarity_cut_off = float(arg)
-		elif opt in ("-x"):
+		elif opt in ("-x",):
 			maximum_distance = int(arg)
 		elif opt in ("-c", "--commit"):
 			commit = 1

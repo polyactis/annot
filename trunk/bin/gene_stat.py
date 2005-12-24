@@ -43,6 +43,8 @@ import sys, os, psycopg, getopt, csv, fileinput, math
 from sets import Set
 from codense.common import db_connect
 from numarray import greater_equal
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
 
 class gene_stat:
 	"""

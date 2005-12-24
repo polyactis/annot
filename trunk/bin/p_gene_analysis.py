@@ -54,7 +54,9 @@ import sys, os, psycopg, getopt, csv, math
 from sets import Set
 from numarray import *
 from codense.common import db_connect
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class prediction_space_attr:
 	"""
 	data structure for prediction_space2attr

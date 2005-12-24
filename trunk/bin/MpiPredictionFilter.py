@@ -48,7 +48,9 @@ from codense.common import mpi_synchronize
 from gene_stat import gene_stat
 from sets import Set
 import math
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+        from python2_3 import *
+	
 class prediction_attributes:
 	"""
 	10-15-05
@@ -861,41 +863,41 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
-		elif opt in ("-i"):
+		elif opt in ("-i",):
 			input_fname = arg
-		elif opt in ("-j"):
+		elif opt in ("-j",):
 			jnput_fname = arg
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			max_size = int(arg)
-		elif opt in ("-u"):
+		elif opt in ("-u",):
 			unknown_gene_ratio = float(arg)
-		elif opt in ("-p"):
+		elif opt in ("-p",):
 			p_value_cut_off = float(arg)
-		elif opt in ("-y"):
+		elif opt in ("-y",):
 			is_correct_type = int(arg)
-		elif opt in ("-a"):
+		elif opt in ("-a",):
 			acc_cut_off = float(arg)
-		elif opt in ("-e"):
+		elif opt in ("-e",):
 			exponent = float(arg)
-		elif opt in ("-s"):
+		elif opt in ("-s",):
 			score_list = arg
-		elif opt in ("-l"):
+		elif opt in ("-l",):
 			max_layer = int(arg)
-		elif opt in ("-q"):
+		elif opt in ("-q",):
 			norm_exp = float(arg)
-		elif opt in ("-x"):
+		elif opt in ("-x",):
 			recurrence_x = float(arg)
-		elif opt in ("-w"):
+		elif opt in ("-w",):
 			recurrence_x_type = int(arg)
-		elif opt in ("-v"):
+		elif opt in ("-v",):
 			size = int(arg)
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			eg_d_type = int(arg)
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
-		elif opt in ("-b"):
+		elif opt in ("-b",):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r",):
 			report = 1
 	if schema and input_fname and jnput_fname:
 		instance = MpiPredictionFilter(hostname, dbname, schema, input_fname, jnput_fname, max_size, \
