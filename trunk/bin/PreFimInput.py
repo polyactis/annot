@@ -21,6 +21,8 @@ Description:
 import sys, os, psycopg, getopt, csv
 from codense.common import db_connect
 sys.path += [os.path.expanduser('~/script/annot/bin')]
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+        from python2_3 import *
 
 def output_edge_data_fim_edge_oriented(outputfile, min_support=3, max_support=200, hostname='zhoudb', dbname='graphdb', \
 	schema='sc_new_38', debug=0, edge_table='edge_cor_vector'):

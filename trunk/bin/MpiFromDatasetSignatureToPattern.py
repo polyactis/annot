@@ -33,6 +33,8 @@ from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize, db_c
 from netmine_wrapper import netmine_wrapper
 from codense.codense2db import codense2db
 from sets import Set
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+        from python2_3 import *
 
 edge2occurrence_vector = {}	#08-09-05	global structure to store the occurrence vectors of edges appearing in the patterns
 
