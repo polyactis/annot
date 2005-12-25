@@ -165,13 +165,16 @@ class graph_merge:
 		03-13-05
 			This is a message capturing loop for each secondary node.
 			They function according to the message.
+		12-25-05
+			use break instead of sys.exit(0)
+			sys.exit(0) causes the main node to be dead
 		"""
 		while 1:
 			data, source, tag = communicator.receiveString(0, None)
 			if data=="output":
 				self.node_output(ofname, support, communicator)
 				communicator.send("1",0,1)
-				sys.exit(0)
+				break
 			else:
 				data = data.split(',')
 				if data[0] == 'new':
