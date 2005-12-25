@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Usage: fill_dataset_no2id.py -k -i -o [OPTIONS]
+Usage: fill_dataset_no2id.py -k [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
@@ -12,6 +12,7 @@ Option:
 	-h, --help              show this help
 
 Examples:
+	fill_dataset_no2id.py -k hs_fim_165 -c
 
 Description:
 	Fill in table schema.dataset_no2id  based on the mapping_file.
@@ -88,11 +89,11 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg	
-		elif opt in ("-t"):
+		elif opt in ("-t",):
 			table = arg
-		elif opt in ("-m"):
+		elif opt in ("-m",):
 			mapping_file = arg
-		elif opt in ("-c"):
+		elif opt in ("-c",):
 			commit = 1
 		
 	if schema:
