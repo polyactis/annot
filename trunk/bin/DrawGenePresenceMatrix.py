@@ -201,6 +201,7 @@ class DrawGenePresenceMatrix:
 	def draw_hist_gene_freq(self,  files, frequency_presence_vector_gene_id_ls, output_dir):
 		"""
 		12-23-05
+		12-26-05 if it's not empty, then draw it
 		"""
 		sys.stderr.write("Drawing gene frequency histogram for each dataset...")
 		#initialize a structure to store frequency list in each dataset
@@ -216,9 +217,10 @@ class DrawGenePresenceMatrix:
 		
 		for i in range(len(files)):
 			output_fname = os.path.join(output_dir, files[i])
-			r.png("%s.png"%output_fname)
-			r.hist(dataset_index_gene_freq_ls[i], main='histogram',xlab='gene frequency',ylab='no of genes', labels=r.TRUE)
-			r.dev_off()
+			if dataset_index_gene_freq_ls[i]:	#12-26-05 if it's not empty, then draw it
+				r.png("%s.png"%output_fname)
+				r.hist(dataset_index_gene_freq_ls[i], main='histogram',xlab='gene frequency',ylab='no of genes', labels=r.TRUE)
+				r.dev_off()
 		sys.stderr.write('Done.\n')
 	
 	def run(self):
