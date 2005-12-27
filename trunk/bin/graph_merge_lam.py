@@ -46,45 +46,29 @@ class graph_merge:
 		#value is the recurrence
 		self.graph_dict = {}
 	
-	def check_edge(self, edge_name, communicator, max_rank):
+	def check_edge(self, edge_name, communicator, half_full_machine_no, dict_size_of_half_full_machine):
 		"""
 		03-13-05
 			input: an edge
 			output: either '-1'(incremented) or a threshold_indicator_list
-			
+		12-26-05 speed up
+		
 			check which node has this edge, 
-			if that node	has it, increment its counter in its graph_dict, return '-1' meaning 'incremented'
-						not have it, return '1' or '0' indicating whether its graph_dict reaches memory threshold.
+			return '1': that node has it, increment its counter in its graph_dict
+			return '2': not have it but memory not full and add it
+			return '0': not have it and memory full and can't add it
 		"""
-		threshold_indicator_list = []
-		for dest in range(1,max_rank+1):
+		for dest in range(1, half_full_machine_no+1):
 			communicator.send(edge_name, dest, dest)
 			data, source, tag = communicator.receiveString(dest, None)
-			if data=="-1":
-				return data
-			else:
-				threshold_indicator_list.append(data)
-		return threshold_indicator_list
-	
-	def add_edge(self, edge_name, threshold_indicator_list, communicator, max_rank):
-		"""
-		03-13-05
-			input: edge_name and threshold_indicator_list
-			output: "no space" or "added" or "unknown error"
-			
-			find a node through threshold_indicator_list, which doesn't reach memory threshold
-		"""
-		#default return is "no space"
-		return_value = "no space"
-		for dest in range(1, max_rank+1):
-			threshold_indicator = threshold_indicator_list[dest-1]
-			if threshold_indicator=='0':
-				#found one node
-				communicator.send("new,%s"%(edge_name), dest, dest)
-				return_value, source, tag = communicator.receiveString(dest, None)
-				break
-				
-		return return_value
+			if data=="2":
+				if dest!=half_full_machine_no:
+					sys.stderr.write("Error: machine, %s, adding this edge, %s is not half_full_machine_no, %s.\n"\
+						%(dest, edge_name, half_full_machine_no))
+				dict_size_of_half_full_machine += 1
+		if data=='0':
+			sys.stderr.write("Error: edge %s neither inserted nor incremented.\n"%edge_name)
+		return dict_size_of_half_full_machine
 
 	def output(self, ofname, first_block, support, communicator, max_rank):
 		"""
@@ -108,11 +92,19 @@ class graph_merge:
 				print "%s encounted error: %s in its output"%(source, return_value)
 	
 	def edge_loadin(self, dir, communicator, max_rank):
+		"""
+		12-26-05
+			design a way to speed up program
+		"""
 		#output block put before edges
 		first_block = ''
 		
 		files = os.listdir(dir)
 		sys.stderr.write("\tTotally, %d files to be processed.\n"%len(files))
+		
+		half_full_machine_no = 1	#12-26-05	the initial machine without memory being full
+		dict_size_of_half_full_machine = 0	#12-26-05
+		
 		for f in files:
 			pathname = os.path.join(dir, f)
 			sys.stderr.write("%d/%d:\t%s\n"%(files.index(f)+1,len(files),f))
@@ -128,12 +120,13 @@ class graph_merge:
 						edge = '%s,%s'%(vertex1,vertex2)
 					else:
 						edge = '%s,%s'%(vertex2, vertex1)
-					check_return_value = self.check_edge(edge, communicator, max_rank)
-					if check_return_value != '-1':
-						#new edge
-						add_return_value = self.add_edge(edge, check_return_value, communicator, max_rank)
-					if add_return_value!='added':
-						sys.stderr.write("Error encounted when adding an edge: %s\n"%add_return_value)
+					dict_size_of_half_full_machine = self.check_edge(edge, communicator, half_full_machine_no, dict_size_of_half_full_machine)
+					if dict_size_of_half_full_machine>=threshold:	#12-26-05	increase the machine no
+						half_full_machine_no += 1
+						dict_size_of_half_full_machine = 0	#12-26-05 reset the dict size for half_full_machine_no
+						if half_full_machine_no>max_rank:
+							sys.stderr.write("Error: memory used up on all machines(current half_full_machine_no: %s.\n"%half_full_machine_no)
+							break
 				elif file_no == 1:
 					first_block += line
 			inf.close()
@@ -168,6 +161,8 @@ class graph_merge:
 		12-25-05
 			use break instead of sys.exit(0)
 			sys.exit(0) causes the main node to be dead
+		12-26-05
+			merge the functinality of 'not full' and 'add edge'
 		"""
 		while 1:
 			data, source, tag = communicator.receiveString(0, None)
@@ -177,27 +172,22 @@ class graph_merge:
 				break
 			else:
 				data = data.split(',')
-				if data[0] == 'new':
-					#create an edge tuple
-					edge = (int(data[1]), int(data[2]))
-					self.graph_dict[edge] = 1
-					communicator.send("added", 0, 2)
+				#create an edge tupple
+				edge = (int(data[0]), int(data[1]))
+				if edge in self.graph_dict:
+					#present, increment its counter
+					self.graph_dict[edge] += 1
+					communicator.send("1",0, 3)
 				else:
-					#create an edge tupple
-					edge = (int(data[0]), int(data[1]))
-					if edge in self.graph_dict:
-						#present, increment its counter
-						self.graph_dict[edge] += 1
-						communicator.send("-1",0, 3)
+					#not present
+					if len(self.graph_dict)<threshold:
+						#not full and add this edge
+						self.graph_dict[edge] = 1
+						communicator.send("2",0,4)
 					else:
-						#not present
-						if len(self.graph_dict)<threshold:
-							#not full
-							communicator.send("0",0,4)
-						else:
-							#full
-							communicator.send("1",0,5)
-	
+						#full
+						communicator.send("0",0,5)
+
 	def run(self):
 		"""
 		03-13-05
