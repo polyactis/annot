@@ -5,6 +5,7 @@ Usage: DrawGenePresenceMatrix.py -i INPUTDIR -o OUTPUTFILE -p OUTPUTPIC [OPTIONS
 Option:
 	-i ...	the input directory
 	-o ...	the output_dir
+	-e ...	power of frequency, 0.5(default), more frequent a gene is, more important it is.
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
@@ -21,9 +22,10 @@ Description:
 		1. gim flie, gene incidence matrix
 		2. png form of the gim file
 		3. gene frequency histogram for each dataset
+		4. enrich_index.csv
 """
 
-import os, sys, csv, getopt
+import os, sys, csv, getopt, math
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from graph.complete_cor_vector import complete_cor_vector
 from sets import Set
@@ -34,16 +36,19 @@ if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 
 class DrawGenePresenceMatrix:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None,\
-		input_dir=None, output_dir=None, debug=0, report=0):
+		input_dir=None, output_dir=None, exponent=0.5, debug=0, report=0):
 		"""
 		12-23-05
 			only output_dir
+		12-26-05
+			add exponent
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.input_dir = input_dir
 		self.output_dir = output_dir
+		self.exponent =float(exponent)
 		self.debug = int(debug)
 		self.report = int(report)
 	
@@ -198,30 +203,48 @@ class DrawGenePresenceMatrix:
 		sys.stderr.write('Done.\n')
 	
 	
-	def draw_hist_gene_freq(self,  files, frequency_presence_vector_gene_id_ls, output_dir):
+	def draw_hist_gene_freq(self,  files, frequency_presence_vector_gene_id_ls, exponent, output_dir):
 		"""
 		12-23-05
 		12-26-05 if it's not empty, then draw it
+		12-26-05 add an enrich_index_no_of_genes_filename_ls
 		"""
-		sys.stderr.write("Drawing gene frequency histogram for each dataset...")
+		sys.stderr.write("Drawing gene frequency histogram for each dataset...\n")
 		#initialize a structure to store frequency list in each dataset
 		dataset_index_gene_freq_ls = []
 		for i in range(len(files)):
 			dataset_index_gene_freq_ls.append([])
-		
 		for row in frequency_presence_vector_gene_id_ls:
 			frequency = row[0]
 			for i in range(1, len(row)-1):
 				if row[i] == 1:
 					dataset_index_gene_freq_ls[i-1].append(frequency)	#WATCH i-1
 		
+		#12-26-05
+		enrich_index_no_of_genes_filename_ls = []
+		functor = lambda x: math.pow(x, exponent)
+		
 		for i in range(len(files)):
+			sys.stderr.write("%s\t%s"%('\x08'*20, i))
 			output_fname = os.path.join(output_dir, files[i])
+			#12-26-05
+			enrich_index_no_of_genes_filename_ls.append([sum(map(functor, dataset_index_gene_freq_ls[i])), len(dataset_index_gene_freq_ls[i]), files[i]])
+			
 			if dataset_index_gene_freq_ls[i]:	#12-26-05 if it's not empty, then draw it
 				r.png("%s.png"%output_fname)
 				r.hist(dataset_index_gene_freq_ls[i], main='histogram',xlab='gene frequency',ylab='no of genes', labels=r.TRUE)
 				r.dev_off()
+		
+		#12-26-05
+		enrich_index_no_of_genes_filename_ls.sort()
+		enrich_index_output_fname = os.path.join(output_dir, 'enrich_index.csv')
+		writer = csv.writer(open(enrich_index_output_fname, 'w'), delimiter ='\t')
+		for row in enrich_index_no_of_genes_filename_ls:
+			writer.writerow(row)
+		del writer
+		
 		sys.stderr.write('Done.\n')
+	
 	
 	def run(self):
 		"""
@@ -242,7 +265,7 @@ class DrawGenePresenceMatrix:
 		png_output_fname = os.path.join(self.output_dir, '%s.png'%input_dir_basename)
 		
 		files, frequency_presence_vector_gene_id_ls = self.write_gene_incidence_matrix(self.input_dir,  gim_output_fname)
-		self.draw_hist_gene_freq(files, frequency_presence_vector_gene_id_ls, self.output_dir)
+		self.draw_hist_gene_freq(files, frequency_presence_vector_gene_id_ls, self.exponent, self.output_dir)
 		self.draw_incidence_matrix(files, gim_output_fname, png_output_fname)
 		
 	
@@ -252,13 +275,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema="]
-	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:br", long_options_list)
+	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:e:br", long_options_list)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
 	input_dir = None
 	output_dir = None
+	exponent = 0.5
 	debug = 0
 	report = 0
 
@@ -276,6 +300,8 @@ if __name__ == '__main__':
 			input_dir = arg
 		elif opt in ("-o",):
 			output_dir = arg
+		elif opt in ("-e",):
+			exponent = float(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-r",):
@@ -283,7 +309,7 @@ if __name__ == '__main__':
 		
 	if input_dir and output_dir:
 		instance = DrawGenePresenceMatrix(hostname, dbname, schema, input_dir, output_dir, \
-			debug, report)
+			exponent, debug, report)
 		instance.run()
 	else:
 		print __doc__
