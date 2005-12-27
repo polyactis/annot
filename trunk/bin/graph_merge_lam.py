@@ -27,6 +27,7 @@ Description:
 
 from Scientific import MPI
 import sys, os, re, getopt
+import Numeric
 
 class graph_merge:
 	'''
@@ -46,7 +47,7 @@ class graph_merge:
 		#value is the recurrence
 		self.graph_dict = {}
 	
-	def check_edge(self, edge_name, communicator, half_full_machine_no, dict_size_of_half_full_machine):
+	def check_edge(self, edge, communicator, half_full_machine_no, dict_size_of_half_full_machine):
 		"""
 		03-13-05
 			input: an edge
@@ -59,38 +60,17 @@ class graph_merge:
 			return '0': not have it and memory full and can't add it
 		"""
 		for dest in range(1, half_full_machine_no+1):
-			communicator.send(edge_name, dest, dest)
-			data, source, tag = communicator.receiveString(dest, None)
-			if data=="2":
+			communicator.send(edge, dest, dest)
+			data, source, tag, count = communicator.receive(Numeric.Int, dest, None)
+			if data[0]==2:
 				if dest!=half_full_machine_no:
 					sys.stderr.write("Error: machine, %s, adding this edge, %s is not half_full_machine_no, %s.\n"\
-						%(dest, edge_name, half_full_machine_no))
+						%(dest, edge, half_full_machine_no))
 				dict_size_of_half_full_machine += 1
-		if data=='0':
-			sys.stderr.write("Error: edge %s neither inserted nor incremented.\n"%edge_name)
+		if data[0]==0:
+			sys.stderr.write("Error: edge %s neither inserted nor incremented.\n"%edge)
 		return dict_size_of_half_full_machine
 
-	def output(self, ofname, first_block, support, communicator, max_rank):
-		"""
-		03-13-05
-			input: first_block, support, communicator
-			no output:
-			
-			first output the first_block,
-			then tell each node to output its graph_dict given a support
-		"""
-		#output the preceding block first
-		of = open(ofname, 'w')
-		of.write(first_block)
-		of.close()
-		for dest in range(1, max_rank+1):
-			communicator.send("output", dest, dest)
-			return_value, source, tag = communicator.receiveString(dest, None)
-			if return_value=="1":
-				print "%s finished its output"%(source)
-			else:
-				print "%s encounted error: %s in its output"%(source, return_value)
-	
 	def edge_loadin(self, dir, communicator, max_rank):
 		"""
 		12-26-05
@@ -117,9 +97,9 @@ class graph_merge:
 					vertex1 = int(line_list[1])
 					vertex2 = int(line_list[2])
 					if vertex1 <= vertex2:
-						edge = '%s,%s'%(vertex1,vertex2)
+						edge = Numeric.array([vertex1,vertex2])
 					else:
-						edge = '%s,%s'%(vertex2, vertex1)
+						edge = Numeric.array([vertex2, vertex1])
 					dict_size_of_half_full_machine = self.check_edge(edge, communicator, half_full_machine_no, dict_size_of_half_full_machine)
 					if dict_size_of_half_full_machine>=threshold:	#12-26-05	increase the machine no
 						half_full_machine_no += 1
@@ -132,6 +112,30 @@ class graph_merge:
 			inf.close()
 		
 		return first_block
+
+	def output(self, ofname, first_block, support, communicator, max_rank):
+		"""
+		03-13-05
+			input: first_block, support, communicator
+			no output:
+		12-27-05
+			change the type of communication message
+		
+			first output the first_block,
+			then tell each node to output its graph_dict given a support
+		"""
+		#output the preceding block first
+		of = open(ofname, 'w')
+		of.write(first_block)
+		of.close()
+		output_signal = Numeric.array([-1,-1])	#12-27-05 No gene is named -1
+		for dest in range(1, max_rank+1):
+			communicator.send(output_signal, dest, dest)
+			return_value, source, tag, count = communicator.receive(Numeric.Int, dest, None)	#12-27-05
+			if return_value[0]==1:
+				print "%s finished its output"%(source)
+			else:
+				print "%s encounted error: %s in its output"%(source, return_value)
 	
 	def node_output(self, ofname, support, communicator):
 		"""
@@ -163,30 +167,31 @@ class graph_merge:
 			sys.exit(0) causes the main node to be dead
 		12-26-05
 			merge the functinality of 'not full' and 'add edge'
+		12-27-05
+			change the communication type
 		"""
 		while 1:
-			data, source, tag = communicator.receiveString(0, None)
-			if data=="output":
+			data, source, tag, count = communicator.receive(Numeric.Int, 0, None)	#12-27-05
+			if data[0]==-1:	#12-27-05
 				self.node_output(ofname, support, communicator)
-				communicator.send("1",0,1)
+				communicator.send(Numeric.array([1]),0,1)	#12-27-05
 				break
 			else:
-				data = data.split(',')
 				#create an edge tupple
-				edge = (int(data[0]), int(data[1]))
+				edge = (data[0], data[1])
 				if edge in self.graph_dict:
 					#present, increment its counter
 					self.graph_dict[edge] += 1
-					communicator.send("1",0, 3)
+					communicator.send(Numeric.array([1]),0, 3)
 				else:
 					#not present
 					if len(self.graph_dict)<threshold:
 						#not full and add this edge
 						self.graph_dict[edge] = 1
-						communicator.send("2",0,4)
+						communicator.send(Numeric.array([2]),0,4)
 					else:
 						#full
-						communicator.send("0",0,5)
+						communicator.send(Numeric.array([0]),0,5)
 
 	def run(self):
 		"""
