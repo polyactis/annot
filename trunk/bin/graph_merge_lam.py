@@ -169,12 +169,17 @@ class graph_merge:
 			merge the functinality of 'not full' and 'add edge'
 		12-27-05
 			change the communication type
+		12-27-05
+			define signal ahead, don't make it on the fly when sending message
 		"""
+		good_signal = Numeric.array([1])
+		add_signal = Numeric.array([2])
+		bad_signal = Numeric.array([0])
 		while 1:
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, None)	#12-27-05
 			if data[0]==-1:	#12-27-05
 				self.node_output(ofname, support, communicator)
-				communicator.send(Numeric.array([1]),0,1)	#12-27-05
+				communicator.send(good_signal,0,1)	#12-27-05
 				break
 			else:
 				#create an edge tupple
@@ -182,16 +187,16 @@ class graph_merge:
 				if edge in self.graph_dict:
 					#present, increment its counter
 					self.graph_dict[edge] += 1
-					communicator.send(Numeric.array([1]),0, 3)
+					communicator.send(good_signal,0, 3)
 				else:
 					#not present
 					if len(self.graph_dict)<threshold:
 						#not full and add this edge
 						self.graph_dict[edge] = 1
-						communicator.send(Numeric.array([2]),0,4)
+						communicator.send(add_signal,0,4)
 					else:
 						#full
-						communicator.send(Numeric.array([0]),0,5)
+						communicator.send(bad_signal,0,5)
 
 	def run(self):
 		"""
