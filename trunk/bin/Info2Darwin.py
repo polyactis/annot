@@ -67,7 +67,7 @@ Description:
 import sys, os, getopt, re
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, get_gene_id2gene_symbol, \
-	get_gene_id2no_of_events, get_org_from_tax_id, dict_map, get_gene_id2family_size
+	get_gene_id2no_of_events, get_org_from_tax_id, dict_map, get_gene_id2family_size, get_gene_id2no_of_promoters
 from sets import Set
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 		from python2_3 import *
@@ -168,7 +168,7 @@ class Info2Darwin:
 		"""
 		12-28-05
 			output dictionary into darwin format
-		12-29-05 replace ' with "
+		12-29-05 replace ' with '\prime'
 		"""
 		sys.stderr.write("Outputting %s..."%dc_name)
 		outf.write("%s:=[\n"%dc_name)
@@ -177,7 +177,14 @@ class Info2Darwin:
 				key = key_map[key]
 			else:
 				key = str(key)	#convert it to string form
-			value = value.replace("'", '"')	#12-29-05 replace ' with "
+			if type(key)==str:
+				key = key.replace("'", '\prime')
+			if type(value)==str:	#12-29-05 if it's string
+				value = value.replace("'", '\prime')	#12-29-05 replace ' with blank ' '
+			if type(value)==list:	#12-29-05
+				for i in range(len(value)):
+					if type(value[i])==str:
+						value[i] = value[i].replace("'", '\prime')
 			row = [key, value]
 			outf.write(repr(row))
 			outf.write(',\n')
@@ -205,7 +212,8 @@ class Info2Darwin:
 			gene_id2no_of_events = get_gene_id2no_of_events(curs, self.tax_id, ensembl2no_of_events_table='graph.ensembl2no_of_events')
 			self.dict2darwin(gene_id2no_of_events, 'as', gene_id2symbol, outf)
 		if len(self.running_bit)>=4 and self.running_bit[3] =='1':
-			gene_id2no_of_promoters = get_gene_id2no_of_events(curs, self.tax_id, ensembl2no_of_events_table='graph.ensembl_id2no_of_promoters')
+			gene_id2no_of_promoters = get_gene_id2no_of_promoters(curs, self.tax_id)
+				#get_gene_id2no_of_events(curs, self.tax_id, ensembl2no_of_events_table='graph.ensembl_id2no_of_promoters')
 			self.dict2darwin(gene_id2no_of_promoters, 'dp', gene_id2symbol, outf)
 		if len(self.running_bit)>=5 and self.running_bit[4] =='1':
 			tg_tax_id2ca_depth_tax_id_short_org = get_tg_tax_id2ca_depth_tax_id_short_org(curs, self.tax_id)
