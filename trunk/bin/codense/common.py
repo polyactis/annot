@@ -1973,3 +1973,93 @@ def get_dataset_no2desc(curs, dataset_no2id_table='dataset_no2id', dataset_desc_
 		dataset_no2desc[dataset_no] = description
 	sys.stderr.write("Done.\n")
 	return dataset_no2desc
+
+
+"""
+12-28-05
+	a series of functions utilizing the taxonomy.tax_id2org() and taxonomy.org2tax_id()
+"""
+def get_org_from_tax_id(curs, tax_id):
+	curs.execute("select taxonomy.tax_id2org(%s)"%tax_id)
+	rows = curs.fetchall()
+	if rows:
+		organism = rows[0][0]
+	else:
+		organism = None
+	return organism
+
+def get_tax_id_from_org(curs, org):
+	curs.execute("select taxonomy.org2tax_id('%s')"%org)
+	rows = curs.fetchall()
+	if rows:
+		tax_id = rows[0][0]
+	else:
+		tax_id = None
+	return tax_id
+
+def get_short_org_from_tax_id(curs, tax_id):
+	curs.execute("select taxonomy.tax_id2org(%s)"%tax_id)
+	rows = curs.fetchall()
+	if rows:
+		organism = rows[0][0]
+		short_org = organism.split()
+		short_org = '%s%s'%(short_org[0][0], short_org[1][0])
+	else:
+		short_org = None
+	return short_org.lower()	#lower case
+
+
+"""
+12-28-05
+	different from get_gene_no2no_of_events():
+		no schema.gene table
+		convert gene_id to integer
+"""
+def get_gene_id2no_of_events(curs, tax_id, ensembl2no_of_events_table='graph.ensembl2no_of_events', \
+	ensembl_id2gene_id_table='graph.ensembl_id2gene_id', schema=None):
+	sys.stderr.write("Getting gene_id2no_of_events...\n")
+	gene_id2no_of_events = {}
+	curs.execute("SELECT e1.gene_id,avg(e2.no_of_events) as no_of_events from %s e1, %s e2 \
+		where e1.ensembl_id=e2.ensembl_id and e1.tax_id=%s group by e1.gene_id"%(ensembl_id2gene_id_table,\
+		ensembl2no_of_events_table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id, no_of_events = row
+		gene_id = int(gene_id)
+		gene_id2no_of_events[gene_id] = no_of_events
+	sys.stderr.write("End getting gene_id2no_of_events.\n")
+	return gene_id2no_of_events
+
+"""
+12-28-05
+	if one gene belongs to >1 families, take the bigger family size
+	
+	different from get_gene_no2family_size():
+		no schema.gene table
+		convert gene_id to integer
+"""
+def get_gene_id2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ensembl_id2family_id', ensembl_id2gene_id_table='graph.ensembl_id2gene_id'):
+	sys.stderr.write("Getting gene_id2family_size...\n")
+	#1st, get the family_id2size
+	family_id2size = {}
+	curs.execute("select count(ensembl_id), family_id from %s where tax_id=%s group by family_id"%\
+		(ensembl_id2family_id_table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		size, family_id = row
+		family_id2size[family_id] = int(size)
+	#2nd, get the gene_id2family_size
+	gene_id2family_size = {}
+	curs.execute("select distinct eg.gene_id, ef.family_id from %s ef,  %s eg where ef.ensembl_id=eg.ensembl_id\
+		and eg.tax_id =%s"%\
+		(ensembl_id2family_id_table, ensembl_id2gene_id_table, tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id, family_id = row
+		gene_id = int(gene_id)
+		if gene_id not in gene_id2family_size:
+			gene_id2family_size[gene_id] = 0
+		if family_id2size[family_id] > gene_id2family_size[gene_id]:	#always take the larger one
+			gene_id2family_size[gene_id]  = family_id2size[family_id]
+	sys.stderr.write("End getting gene_id2family_size.\n")
+	return gene_id2family_size
