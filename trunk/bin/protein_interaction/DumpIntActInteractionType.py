@@ -49,8 +49,13 @@ class DumpIntActInteractionType:
 	
 	
 	def submit2table(self, curs, table, interaction_type_attrib):
-		curs.execute("insert into %s (acc, name, definition, is_obsolete) \
-			values('%s', '%s', '%s', %s)"%(table, interaction_type_attrib.tag2variable['id'],\
+		"""
+		12-29-05
+			solve the '-within-text problem
+			change acc to interaction_type_id
+		"""
+		curs.execute("insert into " + table +" (interaction_type_id, name, definition, is_obsolete) \
+			values(%s, %s, %s, %s)", (interaction_type_attrib.tag2variable['id'],\
 			interaction_type_attrib.tag2variable['term'], interaction_type_attrib.tag2variable['definition'], \
 			interaction_type_attrib.tag2variable['obsolete term']))
 	
