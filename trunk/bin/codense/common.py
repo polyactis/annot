@@ -1366,6 +1366,8 @@ def get_gene_no2no_of_events(curs, ensembl2no_of_events_table='graph.ensembl2no_
 """
 11-29-05
 	if one gene belongs to >1 families, take the bigger family size
+12-29-05
+	correct a bug(family_id could be None)
 """
 def get_gene_no2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ensembl_id2family_id', ensembl_id2gene_id_table='graph.ensembl_id2gene_id', \
 	gene_table='gene', schema=None):
@@ -1377,7 +1379,8 @@ def get_gene_no2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ense
 	rows = curs.fetchall()
 	for row in rows:
 		size, family_id = row
-		family_id2size[family_id] = size
+		if family_id:	#12-29-05
+			family_id2size[family_id] = size
 	#2nd, get the gene_no2family_size
 	gene_no2family_size = {}
 	curs.execute("select distinct g.gene_no, ef.family_id from %s ef,  %s eg, %s g where ef.ensembl_id=eg.ensembl_id\
@@ -1385,10 +1388,11 @@ def get_gene_no2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ense
 	rows = curs.fetchall()
 	for row in rows:
 		gene_no, family_id = row
-		if gene_no not in gene_no2family_size:
-			gene_no2family_size[gene_no] = 0
-		if family_id2size[family_id] > gene_no2family_size[gene_no]:	#always take the larger one
-			gene_no2family_size[gene_no]  = family_id2size[family_id]
+		if family_id:	#12-29-05
+			if gene_no not in gene_no2family_size:
+				gene_no2family_size[gene_no] = 0
+			if family_id2size[family_id] > gene_no2family_size[gene_no]:	#always take the larger one
+				gene_no2family_size[gene_no]  = family_id2size[family_id]
 	sys.stderr.write("End getting gene_no2family_size.\n")
 	return gene_no2family_size
 
@@ -2033,7 +2037,8 @@ def get_gene_id2no_of_events(curs, tax_id, ensembl2no_of_events_table='graph.ens
 """
 12-28-05
 	if one gene belongs to >1 families, take the bigger family size
-	
+12-29-05 correct a bug(family_id could be None)
+
 	different from get_gene_no2family_size():
 		no schema.gene table
 		convert gene_id to integer
@@ -2047,7 +2052,8 @@ def get_gene_id2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ense
 	rows = curs.fetchall()
 	for row in rows:
 		size, family_id = row
-		family_id2size[family_id] = int(size)
+		if family_id:	#12-29-05 family_id could be None,
+			family_id2size[family_id] = int(size)
 	#2nd, get the gene_id2family_size
 	gene_id2family_size = {}
 	curs.execute("select distinct eg.gene_id, ef.family_id from %s ef,  %s eg where ef.ensembl_id=eg.ensembl_id\
@@ -2056,10 +2062,28 @@ def get_gene_id2family_size(curs, tax_id, ensembl_id2family_id_table='graph.ense
 	rows = curs.fetchall()
 	for row in rows:
 		gene_id, family_id = row
-		gene_id = int(gene_id)
-		if gene_id not in gene_id2family_size:
-			gene_id2family_size[gene_id] = 0
-		if family_id2size[family_id] > gene_id2family_size[gene_id]:	#always take the larger one
-			gene_id2family_size[gene_id]  = family_id2size[family_id]
+		if family_id:	#12-29-05 family_id could be None,
+			gene_id = int(gene_id)
+			if gene_id not in gene_id2family_size:
+				gene_id2family_size[gene_id] = 0
+			if family_id2size[family_id] > gene_id2family_size[gene_id]:	#always take the larger one
+				gene_id2family_size[gene_id]  = family_id2size[family_id]
 	sys.stderr.write("End getting gene_id2family_size.\n")
 	return gene_id2family_size
+
+"""
+12-29-05
+	new data from DBTSS
+"""
+def get_gene_id2no_of_promoters(curs, tax_id, entrezgene_id2no_of_promoters_table='graph.entrezgene_id2no_of_promoters'):
+	sys.stderr.write("Getting gene_id2no_of_promoters...\n")
+	gene_id2no_of_promoters = {}
+	curs.execute("SELECT entrezgene_id, no_of_promoters from %s where tax_id=%s"%(entrezgene_id2no_of_promoters_table, \
+		tax_id))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id, no_of_promoters = row
+		gene_id = int(gene_id)
+		gene_id2no_of_promoters[gene_id] = int(no_of_promoters)
+	sys.stderr.write("End getting gene_id2no_of_promoters.\n")
+	return gene_id2no_of_promoters
