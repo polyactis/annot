@@ -168,6 +168,7 @@ class Info2Darwin:
 		"""
 		12-28-05
 			output dictionary into darwin format
+		12-29-05 replace ' with "
 		"""
 		sys.stderr.write("Outputting %s..."%dc_name)
 		outf.write("%s:=[\n"%dc_name)
@@ -176,6 +177,7 @@ class Info2Darwin:
 				key = key_map[key]
 			else:
 				key = str(key)	#convert it to string form
+			value = value.replace("'", '"')	#12-29-05 replace ' with "
 			row = [key, value]
 			outf.write(repr(row))
 			outf.write(',\n')
