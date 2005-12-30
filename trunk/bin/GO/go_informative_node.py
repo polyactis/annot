@@ -15,7 +15,7 @@ Option:
 	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 4), 4(biggest-first-break 
 		control no of nodes), 5(biggest-first-break-level-by-level, similar to 4)
 	-l ..., --level=...	for node_type=3 or 4, this determines the level of a qualified go, 4(default)
-	-b, --bfs	construct by BFS instead of index(IGNORE)
+	-c ...,	branch, 1(molecular_function), 2(biological_process, default), 3(cellular_component)
 	-u,	debug
 	-h, --help      show this help
 	
@@ -39,6 +39,9 @@ Description:
 	Second usage:
 	this program constructs go_association and go_graph directly from database.
 	It depends on schema.gene, graph.association, go.term and go.term2term.
+	
+	12-30-05 A snippet is commented out which could be used to do
+		species-specific association tasks.
 """
 
 import sys, os, psycopg, getopt, csv
@@ -156,11 +159,13 @@ class go_informative_node_bfs:
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, go_association=None, \
 		go_graph=None, size=60, max_no_of_nodes=160,\
-		type=0, node_type=1, level=4, debug=0):
+		type=0, node_type=1, level=4, branch=2, debug=0):
 		"""
 		03-08-05
 			add a parameter, level to indicate the level of qualified nodes for node_type==3.
 		11-06-05 add node_type=4
+		12-30-05
+			add branch
 		"""
 		self.schema = schema
 		if self.schema:
@@ -177,6 +182,7 @@ class go_informative_node_bfs:
 		self.type = int(type)
 		self.node_type = int(node_type)
 		self.level = int(level)
+		self.branch = int(branch)
 		self.debug = int(debug)
 		
 		output_format_dict = {0:self.output_full,
@@ -187,8 +193,19 @@ class go_informative_node_bfs:
 		else:
 			sys.stderr.write('Type %d invalid\n'%self.type)
 			sys.exit(2)
-		#biological_process is the root
-		self.root = 'GO:0008150'
+		#12-30-05
+		self.root_dict = {1:'GO:0003674',
+			2:'GO:0008150',
+			3:'GO:0005575'}
+		self.root = self.root_dict[self.branch]	#12-30-05
+		self.branch_name_dict = {1:'molecular_function',
+			2:'biological_process',
+			3:'cellular_component'}
+		self.branch_unknown_acc_dict = {1:'GO:0005554',
+			2:'GO:0000004',
+			3:'GO:0008372'}
+		
+		
 		self.go_graph = kjGraph()
 		#11-06-05
 		self.complement_go_graph = kjGraph()	#used to check parents of a node
@@ -220,12 +237,24 @@ class go_informative_node_bfs:
 	def dstruc_loadin_from_db(self):
 		"""
 		11-07-05 add the complement_go_graph
+		12-30-05
+			flexible, adjut to self.branch
 		"""
 		sys.stderr.write("Loading Data STructure...")
 		#biological_process, not obsolete, not biological_process unknown.
+		"""
+		#12-30-05 deal with non-schema specific association tasks, here is human
+		self.curs.execute("select a.go_id, a.gene_id from graph.association a, go.term t\
+			where a.organism='Homo sapiens' and t.acc=a.go_id and\
+			t.term_type='%s' and t.acc!='%s' and t.is_obsolete=0"%(self.branch_name_dict[self.branch],
+			self.branch_unknown_acc_dict[self.branch]))
+		"""
+		
 		self.curs.execute("select a.go_id, g.gene_id from graph.association a, go.term t,\
 			gene g where g.gene_id=a.gene_id and t.acc=a.go_id and\
-			t.term_type='biological_process' and t.acc!='GO:0000004' and t.is_obsolete=0")
+			t.term_type='%s' and t.acc!='%s' and t.is_obsolete=0"%(self.branch_name_dict[self.branch],
+			self.branch_unknown_acc_dict[self.branch]))
+		
 		rows = self.curs.fetchall()
 		for row in rows:
 		#setup the go_id2gene_id_dict structure
@@ -236,18 +265,28 @@ class go_informative_node_bfs:
 			else:
 				self.go_id2gene_id_dict[go_id].add(gene_id)
 		#get the non-obsolete biological_process GO DAG
+		#12-30-05
 		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc,t1.depth, t2.depth from \
 			go.term2term t2t, go.term t1, go.term t2 where t2t.term1_id=t1.id and \
 			t2t.term2_id=t2.id and t1.is_obsolete=0 and t2.is_obsolete=0 and \
-			t1.term_type='biological_process' and t2.term_type='biological_process' ")
+			t1.term_type='%s' and t2.term_type='%s' "%(self.branch_name_dict[self.branch],
+			self.branch_name_dict[self.branch]))
+		
 		rows = self.curs.fetchall()
 		for row in rows:
 		#setup the go_graph structure
 			self.go_graph.add((row[2], row[3]))
 			#11-06-05
 			self.complement_go_graph.add((row[3], row[2]))
-			depth1 = int(row[4])
-			depth2 = int(row[5])
+			#12-30-05
+			if row[4]:
+				depth1 = int(row[4])
+			else:
+				depth1 = 0
+			if row[5]:
+				depth2 = int(row[5])
+			else:
+				depth2 = 0
 			self.go_id2depth[row[2]] = depth1
 			self.go_id2depth[row[3]] = depth2
 		self.go_id_set = kjSet(self.go_graph.keys() + self.go_graph.values())
@@ -587,7 +626,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:m:t:n:l:bu", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:i:s:m:t:n:l:c:bu", ["help", "hostname=", \
 			"dbname=", "schema=", "go_association=", "go_index=", "size=", "type=", "node_type=", "level=", "bfs"])
 	except:
 		print __doc__
@@ -603,6 +642,7 @@ if __name__ == '__main__':
 	type = 0
 	node_type = 1
 	level = 4
+	branch = 2
 	bfs = 1
 	debug = 0
 	for opt, arg in opts:
@@ -629,13 +669,15 @@ if __name__ == '__main__':
 			node_type = int(arg)
 		elif opt in ("-l", "--level"):
 			level = int(arg)
+		elif opt in ("-c",):
+			branch = int(arg)
 		elif opt in ("-b", "--bfs"):
 			bfs = 1
 		elif opt in ("-u",):
 			debug = 1
 	if schema or (go_association and go_index):
 		instance = go_informative_node_bfs(hostname, dbname, schema, go_association, \
-			go_index, size, max_no_of_nodes, type, node_type, level, debug)
+			go_index, size, max_no_of_nodes, type, node_type, level, branch, debug)
 		instance.run()
 	else:
 		print __doc__
