@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 """
-Usage: PreFimInput.py -k SCHEMA [OPTION] OUTPUTFILE
+Usage: PreFimInput.py -s SIG_VECTOR_FILE [OPTION] OUTPUTFILE
 
 Option:
-	-z ..., --hostname=...	the hostname, zhoudb(default)
-	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database
+	-z ..., --hostname=...	the hostname, zhoudb(default, IGNORE)
+	-d ..., --dbname=...	the database name, graphdb(default, IGNORE)
+	-k ..., --schema=...	which schema in the database, IGNORE
+	-s ...,	sig_vector file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
 	-b, --debug	debug version
 	-h, --help              show this help
 	
 Examples:
-	PreFimInput.py -k shu ~/bin/hhu_clustering/shu.fim.input
+	PreFimInput.py -s mm_fim_114_4.gene_no.sig_vector -m 5 -x 114 mm_fim_114m5x114_i
 
 Description:
 	Prepare input for fim_closed.
@@ -24,7 +25,8 @@ sys.path += [os.path.expanduser('~/script/annot/bin')]
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
         from python2_3 import *
 
-def output_edge_data_fim_edge_oriented(outputfile, min_support=3, max_support=200, hostname='zhoudb', dbname='graphdb', \
+def output_edge_data_fim_edge_oriented(outputfile, min_support=3, \
+	max_support=200, hostname='zhoudb', dbname='graphdb', \
 	schema='sc_new_38', debug=0, edge_table='edge_cor_vector'):
 	"""
 	08-07-05
@@ -62,14 +64,43 @@ def output_edge_data_fim_edge_oriented(outputfile, min_support=3, max_support=20
 	
 	sys.stderr.write("Done\n")
 
+def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_support=3, \
+	max_support=200, sig_vector_fname='', debug=0):
+	"""
+	12-30-05
+		read edge data from sig_vector_file
+	"""	
+	fname = outputfile
+	reader = csv.reader(open(sig_vector_fname, 'r'), delimiter='\t')
+	writer = csv.writer(open(fname,'w'),delimiter='\t')
+	
+	sys.stderr.write("Getting edge matrix for all functions...\n")
+	counter = 0
+	for row in reader:
+		sig_vector = row[2:]
+		sig_vector = map(int, sig_vector)
+		if sum(sig_vector)>=min_support and sum(sig_vector)<=max_support:
+			new_row = []
+			for i in range(len(sig_vector)):
+				if sig_vector[i]==1:
+					new_row.append(i+1)
+			writer.writerow(new_row)
+		counter +=1
+		if counter%5000==0:
+			sys.stderr.write('%s%s'%('\x08'*20, counter))
+		if debug:
+			break
+	del reader, writer
+	sys.stderr.write("Done\n")
+	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:m:x:b", ["help", "hostname=", "dbname=", "schema=", "min_sup", "max_sup=", \
-			"debug"])
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:s:m:x:b", ["help", "hostname=", \
+			"dbname=", "schema=", "min_sup", "max_sup=", "debug"])
 	except:
 		print __doc__
 		sys.exit(2)
@@ -77,6 +108,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	sig_vector_fname = ''
 	min_sup = 0
 	max_sup = 200
 	debug = 0
@@ -90,6 +122,8 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-s",):
+			sig_vector_fname = arg
 		elif opt in ("-m", "--min_sup"):
 			min_sup = int(arg)
 		elif opt in ("-x", "--max_sup"):
@@ -97,9 +131,10 @@ if __name__ == '__main__':
 		elif opt in ("-b", "--debug"):
 			debug = 1
 	outputfile = args[0]
-	
-	if schema and outputfile:
-		output_edge_data_fim_edge_oriented(outputfile, min_sup, max_sup, hostname, dbname, schema, debug)
+	#12-30-05 discard the schema form, take input from sig_vector_fname
+	if sig_vector_fname and outputfile:
+		output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_sup, max_sup, \
+			sig_vector_fname, debug)
 	else:
 		print __doc__
 		sys.exit(2)
