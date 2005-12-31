@@ -320,6 +320,8 @@ class Schema2Darwin:
 		09-28-05
 		12-19-05
 			use class_list and output_fname_list to ease program writing
+		12-30-05
+			fix a bug in indexing darwin_instance_list
 		"""
 		if self.ofname and self.acc_cut_off and self.lm_bit:
 			schema_instance = form_schema_tables(self.ofname, self.acc_cut_off, self.lm_bit)
@@ -354,7 +356,8 @@ class Schema2Darwin:
 			if self.running_bit[i] == '1':
 				darwin_instance_list.append(class_list[i](self.hostname, self.dbname, self.schema, self.ofname, self.lm_bit, self.acc_cut_off, \
 					output_fname_list[i], gene_id2symbol, go_no2name, mt_no2tf_name, debug, report))
-				darwin_instance_list[i].start()
+				current_pos = len(darwin_instance_list)-1 #12-30-05
+				darwin_instance_list[current_pos].start()
 			
 		for i in range(len(darwin_instance_list)):
 			darwin_instance_list[i].join()
