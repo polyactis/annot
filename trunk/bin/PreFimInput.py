@@ -10,6 +10,7 @@ Option:
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
 	-b, --debug	debug version
+	-r,	enable report flag
 	-h, --help              show this help
 	
 Examples:
@@ -65,7 +66,7 @@ def output_edge_data_fim_edge_oriented(outputfile, min_support=3, \
 	sys.stderr.write("Done\n")
 
 def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_support=3, \
-	max_support=200, sig_vector_fname='', debug=0):
+	max_support=200, sig_vector_fname='', debug=0, report=0):
 	"""
 	12-30-05
 		read edge data from sig_vector_file
@@ -86,7 +87,7 @@ def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_supp
 					new_row.append(i+1)
 			writer.writerow(new_row)
 		counter +=1
-		if counter%5000==0:
+		if report and counter%5000==0:
 			sys.stderr.write('%s%s'%('\x08'*20, counter))
 		if debug:
 			break
@@ -99,7 +100,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:s:m:x:b", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:s:m:x:br", ["help", "hostname=", \
 			"dbname=", "schema=", "min_sup", "max_sup=", "debug"])
 	except:
 		print __doc__
@@ -112,6 +113,7 @@ if __name__ == '__main__':
 	min_sup = 0
 	max_sup = 200
 	debug = 0
+	report = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
 			print __doc__
@@ -130,11 +132,13 @@ if __name__ == '__main__':
 			max_sup = int(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
+		elif opt in ("-r",):
+			report = 1
 	outputfile = args[0]
 	#12-30-05 discard the schema form, take input from sig_vector_fname
 	if sig_vector_fname and outputfile:
 		output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_sup, max_sup, \
-			sig_vector_fname, debug)
+			sig_vector_fname, debug, report)
 	else:
 		print __doc__
 		sys.exit(2)
