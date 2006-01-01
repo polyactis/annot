@@ -62,6 +62,7 @@ std::vector<Graph> cc_from_edge_list::cc2subgraph(Graph &graph)
 }
 
 boost::python::list cc_from_edge_list::subgraph2list(Graph &subgraph, Graph &graph)
+//12-31-05 edge_tup in ascending order
 {
 	boost::python::list subgraph_edge_list;	//store the egdes
 	
@@ -69,6 +70,8 @@ boost::python::list cc_from_edge_list::subgraph2list(Graph &subgraph, Graph &gra
 	
 	boost::graph_traits<Graph>::vertex_descriptor
 	vertex_local, vertex_local1, vertex_global, vertex_global1;
+	int vg_name, vg_name1;	//12-31-05
+	boost::python::tuple edge_tup;
 	#if defined(DEBUG)
 		std::cout << "edges(g) = ";
 	#endif
@@ -83,7 +86,14 @@ boost::python::list cc_from_edge_list::subgraph2list(Graph &subgraph, Graph &gra
 			std::cout << "(" << get(vertex2name, vertex_global)
 			<< "," << get(vertex2name, vertex_global1) << ") ";
 		#endif
-		subgraph_edge_list.append(boost::python::make_tuple(get(vertex2name, vertex_global), get(vertex2name, vertex_global1)));
+		//12-31-05
+		vg_name = get(vertex2name, vertex_global);
+		vg_name1 = get(vertex2name, vertex_global1);
+		if (vg_name<vg_name1)
+			edge_tup = boost::python::make_tuple(vg_name, vg_name1);
+		else
+			edge_tup = boost::python::make_tuple(vg_name1, vg_name);
+		subgraph_edge_list.append(edge_tup);
 
 	}
 	#if defined(DEBUG)
