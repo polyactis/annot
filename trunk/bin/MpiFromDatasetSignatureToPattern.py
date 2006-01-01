@@ -1,12 +1,13 @@
 #!/usr/bin/env mpipython
 """
-Usage: MpiFromDatasetSignatureToPattern.py -k SCHEMA -i INPUTFILE -o OUTPUTFILE [OPTION]
+Usage: MpiFromDatasetSignatureToPattern.py -i INPUTFILE -s SIG_VECTOR_FILE -o OUTPUTFILE [OPTION]
 
 Option:
-	-z ..., --hostname=...	the hostname, zhoudb(default)
-	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database
+	-z ..., --hostname=...	the hostname, zhoudb(default, USELESS)
+	-d ..., --dbname=...	the database name, graphdb(default, USELESS)
+	-k ..., --schema=...	which schema in the database(USELESS)
 	-i ...,	--inputfile=...	the input file, dataset signature output by fim
+	-s ...,	sig_vector file
 	-o ..., --outputfile=...	the output file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
@@ -17,7 +18,7 @@ Option:
 	
 Examples:
 	mpirun.mpich -np 30 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiFromDatasetSignatureToPattern.py
-	-k mm_fim_97 -i /scratch/00/yuhuang/tmp/mm_fim_97.s4.l5.output -o /scratch/00/yuhuang/tmp/mm_fim_97.o
+	-s mm_fim_97_4.sig_vector -i mm_fim_97.s4.l5.output -o mm_fim_97.o
 	
 Description:
 	Program to handle the fim_closed output over the edge-transaction mining
@@ -86,6 +87,8 @@ def patternFormation(offset, parameter_list):
 			else:
 				sys.stderr.write("Something wrong, %s already appears in signature2pattern\n"%occurrenceBinaryForm)
 				sys.exit(2)
+		elif counter>upper_bound:	#12-30-05	skip the other rows
+			break
 	del dSF
 	#fill patterns in signature2pattern
 	#iF = csv.reader(open(intermediateFile,'r'), delimiter='\t')	#08-24-05 intermediateFile defunct
@@ -114,7 +117,7 @@ def patternFormation(offset, parameter_list):
 					edge2occurrence_vector[edge_tuple].append(occurrence_vector)
 				else:
 					edge2occurrence_vector[edge_tuple][0] += 1
-				"""raw_input will stop the paralle program
+				"""raw_input will stop the parallel program
 				is_continue = raw_input("Continue?(Y/n)")
 				if is_continue=='n':
 					sys.exit(2)
@@ -135,6 +138,8 @@ def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc):
 	08-07-05
 	08-09-05
 		calculate recurrence array for codense2db.py
+	12-31-05
+		remove several time-consuming steps, but vertex_set and cc_edge_list are not sorted anymore
 	"""
 	if no_cc:
 		vertex_set = codense2db_instance.vertex_set_from_cc_edge_list(edge_list)
@@ -149,9 +154,9 @@ def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc):
 		for cc_edge_list in cc_list:
 			vertex_set = codense2db_instance.vertex_set_from_cc_edge_list(cc_edge_list)
 			vertex_set.sort()
-			cc_edge_list = map(list, cc_edge_list)	#change the tuple type to list
+			cc_edge_list = map(list, cc_edge_list)  #change the tuple type to list
 			for i in range(len(cc_edge_list)):
-				cc_edge_list[i].sort()	#sort it
+				cc_edge_list[i].sort()  #sort it
 			combined_vector = get_combined_vector(cc_edge_list)
 			recurrence_array = codense2db_instance.parse_recurrence(combined_vector)
 			of.write('%s\t%s\t%s\n'%(repr(vertex_set), repr(cc_edge_list), repr(recurrence_array) ) )
@@ -175,10 +180,12 @@ def encodeOccurrence(ls):
 	"""
 	08-06-05
 		encode an occurrence vector to a binary number
+	12-30-05
+		python2.2, int is can't handle long integer. replace it with long.
 	"""
 	binary_number = 0
 	for digit in ls:
-		binary_number += int(math.pow(2, digit-1))	#int() because math.pow() returns float 
+		binary_number += long(math.pow(2, digit-1))	#int() because math.pow() returns float 
 			#IMPORTANT: later makes the binary_number approximate cause it's too large
 	return binary_number
 
@@ -186,11 +193,13 @@ def encodeOccurrenceBv(ls):
 	"""
 	08-06-05
 		encode an occurrence vector to a binary number
+	12-30-05
+		python2.2, int is can't handle long integer. replace it with long.
 	"""
 	binary_number = 0
 	for i in range(len(ls)):
 		if ls[i] == 1:
-			binary_number += int(math.pow(2, i))
+			binary_number += long(math.pow(2, i))
 	return binary_number
 
 def decodeOccurrence(signature):
@@ -231,7 +240,7 @@ def decodeOccurrenceToBv(signature, no_of_datasets):
 	
 class MpiFromDatasetSignatureToPattern:
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
-		outputfile=None, min_sup=0, max_sup=200, no_cc=0, debug=0, report=0):
+		sig_vector_fname=None, outputfile=None, min_sup=0, max_sup=200, no_cc=0, debug=0, report=0):
 		"""
 		08-07-05
 			Program to handle the fim_closed output over the edge-transaction mining
@@ -241,6 +250,7 @@ class MpiFromDatasetSignatureToPattern:
 		self.dbname = dbname
 		self.schema = schema
 		self.inputfile = inputfile
+		self.sig_vector_fname = sig_vector_fname
 		self.outputfile = outputfile
 		self.min_sup = int(min_sup)
 		self.max_sup = int(max_sup)
@@ -248,29 +258,18 @@ class MpiFromDatasetSignatureToPattern:
 		self.debug = int(debug)
 		self.report = int(report)
 	
-	def get_no_of_edges_and_no_of_datasets(self, curs, edge_table='edge_cor_vector'):
+	def get_no_of_datasets(self, sig_vector_fname):
 		"""
-		08-24-05
-			get the no_of_edges and no_of_datasets
-				no_of_edges got from edge_cor_vector_edge_id_seq
-				no_of_datasets got from the first sig_vector
+		12-31-05
+			
 		"""
-		sys.stderr.write("Getting no_of_edges and no_of_datasets...")
-		array_to_return = Numeric.zeros(2, Numeric.Int)
-		curs.execute("select last_value from %s_edge_id_seq"%edge_table)
-		rows = curs.fetchall()
-		array_to_return[0] = rows[0][0]
-		if array_to_return[0]<=1:
-			sys.stderr.write("edge_cor_vector_edge_id_seq says there's <=1 edge. something wrong, exit.\n")
-			sys.exit(2)
-		curs.execute("select sig_vector from %s limit 1"%edge_table)
-		rows = curs.fetchall()
-		for row in rows:
-			sig_vector = row[0][1:-1].split(',')
-			no_of_datasets = len(sig_vector)
-		array_to_return[1] = no_of_datasets
-		sys.stderr.write("Done.\n")
-		return array_to_return
+		sys.stderr.write("Getting no_of_datasets...")
+		reader = csv.reader(open(sig_vector_fname, 'r'), delimiter='\t')
+		edge_sig_vector = reader.next()
+		no_of_datasets = len(edge_sig_vector)-2
+		del reader
+		sys.stderr.write("Got no_of_datasets.\n")
+		return no_of_datasets
 	
 	def outputEdgeData(self, curs, outputfile, min_sup, max_sup, edge_table='edge_cor_vector'):
 		"""
@@ -310,58 +309,49 @@ class MpiFromDatasetSignatureToPattern:
 		sys.stderr.write("Done\n")
 		del writer
 	
-	def fillEdgeSigMatrix(self, communicator, hostname, dbname, schema, no_of_datasets, min_sup, max_sup, edge_table='edge_cor_vector'):
+	def fillEdgeSigMatrix(self, communicator, free_computing_nodes, sig_vector_fname, no_of_datasets, min_sup, max_sup):
 		"""
 		08-24-05
 			similar to outputEdgeData() but read it into edge_sig_matrix, instead of output
 		08-31-05
 			Because Numeric.Int is only 32 bits. So it can't encode occurrence_vector and send it.
 			If sending occurrence_vector directly, it will blow the message size. So send block by block
+		12-30-05
+			get edge data from a sig_vector_fname(in gene_no form), instead of edge_table
 		"""
-		node_returned_value_list = []
+		sys.stderr.write("Node %s getting edge matrix for all functions...\n"%communicator.rank)
 		node_rank = communicator.rank
 		edge_sig_matrix = []
 		edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
 		if node_rank == 0:		
-			sys.stderr.write("Getting edge matrix for all functions...\n")
-			(conn, curs) = db_connect(hostname, dbname, schema)
-			curs.execute("DECLARE crs CURSOR FOR select edge_name,sig_vector \
-				from %s"%(edge_table))
-			curs.execute("fetch 5000 from crs")
-			rows = curs.fetchall()
+			reader = csv.reader(open(sig_vector_fname, 'r'), delimiter='\t')
 			counter = 0
-			while rows:
-				#clear to zero before going ahead
-				pointer = 0
-				edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
-				for row in rows:
-					edge = row[0][1:-1].split(',')
-					edge = map(int, edge)
-					sig_vector = row[1][1:-1].split(',')
-					sig_vector = map(int, sig_vector)
-					
-					if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
-						edge_sig_block[pointer] = edge+sig_vector
-						pointer += 1
-					else:
-						if self.debug:
-							sys.stderr.write("edge %s with support %s, not included.\n"%(repr(edge), sum(sig_vector)))
-					counter +=1
-				if self.report:
-					sys.stderr.write('%s%s'%('\x08'*20, counter))
-				for node in range(1, communicator.size):	#send it to everyone
+			for row in reader:
+				edge_sig_vector = map(int, row)
+				frequency = sum(edge_sig_vector[2:])
+				if frequency>=min_sup and frequency<=max_sup:
+					edge_sig_block[counter] = edge_sig_vector
+					counter += 1
+					if counter == 5000:
+						for node in free_computing_nodes:	#send it to everyone
+							communicator.send(edge_sig_block, node, 0)
+							if self.debug:
+								sys.stderr.write("a block sent to %s.\n"%node)
+						counter = 0	#reset the counter
+				else:
+					if self.debug:
+						sys.stderr.write("edge_sig_vector %s, not included.\n"%(repr(edge_sig_vector)))
+			del reader
+			if counter>0 and counter<5000:	#the last block is not empty and not sent.
+				edge_sig_block[counter][0] = -1	#-1 is used to mark the end of this incomplete edge_sig_block
+				for node in free_computing_nodes:	#send it to everyone
 					communicator.send(edge_sig_block, node, 0)
 					if self.debug:
 						sys.stderr.write("a block sent to %s.\n"%node)
-				curs.execute("fetch 5000 from crs")
-				rows = curs.fetchall()
-			del conn, curs
 			#tell each node to exit the loop
-			edge_sig_block = Numeric.zeros((5000, 2+no_of_datasets), Numeric.Int)
 			edge_sig_block[0,0] = -1
 			for node in range(1, communicator.size):	#send it to everyone
-					communicator.send(edge_sig_block, node, 0)
-			sys.stderr.write("edge_sig_matrix fetching Done\n")
+				communicator.send(edge_sig_block, node, 0)
 		else:
 			edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
 			while edge_sig_block:
@@ -371,12 +361,16 @@ class MpiFromDatasetSignatureToPattern:
 					break
 				else:
 					for edge_sig_vector in edge_sig_block:
-						if edge_sig_block[0]!=-1 and edge_sig_vector[0]!=0 and edge_sig_vector[1]!=0:	#skip the 0 vectors
+						if edge_sig_vector[0]==-1:	#reach the end of this edge_sig_block
+							break
+						if edge_sig_vector[0]<edge_sig_vector[1]:	#in ascending order
 							edge_sig_matrix.append([edge_sig_vector[0], edge_sig_vector[1], encodeOccurrenceBv(edge_sig_vector[2:])])
+						else:
+							edge_sig_matrix.append([edge_sig_vector[1], edge_sig_vector[0], encodeOccurrenceBv(edge_sig_vector[2:])])
 				edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
-		
+		sys.stderr.write("Node %s edge_sig_matrix fetching Done\n"%node_rank)
 		return edge_sig_matrix
-		
+	
 	def createOffsetList(self, inputfile, no_of_nodes):
 		"""
 		08-06-05
@@ -415,34 +409,36 @@ class MpiFromDatasetSignatureToPattern:
 		08-31-05
 			the integer returned by encodeOccurrenceBv() could be 138-bit(human no_of_datasets)
 			And Numeric.Int is only 32 bit. So Change edge_sig_matrix format.
+		12-31-05
+			no database connection any more
+			
 		"""
 		communicator = MPI.world.duplicate()
 		
 		intermediateFile = '%s.int'%self.outputfile
-		offset_list = Numeric.zeros((communicator.size), Numeric.Int)	#not communicator.size-1, 
-		two_number_array = Numeric.zeros(2, Numeric.Int)	#08-24-05, no_of_edges and no_of_datasets
+		offset_list = Numeric.zeros((communicator.size), Numeric.Int)	#not communicator.size-1,
+		free_computing_nodes = range(1,communicator.size)	#exclude the 1st node
 		if communicator.rank == 0:
-			sys.stderr.write("this is node %s\n"%communicator.rank)
-			(conn, curs) = db_connect(self.hostname, self.dbname, self.schema)
+			sys.stderr.write("node %s creating offset_list..."%communicator.rank)
 			offset_list[:] = self.createOffsetList(self.inputfile, communicator.size-1)
+			sys.stderr.write("done.\n")
 			if self.debug:
 				sys.stderr.write("offset_list: %s\n"%repr(offset_list))
-			two_number_array = self.get_no_of_edges_and_no_of_datasets(curs)
-			if self.debug:
-				sys.stderr.write("two_number_array is %s\n"%repr(two_number_array))
-			del conn, curs
+			no_of_datasets = self.get_no_of_datasets(self.sig_vector_fname)
+				#no_of_datasets is used in fillEdgeSigMatrix() and patternFormation()
+			for node in free_computing_nodes:
+				communicator.send(str(no_of_datasets), node, 0)
+		else:
+			data, source, tag = communicator.receiveString(0, 0)
+			no_of_datasets = int(data)	#take the data
 		
 		communicator.broadcast(offset_list, 0)	#share the offset_list
 		mpi_synchronize(communicator)
 		
-		communicator.broadcast(two_number_array, 0)	#broadcast no_of_edges and no_of_datasets
-		mpi_synchronize(communicator)
-		no_of_edges, no_of_datasets = two_number_array
-
-		edge_sig_matrix = self.fillEdgeSigMatrix(communicator, self.hostname, self.dbname, self.schema, no_of_datasets, self.min_sup, self.max_sup)
+		edge_sig_matrix = self.fillEdgeSigMatrix(communicator, free_computing_nodes, self.sig_vector_fname, \
+			no_of_datasets, self.min_sup, self.max_sup)
 		if self.debug:
 			sys.stderr.write("edge_sig_matrix[:3] is %s\n"%(repr(edge_sig_matrix[:3])))
-		mpi_synchronize(communicator)		
 		
 		job_list = range(communicator.size-1)	#corresponding to the indices in the offset_list
 		parameter_list =[self.inputfile, intermediateFile, self.outputfile, offset_list, self.no_cc, edge_sig_matrix,  no_of_datasets, self.debug]
@@ -466,7 +462,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:y:m:x:nbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:s:o:y:m:x:nbr", ["help", "hostname=", \
 			"dbname=", "schema=", "inputfile=", "outputfile=", "min_sup", "max_sup=", \
 			"no_cc", "debug", "report"])
 	except:
@@ -477,6 +473,7 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = ''
 	inputfile = None
+	sig_vector_fname = None
 	outputfile = None
 	min_sup = 0
 	max_sup = 200
@@ -495,6 +492,8 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-i", "--inputfile"):
 			inputfile = arg
+		elif opt in ("-s", ):
+			sig_vector_fname = arg
 		elif opt in ("-o", "--outputfile"):
 			outputfile = arg
 		elif opt in ("-m", "--min_sup"):
@@ -507,9 +506,9 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r", "--report"):
 			report = 1
-	if schema and inputfile and outputfile:
+	if inputfile and outputfile and sig_vector_fname:
 		instance = MpiFromDatasetSignatureToPattern(hostname, dbname, schema, \
-			inputfile, outputfile, min_sup, max_sup, no_cc, debug, report)
+			inputfile, sig_vector_fname, outputfile, min_sup, max_sup, no_cc, debug, report)
 		instance.run()
 	else:
 		print __doc__
