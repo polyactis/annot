@@ -8,7 +8,7 @@ Option:
 	-k ..., --schema=...	which schema in the database(IGNORE)
 	-i ...,	inputfile
 	-o ...,	outputfile
-	-s ...,	no of clusters per transmission, 1000000(default)
+	-s ...,	message_size, 1000000(default)
 	-n,	output_table is new(IGNORE)
 	-c,	commit the database transaction(IGNORE)
 	-b,	debug version.
@@ -106,6 +106,10 @@ class MpiBFSCluster:
 			called by common.computing_node()
 		10-28-05
 			the input is from MpiFromDatasetSignatureToPattern.py
+		01-01-06
+			edge_set in the input is tuple-list, use '), (' as a delimiter
+			input doesn't have recurrence_array(row[2])
+			edge_set is already sorted
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -113,20 +117,20 @@ class MpiBFSCluster:
 		result = []
 		for row in data:
 			try:
-				vertex_set, edge_set, recurrence_array = row
+				vertex_set, edge_set = row
 				vertex_set = vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
 				vertex_set.sort()	#10-28-05
-				edge_set = edge_set[2:-2].split('], [')	#10-28-05
+				edge_set = edge_set[2:-2].split('), (')	#10-28-05	#01-01-06
 				for i in range(len(edge_set)):
 					edge_set[i] = edge_set[i].split(',')
 					edge_set[i] = map(int, edge_set[i])
-					edge_set[i].sort()	#10-28-05
+					#edge_set[i].sort()	#10-28-05	#01-01-06
 				j_instance = johnson_sp()
 				j_instance.run(vertex_set, edge_set)
 				j_instance.D
-				edge_set.sort()	#10-28-05 to ease codense2db.py
-				row = [repr(vertex_set), repr(edge_set), row[2], repr(j_instance.D)]	#10-28-05
+				#edge_set.sort()	#10-28-05 to ease codense2db.py	#01-01-06
+				row = [repr(vertex_set), repr(edge_set), repr(j_instance.D)]	#10-28-05, #01-01-06
 				result.append(row)
 			except:
 				common_string = "Node %s error"%communicator.rank
