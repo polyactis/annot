@@ -6,8 +6,8 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-i ...,	the old input_fname(views from splat_table, mcl_table, input=>pattern_table)
-	-j ...,	the new input_fname(new views, and output=>p_gene_table)
+	-i ...,	input_fname, from MpiBFSCluster.py
+	-j ..., jnput_fname(output file)
 	--de=...,	the minimum GO tree depth(root is 0) to consider, 5(default)
 	-u ...,	min #genes associated with the candidate go in layer 1, 2(default)
 	-g ...,	min ratio of #associated genes on layer 1, 0.5(default)
@@ -18,23 +18,26 @@ Option:
 	-l ...,	maximum layer, 5(default)
 	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.8(default)
 	-t ...,	edge_gradient type, 1 (edge_gradient), 0(edge gradient_score),2(vertex_gradient, default)
-	-x ...,	recurrence_x, either to do cutoff, or exponent, 5(default)
-	-w ...,	recurrence_x's type, 0(nothing), 1(cutoff), 2(exponent, default)
+	-x ...,	recurrence_x, either to do cutoff, or exponent, 5(default)	(IGNORE)
+	-w ...,	recurrence_x's type, 0(nothing), 1(cutoff), 2(exponent, default)	(IGNORE)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
 	-f ...,	file contains the go_no2edge_counter_list data structure
-	-n,	need to createGeneTable()
-	-c,	commit the database transaction
+	-n,	need to createGeneTable()	(IGNORE)
+	-c,	commit the database transaction (IGNORE)
 	-b,	debug version.
 	-r,	enable report flag
 	-h,	Display the usage infomation.
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiStatCluster.py
-	-k hs_fim_40 -i -j -n -c -r
+	-k hs_fim_40 -i -j -r
 	
 Description:
 	Program to do function prediction statistics based on gradient.
-	
+	01-02-06 program starts to work on plain files
+	output format:
+	id, gene_no, go_no, GradientScorePrediction_instance.depth, gradient_score, edge_gradient, \
+	is_correct, is_correct_L1, is_correct_lca, one_dim_list2string(lca_list)
 """
 
 import sys, os, getopt, csv, math, Numeric, cPickle
@@ -229,7 +232,11 @@ class GradientScorePrediction(gradient_class):
 			2: self.cal_gradient_denominator_2}
 	
 	def get_d_matrix(self, d_matrix_string):
-		d_matrix = d_matrix_string[2:-2].split('},{')
+		"""
+		01-02-06
+			d_matrix_string is from the output file of MpiBFSCluster.py
+		"""
+		d_matrix = d_matrix_string[2:-2].split('], [')
 		for index in range(len(d_matrix)):
 			d_matrix[index] = d_matrix[index].split(',')
 			d_matrix[index] = map(int, d_matrix[index])
@@ -377,6 +384,8 @@ class GradientScorePrediction(gradient_class):
 			
 			[return] layer2gradient_score, layer2edge_gradient
 			[global structures]: go_no2edge_counter_list, edge_type2index
+		01-02-06
+			math.log is one-argument function (=ln) in python2.2
 		"""
 		if self.debug:
 			print "gene_no",gene_no, "go_no", go_no, "edge_set", edge_set, "d_row", d_row
@@ -402,7 +411,7 @@ class GradientScorePrediction(gradient_class):
 				layer2edge_gradient[key_layer] += edge_gradient_part
 				edge_type = (v1_type, v2_type)
 				p_e = self.go_no2edge_counter_list[go_no][self.edge_type2index[edge_type]]/float(no_of_total_edges)
-				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e, 10))
+				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e)/math.log(10))	#01-02-06
 				if self.debug:
 					print "edge,v1_go_no, v2_go_no, score1, score2, edge_type, p_e, layer2gradient_score, layer2edge_gradient",\
 					edge,v1_go_no_set, v2_go_no_set, score1, score2, edge_type, p_e,layer2gradient_score, layer2edge_gradient
@@ -422,7 +431,7 @@ class GradientScorePrediction(gradient_class):
 					p_e = (no_of_total_genes-len(go_no2gene_no_set[go_no])-no_of_unknown_genes)/float(no_of_total_genes)
 				elif v2_type == 2:	#unknown genes
 					p_e = no_of_unknown_genes/float(no_of_total_genes)
-				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e, 10))
+				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e)/math.log(10))
 				if self.debug:
 					print "edge, v2_go_no, score2, p_e, layer2gradient_score, layer2edge_gradient",\
 					edge, v2_go_no_set, score2, p_e,layer2gradient_score, layer2edge_gradient
@@ -442,7 +451,7 @@ class GradientScorePrediction(gradient_class):
 					p_e = (no_of_total_genes-len(go_no2gene_no_set[go_no])-no_of_unknown_genes)/float(no_of_total_genes)
 				elif v1_type == 2:	#unknown genes
 					p_e = no_of_unknown_genes/float(no_of_total_genes)
-				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e, 10))
+				layer2gradient_score[key_layer] += edge_gradient_part*(-math.log(p_e)/math.log(10))
 				if self.debug:
 					print "edge, v1_go_no, score1, p_e,layer2gradient_score, layer2edge_gradient",\
 					edge, v1_go_no_set, score1, p_e,layer2gradient_score, layer2edge_gradient
@@ -454,6 +463,8 @@ class GradientScorePrediction(gradient_class):
 		10-20-05 type 2: vertex based gradient
 			
 			[return]  layer2gradient_score, layer2edge_gradient
+		01-02-06
+			math.log is one-argument function (=ln) in python2.2
 		"""
 		if self.debug:
 			print "gene_no",gene_no, "go_no", go_no, "edge_set", edge_set, "d_row", d_row
@@ -477,7 +488,7 @@ class GradientScorePrediction(gradient_class):
 					p_e = (no_of_total_genes-len(go_no2gene_no_set[go_no])-no_of_unknown_genes)/float(no_of_total_genes)
 				elif v_type == 2:	#unknown genes
 					p_e = no_of_unknown_genes/float(no_of_total_genes)
-				layer2gradient_score[key_layer] += score*(-math.log(p_e, 10))
+				layer2gradient_score[key_layer] += score*(-math.log(p_e)/math.log(10))
 				if self.debug:
 					print "vertex, v_go_no, score, p_e, layer2gradient_score, layer2edge_gradient", \
 						vertex, v_go_no_set, score, p_e, layer2gradient_score, layer2edge_gradient
@@ -588,12 +599,36 @@ class MpiStatCluster:
 			#1st digit is gene1, 2nd digit is gene2,(order doesn't matter), 0 means gene having this function,
 			#1 means gene having the other function, 2 means unknown gene
 	
+	def input_handler(self, parameter_list, message_size, report=0):
+		"""
+		01-02-06
+			input is from MpiBFSCluster.py's output
+		"""
+		if report:
+			sys.stderr.write("Fetching stuff...\n")
+		reader = parameter_list[0]
+		block = []
+		string_length = 0
+		for row in reader:
+			self.counter += 1
+			row.insert(0, self.counter)	#counter is used as id = line no
+			block.append(row)
+			string_length += len(repr(row))	#the length to control MPI message size
+			if string_length>=message_size:
+				break
+		if report:
+			sys.stderr.write("Fetching done.\n")
+		return block
+	
 	def node_fire_handler(self, communicator, data, parameter_list):
 		"""
 		10-21-05
 			called by common.computing_node()
 		10-22-05
 			GradientScorePrediction changed its return value of get_prediction()
+		01-02-06
+			the stuff from input_handler() changed due to the input of the program
+			starts to come from plain file
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -603,16 +638,9 @@ class MpiStatCluster:
 		no_of_predictions = 0
 		prediction_ls = []
 		for pattern in data:
-			id, vertex_set_string, edge_set_string, no_of_edges, connectivity, unknown_gene_ratio, \
-			recurrence_array_string, d_matrix_string = pattern
-			
-			recurrence_array = recurrence_array_string[1:-1].split(',')
-			recurrence_array = map(float, recurrence_array)
-			if functor:	#if functor is None, just the simple sum
-				recurrence_array = map(functor, recurrence_array)
-			recurrence = sum(recurrence_array)
-			
-			edge_set = edge_set_string[2:-2].split('},{')
+			#01-02-06
+			id, vertex_set_string, edge_set_string, d_matrix_string = pattern
+			edge_set = edge_set_string[2:-2].split('], [')
 			for i in range(len(edge_set)):
 				edge_set[i] = edge_set[i].split(',')
 				edge_set[i] = map(int, edge_set[i])
@@ -629,12 +657,9 @@ class MpiStatCluster:
 					communicator.send(cPickle.dumps([gene_no, go_no], -1), communicator.size-2, 3)	#tag is 3
 					data, source, tag = communicator.receiveString(communicator.size-2, 3)
 					is_correct, is_correct_L1, is_correct_lca, lca_list = cPickle.loads(data)
-					row = [-2, gene_no, go_no, is_correct, is_correct_L1, is_correct_lca, gradient_score, 1, '{%s}'%id, \
-						gradient_score, recurrence, connectivity, no_of_edges, unknown_gene_ratio, \
-						GradientScorePrediction_instance.depth, id, one_dim_list2string(lca_list), edge_gradient, edge_gradient]
-						#-2 is for p_gene_id, which means don't submit it to database
-						#1 is no_of_clusters
-						#the penultimate edge_gradient is a placeholder for vertex_gradient
+					#01-02-06 reshuffle the row
+					row = [id, gene_no, go_no, GradientScorePrediction_instance.depth, gradient_score, edge_gradient, \
+						is_correct, is_correct_L1, is_correct_lca, one_dim_list2string(lca_list)]
 					prediction_ls.append(row)
 					no_of_predictions += 1
 			no_of_clusters += 1
@@ -690,12 +715,14 @@ class MpiStatCluster:
 		"""
 		10-21-05
 			called by common.output_node()
+		01-02-06
+			output goes to plain file, not database
 		"""
-		curs, MpiPredictionFilter_instance, output_table = parameter_list
+		writer = parameter_list[0]
 		prediction_ls = cPickle.loads(data)
 		for row in prediction_ls:
-			p_attr_instance = prediction_attributes(row, type=2)
-			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, output_table, p_attr_instance)
+			writer.writerow(row)
+
 	
 	def run(self):
 		"""
@@ -742,8 +769,11 @@ class MpiStatCluster:
 		node_rank = communicator.rank
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+			"""
+			#01-02-06
 			old_schema_instance = form_schema_tables(self.input_fname)
 			new_schema_instance = form_schema_tables(self.jnput_fname)
+			"""
 			gene_no2go_no = get_gene_no2go_no_set(curs)
 			gene_no2go_no_pickle = cPickle.dumps(gene_no2go_no, -1)	#-1 means use the highest protocol
 			go_no2depth = get_go_no2depth(curs)
@@ -776,6 +806,8 @@ class MpiStatCluster:
 			node_distance_class = gene_p_map_redundancy()			
 		elif node_rank==communicator.size-1:	#establish connection before pursuing
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
+			"""
+			#01-02-06, input and output are all directed to files
 			old_schema_instance = form_schema_tables(self.input_fname)
 			new_schema_instance = form_schema_tables(self.jnput_fname)
 			MpiPredictionFilter_instance = MpiPredictionFilter()
@@ -784,6 +816,7 @@ class MpiStatCluster:
 			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
 			if self.new_table:
 				MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
+			"""
 			if self.go_no2edge_counter_list_fname:
 				go_no2edge_counter_list = cPickle.load(open(self.go_no2edge_counter_list_fname,'r'))
 			else:
@@ -797,9 +830,16 @@ class MpiStatCluster:
 		
 		free_computing_nodes = range(1,communicator.size-2)	#exclude the last node
 		if node_rank == 0:
+			"""
 			curs.execute("DECLARE crs CURSOR FOR SELECT id, vertex_set, edge_set, no_of_edges,\
 			connectivity, unknown_gene_ratio, recurrence_array, d_matrix from %s"%(old_schema_instance.pattern_table))
-			input_node(communicator, curs, free_computing_nodes, self.message_size, self.report)
+			"""
+			self.counter = 0	#01-02-06 counter is used as id
+			reader = csv.reader(open(self.input_fname, 'r'), delimiter='\t')
+			parameter_list = [reader]
+			input_node(communicator, parameter_list, free_computing_nodes, self.message_size, \
+				self.report, input_handler=self.input_handler)
+			del reader
 		elif node_rank in free_computing_nodes:
 			no_of_unknown_genes = get_no_of_unknown_genes(gene_no2go_no)
 			GradientScorePrediction_instance = GradientScorePrediction(gene_no2go_no, go_no2gene_no_set, go_no2depth, \
@@ -811,10 +851,11 @@ class MpiStatCluster:
 		elif node_rank == communicator.size-2:
 			self.judge_node(communicator, curs, gene_stat_instance, node_distance_class)
 		elif node_rank==communicator.size-1:
-			parameter_list = [curs, MpiPredictionFilter_instance, new_schema_instance.p_gene_table]
+			#01-02-06 output goes to plain file, not database
+			writer = csv.writer(open(self.jnput_fname, 'w'), delimiter='\t')
+			parameter_list = [writer]
 			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler, self.report)
-			if self.commit:
-				curs.execute("end")
+			del writer
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -902,7 +943,8 @@ if __name__ == '__main__':
 		elif opt in ("-r",):
 			report = 1
 	if schema and input_fname and jnput_fname:
-		instance = MpiStatCluster(hostname, dbname, schema, input_fname, jnput_fname, depth, min_layer1_associated_genes, \
+		instance = MpiStatCluster(hostname, dbname, schema, input_fname, \
+			jnput_fname, depth, min_layer1_associated_genes, \
 			min_layer1_ratio, min_layer2_associated_genes, min_layer2_ratio, \
 			exponent, score_list, max_layer, norm_exp, eg_d_type, recurrence_x, recurrence_x_type, message_size, \
 			go_no2edge_counter_list_fname, new_table, commit, debug, report)
