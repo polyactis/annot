@@ -9,7 +9,7 @@ Option:
 	-s ...,	sig_vector file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
-	-t ...,	delimiter for the outputfile, 'tab'(default)
+	-t ...,	delimiter for the outputfile, 'tab'(default) (IGNORE)
 	-y ...,	type, 1(fim_closed, Jianfei Zhu's default), 2(closet+)
 	-b, --debug	debug version
 	-r,	enable report flag
@@ -74,6 +74,8 @@ def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_supp
 		read edge data from sig_vector_file
 	01-01-06
 		add delimiter_char and type
+	01-02-06
+		delimiter_char automatically adjusts type
 		
 		For type==2 (closet+) 's spec file
 		1. file name of the data set;
@@ -83,7 +85,12 @@ def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_supp
 		4. total number of transactions
 	"""	
 	reader = csv.reader(open(sig_vector_fname, 'r'), delimiter='\t')
-	writer = csv.writer(open(outputfile, 'w'),delimiter=delimiter_char)
+	if type==1:	#01-02-06
+		delimiter_char='\t'
+	elif type==2:
+		delimiter_char=' '
+	
+	writer = csv.writer(open(outputfile, 'w'), delimiter=delimiter_char)
 	
 	if type==2:	#closet+ needs a spec file
 		spec_fname = '%s.spec'%outputfile
@@ -109,7 +116,7 @@ def output_edge_data_fim_edge_oriented_from_sig_vector_file(outputfile, min_supp
 		if debug:
 			break
 	if type==2:
-		spec_f.write('%s\n'%os.path.basename(outputfile))	#1. file name of the data set;
+		spec_f.write('%s\n'%os.path.abspath(outputfile))	#1. file name of the data set;
 		spec_f.write('%s\n'%(len(sig_vector)+1))	#2. total number of distinct items in the dataset;
 			#01-02-06 +1 because for closet+, item no starts from 0.
 		spec_f.write('%s\n'%(len(sig_vector)+1))	#3. Maximum length of one transaction
