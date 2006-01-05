@@ -17,6 +17,7 @@ Examples:
 Description:
 	Files in INPUTDIR are sorted by file_rename.py(datasets_sort). (12-23-05 NOT ANYMORE)
 	Program to draw a picture to show how genes are located among datasets.
+	(01-03-06) No redundant gene ids in the dataset files. Otherwise, run MergeGenes.py
 	Hint: png is better than jpeg. jpeg has maximum 65500 pixels.
 	Three output:
 		1. gim flie, gene incidence matrix
