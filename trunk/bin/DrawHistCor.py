@@ -6,14 +6,11 @@ Option:
 	FILES are a list of files whose columns are going to be counted.
 	-o ... --outputdir=...,	directory containing output files
 	-d ... --delimiter=...,	delimiter character used to seperate columns, \t(default)
-	-s ... --threshold=...,	std/mean threshold, 1.0 (default)
-	-y ... --type=...,	geo(1,default), or smd(2)
-	-n ... --no_of_valids=...	min number of non-NA, 8(default)
 	-u, --debug	enable debugging
 	-h, --help              show this help
 	
 Examples:
-	DrawHistCor.py -o datasets/sc_log/ datasets/sc/*
+	DrawHistCor.py -o gph_result/sc_log/ gph_result/sc/*
 
 Description:
 	draw histogram of pairwise correlations generated from a microarray dataset.
