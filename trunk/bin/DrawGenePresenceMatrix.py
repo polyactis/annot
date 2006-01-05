@@ -209,6 +209,7 @@ class DrawGenePresenceMatrix:
 		12-23-05
 		12-26-05 if it's not empty, then draw it
 		12-26-05 add an enrich_index_no_of_genes_filename_ls
+		01-05-06 have >10 items, then draw it
 		"""
 		sys.stderr.write("Drawing gene frequency histogram for each dataset...\n")
 		#initialize a structure to store frequency list in each dataset
@@ -231,7 +232,7 @@ class DrawGenePresenceMatrix:
 			#12-26-05
 			enrich_index_no_of_genes_filename_ls.append([sum(map(functor, dataset_index_gene_freq_ls[i])), len(dataset_index_gene_freq_ls[i]), files[i]])
 			
-			if dataset_index_gene_freq_ls[i]:	#12-26-05 if it's not empty, then draw it
+			if len(dataset_index_gene_freq_ls[i])>10:	#01-05-06 have >10 items, then draw it
 				r.png("%s.png"%output_fname)
 				r.hist(dataset_index_gene_freq_ls[i], main='histogram',xlab='gene frequency',ylab='no of genes', labels=r.TRUE)
 				r.dev_off()
