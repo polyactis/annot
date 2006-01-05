@@ -42,18 +42,29 @@ Schema2Darwin.py:
 	and cluster_bs_table.
 
 
-I. Annot pipeline(05-16-05, yh)
+I. Annot pipeline(01-04-06, yh)
 
 shell/mdb_output.sh
 	call microarray/microarraydb.py to output datasets
+Examine datasets to determine how to run LogAffyDatasets.py:
+	Std histogram: DrawHistStd.py
 shell/datasets_filter.sh
-	annot/LogAffyDatasets.py to filter genes
+	annot/LogAffyDatasets.py to filter genes.
+		For GEO affy counting datasets, -l(log) -m(divided by mean)
+		For SMD, no -l -m.
+		Some GEO datasets are treated as SMD, see web doc.
 	annot/MergeGenes.py to merge genes
 	annot/bin/MpiGraphModeling.py to construct correlation graphs
 database schema sql/graph.sql loadin on zhoudb
 annot/gene_id_to_no.py to construct table graph.gene_id_to_no
 
 create symbolic links for $organism in ~/datasets and ~/gph_result
+
+Select dataset:
+	Correlation histogram: DrawHistCor.py
+	gene presence matrix, gene frequency histogram, enrich_index.csv: DrawGenePresenceMatrix.py
+	draw_hist_lowest_correlation() of misc.py
+	count_no_of_edges_from_fim_input() of misc.py
 
 ~/mapping/$schema_name file containing all selected datasets
 
