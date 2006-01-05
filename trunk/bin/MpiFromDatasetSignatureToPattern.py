@@ -11,7 +11,7 @@ Option:
 	-o ..., --outputfile=...	the output file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
-	-q ...,	edge_sig_vector_queue size for each computing node, 3,000,000(default)
+	-q ...,	edge_sig_vector_queue size for each computing node, 2,400,000(default, 0.8G mem)
 	-n, --no_cc	no connected components extraction
 	-b, --debug	debug version.
 	-r, --report	enable report flag
@@ -40,107 +40,7 @@ if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 
 from threading import *
 from Queue import Queue
-class PatternFormThread(Thread):
-	"""
-	12-31-05
-		a thread on each computing node to do patternFormation()
-	"""
-	def __init__(self, rank, parameter_list):
-		Thread.__init__(self)
-		self.rank = rank
-		self.parameter_list = parameter_list
-		self.node_outputfile = None
-	
-	def run(self):
-		sys.stderr.write("Thread from node %s starts ...\n"%(self.rank))
-		self.node_outputfile = patternFormation(self.rank-1, self.parameter_list)
-		sys.stderr.write("Thread from node %s ends.\n"%(self.rank))
-	
 edge2occurrence_vector = {}	#08-09-05	global structure to store the occurrence vectors of edges appearing in the patterns
-
-def patternFormation(offset, parameter_list):
-	"""
-	08-07-05
-		datasetSignatureFname is outputed by fim_closed
-		intermediateFile is outputed by outputEdgeData()
-	08-08-05
-		store the occurrence_vector in edge2occurrence_vector
-	08-24-05
-		edge_sig_matrix replaces the intermediateFile
-		
-		(loop)
-			--encodeOccurrence()
-		(loop)
-			--decodeOccurrenceBv()
-			--outputCcFromEdgeList()
-				--get_combined_vector()
-				--codense2db_instance.parse_recurrence()
-	"""
-	offset = int(offset)
-	datasetSignatureFname, outputfile, offset_list, no_cc, \
-		edge_sig_vector_queue, no_of_datasets, debug = parameter_list
-	#initialize the signatures in signature2pattern, by reading from datasetSignatureFname
-	signature2pattern = {}
-	dSF = csv.reader(open(datasetSignatureFname, 'r'), delimiter=' ')
-	lower_bound = offset_list[offset]+1
-	upper_bound = offset_list[offset+1]
-	counter = 0
-	for row in dSF:
-		counter += 1
-		if counter >= lower_bound and counter<= upper_bound:
-			sig_row = map(int, row[:-1])
-			frequency = int(row[-1][1:-1])
-			occurrenceBinaryForm = encodeOccurrence(sig_row)
-			if debug:
-				sys.stderr.write("dataset signature is %s with frequency %s\n"%(repr(sig_row), frequency))
-				sys.stderr.write("its binary form is %s\n"%occurrenceBinaryForm)
-			signature2pattern[occurrenceBinaryForm] = [frequency]
-		elif counter>upper_bound:	#12-30-05	skip the other rows
-			break
-	del dSF
-	
-	node_outputfile = '%s.%s'%(outputfile, offset)
-	of = open(node_outputfile, 'w')
-	codense2db_instance = codense2db()
-	counter = 0
-	edge_occurrenceBinaryForm_row = edge_sig_vector_queue.get()
-	while edge_occurrenceBinaryForm_row!= -1:
-		counter += 1
-		edge = edge_occurrenceBinaryForm_row[:2]
-		occurrenceBinaryForm = edge_occurrenceBinaryForm_row[2]	#08-24-05	already encoded when edge_sig_matrix is filled in
-		#occurrence_vector = decodeOccurrenceToBv(occurrenceBinaryForm, no_of_datasets)
-		signatureToBeDeleted = []
-		for signature in signature2pattern:
-			frequency = signature2pattern[signature][0]
-			if (occurrenceBinaryForm&signature)==signature:
-				signature2pattern[signature].append(edge)
-				if debug:
-					sys.stderr.write("the occurrence_vector of edge %s is %s\n"%(repr(edge), \
-						repr(decodeOccurrenceToBv(occurrenceBinaryForm, no_of_datasets))))
-					sys.stderr.write("occurrence_vector's binary form is %s, signature is %s\n"%(occurrenceBinaryForm, signature))
-				if len(signature2pattern[signature]) == frequency+1:	#the 1st entry is frequency
-					signatureToBeDeleted.append(signature)
-					if debug:
-						sys.stderr.write("signature %s to be deleted, its pattern is %s\n"%(signature, repr(signature2pattern[signature])))
-				"""
-				edge_tuple = tuple(edge)
-				if edge_tuple not in edge2occurrence_vector:
-					edge2occurrence_vector[edge_tuple] = [1]
-					edge2occurrence_vector[edge_tuple].append(occurrence_vector)
-				else:
-					edge2occurrence_vector[edge_tuple][0] += 1
-				"""
-		for signature in signatureToBeDeleted:
-			edge_list = signature2pattern[signature][1:]
-			outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc)
-			del signature2pattern[signature]
-		edge_occurrenceBinaryForm_row = edge_sig_vector_queue.get()
-	if len(signature2pattern)>1:
-		sys.stderr.write('Weird %s signatures are still available\n'%len(signature2pattern))
-		if debug:
-			sys.stderr.write('%s\n'%repr(signature2pattern))
-	of.close()
-	return node_outputfile
 
 def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc):
 	"""
@@ -252,7 +152,124 @@ def decodeOccurrenceToBv(signature, no_of_datasets):
 	binary_list.append(1)	#the last 1
 	occurrence_vector[len(binary_list)-1] = 1
 	return occurrence_vector
+
+
+class PatternFormThread(Thread):
+	"""
+	12-31-05
+		a thread on each computing node to do patternFormation()
+	"""
+	def __init__(self, rank, parameter_list):
+		Thread.__init__(self)
+		self.rank = rank
+		self.parameter_list = parameter_list
+		self.node_outputfile = None
 	
+	def readin_signature2pattern(self, datasetSignatureFname, offset_list, offset):
+		"""
+		01-04-06
+			split from patternFormation()
+		"""
+		sys.stderr.write("Thread of node %s getting signature2pattern ...\n"%(self.rank))
+		#initialize the signatures in signature2pattern, by reading from datasetSignatureFname
+		signature2pattern = {}
+		dSF = csv.reader(open(datasetSignatureFname, 'r'), delimiter=' ')
+		lower_bound = offset_list[offset]+1
+		upper_bound = offset_list[offset+1]
+		counter = 0
+		for row in dSF:
+			counter += 1
+			if counter >= lower_bound and counter<= upper_bound:
+				sig_row = map(int, row[:-1])
+				frequency = int(row[-1][1:-1])
+				occurrenceBinaryForm = encodeOccurrence(sig_row)
+				if debug:
+					sys.stderr.write("dataset signature is %s with frequency %s\n"%(repr(sig_row), frequency))
+					sys.stderr.write("its binary form is %s\n"%occurrenceBinaryForm)
+				signature2pattern[occurrenceBinaryForm] = [frequency]
+			elif counter>upper_bound:	#12-30-05	skip the other rows
+				break
+		del dSF
+		sys.stderr.write("Thread of node %s got signature2pattern.\n"%(self.rank))
+		return signature2pattern
+		
+	def patternFormation(self, signature2pattern, node_outputfile, no_cc, \
+		edge_sig_vector_queue, no_of_datasets, debug):
+		"""
+		08-07-05
+			datasetSignatureFname is outputed by fim_closed
+			intermediateFile is outputed by outputEdgeData()
+		08-08-05
+			store the occurrence_vector in edge2occurrence_vector
+		08-24-05
+			edge_sig_matrix replaces the intermediateFile
+		01-04-06
+			1st part split out to be readin_signature2pattern()
+			
+			(loop)
+				--decodeOccurrenceBv()
+				--outputCcFromEdgeList()
+					--get_combined_vector()
+					--codense2db_instance.parse_recurrence()
+		"""		
+		sys.stderr.write("Thread of node %s starts patternFormation ...\n"%(self.rank))
+		of = open(node_outputfile, 'w')
+		codense2db_instance = codense2db()
+		counter = 0
+		edge_occurrenceBinaryForm_row = edge_sig_vector_queue.get()
+		while edge_occurrenceBinaryForm_row!= -1:
+			counter += 1
+			edge = edge_occurrenceBinaryForm_row[:2]
+			occurrenceBinaryForm = edge_occurrenceBinaryForm_row[2]	#08-24-05	already encoded when edge_sig_matrix is filled in
+			#occurrence_vector = decodeOccurrenceToBv(occurrenceBinaryForm, no_of_datasets)
+			signatureToBeDeleted = []
+			for signature in signature2pattern:
+				frequency = signature2pattern[signature][0]
+				if (occurrenceBinaryForm&signature)==signature:
+					signature2pattern[signature].append(edge)
+					if debug:
+						sys.stderr.write("the occurrence_vector of edge %s is %s\n"%(repr(edge), \
+							repr(decodeOccurrenceToBv(occurrenceBinaryForm, no_of_datasets))))
+						sys.stderr.write("occurrence_vector's binary form is %s, signature is %s\n"%(occurrenceBinaryForm, signature))
+					if len(signature2pattern[signature]) == frequency+1:	#the 1st entry is frequency
+						signatureToBeDeleted.append(signature)
+						if debug:
+							sys.stderr.write("signature %s to be deleted, its pattern is %s\n"%(signature, repr(signature2pattern[signature])))
+					"""
+					edge_tuple = tuple(edge)
+					if edge_tuple not in edge2occurrence_vector:
+						edge2occurrence_vector[edge_tuple] = [1]
+						edge2occurrence_vector[edge_tuple].append(occurrence_vector)
+					else:
+						edge2occurrence_vector[edge_tuple][0] += 1
+					"""
+			for signature in signatureToBeDeleted:
+				edge_list = signature2pattern[signature][1:]
+				outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, no_cc)
+				del signature2pattern[signature]
+			edge_occurrenceBinaryForm_row = edge_sig_vector_queue.get()
+		if len(signature2pattern)>1:
+			sys.stderr.write('Weird %s signatures are still available\n'%len(signature2pattern))
+			if debug:
+				sys.stderr.write('%s\n'%repr(signature2pattern))
+		of.close()
+		sys.stderr.write("Thread of node %s patternFormation done.\n"%(self.rank))
+	
+	def run(self):
+		"""
+		01-04-06
+			--readin_signature2pattern()
+			--patternFormation()
+		"""
+		datasetSignatureFname, outputfile, offset_list, no_cc, \
+			edge_sig_vector_queue, no_of_datasets, debug = self.parameter_list
+		offset = self.rank - 1
+		signature2pattern = self.readin_signature2pattern(datasetSignatureFname, offset_list, offset)
+		self.node_outputfile = '%s.%s'%(outputfile, offset)	#the other thread will read after it's done
+		self.patternFormation(signature2pattern, self.node_outputfile, no_cc, \
+			edge_sig_vector_queue, no_of_datasets, debug)
+	
+
 class MpiFromDatasetSignatureToPattern:
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
 		sig_vector_fname=None, outputfile=None, min_sup=0, max_sup=200, queue_size=3000000,\
@@ -535,7 +552,7 @@ if __name__ == '__main__':
 	outputfile = None
 	min_sup = 0
 	max_sup = 200
-	queue_size = 3000000
+	queue_size = 2400000
 	no_cc = 0
 	debug = 0
 	report = 0
