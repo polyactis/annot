@@ -45,15 +45,19 @@ class DrawHistCor:
 			add type
 		08-29-05
 			add no_of_valids to cut genes with too few valid values
+		01-05-06
+			deal with blank files
 		"""
 		reader = csv.reader(file(src_pathname), delimiter=delimiter)
 		filename = os.path.basename(src_pathname)
 		output_filename = os.path.join(outputdir, filename)
 		cor_list = []
-		reader.next()	#skip the 1st line
+		counter=0	#01-05-06
 		for row in reader:
-			cor = float(row[3])
-			cor_list.append(cor)
+			if counter>0:
+				cor = float(row[3])
+				cor_list.append(cor)
+			counter += 1
 		del reader
 		if len(cor_list)>100:
 			r.png('%s.png'%output_filename)
