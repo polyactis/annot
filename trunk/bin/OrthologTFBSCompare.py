@@ -80,6 +80,8 @@ class OrthologTFBSCompare:
 	def get_ortholog_pairs(self, curs, homologene_table='homologene.homologene'):
 		"""
 		01-06-06, just hs and mm
+		01-06-06, fix a small bug, not crucial for histograms. replace hid with prev_hid when
+			reporting non 1to1 ortholog pairs
 		"""		
 		sys.stderr.write("Getting ortholog pairs...\n")
 		curs.execute("select hid, tax_id, gene_id from %s order by hid"%homologene_table)
@@ -101,8 +103,8 @@ class OrthologTFBSCompare:
 					hs_gene_id_list.append(tax_id1_gene_id_list[0])	#only the 1st one
 					mm_gene_id_list.append(tax_id2_gene_id_list[0])
 				if len(tax_id1_gene_id_list)!=1 or len(tax_id2_gene_id_list)!=1:
-					sys.stdout.write("hid %s has %s tax_id=%s genes, %s tax_id=%s genes.\n"%(hid, \
-						len(tax_id1_gene_id_list), tax_id1, len(tax_id2_gene_id_list), tax_id2))
+					sys.stdout.write("hid %s has %s tax_id=%s genes, %s tax_id=%s genes.\n"%(prev_hid, \
+						len(tax_id1_gene_id_list), tax_id1, len(tax_id2_gene_id_list), tax_id2))	#here it is prev_hid
 				homo_group = []
 				prev_hid = hid
 			homo_group.append((tax_id, gene_id))
