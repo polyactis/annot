@@ -9,7 +9,7 @@ FORTRAN_LIB	= ~/script/hhu_clustering/lib/libg2c.a
 
 
 
-BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so johnson_sp.so
+BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so johnson_sp.so PostFim.so
 BoostPythonBinary	= clustering cc_from_edge_list
 BoostPythonLib  = -lboost_python
 
