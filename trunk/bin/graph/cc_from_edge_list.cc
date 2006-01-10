@@ -8,18 +8,22 @@
 #include "cc_from_edge_list.h"
 
 void cc_from_edge_list::init_graph_from_edge_list(boost::python::list edge_list, Graph &graph)
+/*
+*01-09-06
+*	re-structure to be faster
+*/
 {
 	vertex_name_type vertex2name = get(vertex_name, graph);
 	int edge_length = boost::python::extract<int>(edge_list.attr("__len__")());
+	std::map<int, vertexDescriptor>::iterator pos;
+	bool inserted;
+	vertexDescriptor u, v;
 	for(int i=0; i<edge_length; i++)
 	{
 		int gene1 = boost::python::extract<int>(edge_list[i][0]);
 		int gene2 = boost::python::extract<int>(edge_list[i][1]);
 		//used in last to get the weight.
-		boost::python::tuple tup = boost::python::make_tuple(gene1, gene2);
-		std::map<int, vertexDescriptor>::iterator pos;
-		bool inserted;
-		vertexDescriptor u, v;
+		//boost::python::tuple tup = boost::python::make_tuple(gene1, gene2);	//01-09-06 no need for this tup
 		tie(pos, inserted) = geneNoMap.insert(std::make_pair(gene1, vertexDescriptor()));
 		if (inserted) {
 			u = add_vertex(graph);
@@ -36,8 +40,10 @@ void cc_from_edge_list::init_graph_from_edge_list(boost::python::list edge_list,
 		} else
 			v = pos->second;
 		
-		graph_traits < Graph >::edge_descriptor e;
-		tie(e, inserted) = add_edge(u, v, graph);
+		//01-09-06 make it simpler
+		//graph_traits < Graph >::edge_descriptor e;
+		//tie(e, inserted) = add_edge(u, v, graph);
+		add_edge(u, v, graph);
 	}
 }
 
@@ -142,6 +148,8 @@ std::vector<Graph> cc_from_edge_list::graph_components(Graph &graph, std::vector
 /*
 *09-05-05
 *	create component-graph-vector from a graph
+*01-09-06
+*	this is for ClusterByEBC()
 */
 {
 	vertex_name_type global_vertex2name = get(vertex_name, graph);
@@ -196,6 +204,119 @@ void cc_from_edge_list::run(boost::python::list edge_list)
 
 	}
 }
+
+
+Graph cc_from_edge_list::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector)
+/*
+*01-09-06
+*	for PostFim.cc
+*
+*/
+{
+	Graph graph;
+	std::map<int, vertexDescriptor> gene_no2vertexDescriptor;
+	std::map<int, vertexDescriptor>::iterator pos;
+	bool inserted;
+	vertexDescriptor u, v;
+	unsigned int gene1, gene2;
+	vertex_name_type vertex2name = get(vertex_name, graph);
+	for (int i=0; i<edge_id_vector.size(); i++)
+	{
+		tie(pos, inserted) = gene_no2vertexDescriptor.insert(std::make_pair(gene1, vertexDescriptor()));
+		if (inserted) {
+			u = add_vertex(graph);
+			vertex2name[u] = gene1;
+			pos->second = u;
+		} else
+			u = pos->second;
+		
+		tie(pos, inserted) = gene_no2vertexDescriptor.insert(std::make_pair(gene2, vertexDescriptor()));
+		if (inserted) {
+			v = add_vertex(graph);
+			vertex2name[v] = gene2;
+			pos->second = v;
+		} else
+			v = pos->second;
+		add_edge(u, v, graph);
+	}
+	return graph;
+}
+
+void cc_from_edge_list::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
+/*
+*01-09-06
+*	for PostFim.cc
+*	both vertex list and edge list are sorted
+*/
+{
+	#if defined(DEBUG)
+		std::cerr << "outputting...";
+	#endif
+	vertex_name_type vertex2name = get(vertex_name, graph);	//mapping
+	
+	boost::graph_traits<Graph>::vertex_descriptor
+		vertex_local, vertex_local1, vertex_global, vertex_global1;
+	int vg_name, vg_name1;
+	std::pair<vertexIterator, vertexIterator> vp;
+	int no_of_vertices = num_vertices(subgraph);
+	std::vector<unsigned int> vertex_vector;
+	//put vertices into vertex_array
+	for (vp = vertices(subgraph); vp.first != vp.second; ++vp.first)
+	{
+		vertex_global = subgraph.local_to_global(*vp.first);
+		vertex_vector.push_back(get(vertex2name, vertex_global));
+	}
+	sort(vertex_vector.begin(), vertex_vector.end());	//sort it in ascending order
+	
+	outf<<"[";
+	for (int i=0; i<no_of_vertices; i++)
+	{
+		outf<<vertex_vector[i];
+		if (i!= no_of_vertices-1)
+			outf << ", ";	//the difference from the middle to the end
+	}		
+	outf<<"]\t";
+	
+	const int no_of_edges = num_edges(subgraph);
+	std::vector<boost::array<unsigned int, 2> > edge_array_vector;
+	boost::array<unsigned int, 2> edge_array;
+	graph_traits<Graph>::edge_iterator ei, ei_end;
+	//put edges into edge_array_vector
+	for (tie(ei,ei_end) = edges(subgraph); ei != ei_end; ++ei)
+	{
+		vertex_local = source(*ei, subgraph);
+		vertex_local1 = target(*ei, subgraph);
+		vertex_global = subgraph.local_to_global(vertex_local);
+		vertex_global1 = subgraph.local_to_global(vertex_local1);
+		vg_name = get(vertex2name, vertex_global);
+		vg_name1 = get(vertex2name, vertex_global1);
+		if (vg_name<vg_name1)	//in ascending order
+		{
+			edge_array[0] = vg_name;
+			edge_array[1] = vg_name1;
+		}
+		else
+		{
+			edge_array[0] = vg_name1;
+			edge_array[1] = vg_name;
+		}
+		edge_array_vector.push_back(edge_array);
+	}
+	
+	sort(edge_array_vector.begin(), edge_array_vector.end(), cmp_edge_array);	//sort the edges
+	outf<<"[";
+	for (int i=0; i<no_of_edges; i++)
+	{
+		outf << "(" << edge_array_vector[i][0] << ", " << edge_array_vector[i][1] << ")";
+		if (i != no_of_edges-1)	//the difference from the middle to the end
+			outf<<", ";
+	}
+	outf<<"]"<<std::endl;
+	#if defined(DEBUG)
+		std::cerr << "done" <<std::endl;
+	#endif
+}
+
 
 /*
 *09-04-05

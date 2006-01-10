@@ -21,6 +21,9 @@
 #include <getopt.h>	//to parse program options.
 #include <fstream>	//to read input_filename
 
+#include <algorithm>	//01-09-06	for sort
+#include <boost/array.hpp>	//01-09-06 for array in output_subgraph()
+
 using namespace boost;
 using namespace boost::python;
 using namespace std;
@@ -42,6 +45,9 @@ typedef boost::tuple<boost::python::list, boost::python::list> twoListTuple;
 //Tue Sep  6 21:50:15 2005
 typedef boost::tokenizer<boost::char_separator<char> > char_tokenizer;
 
+//Mon Jan  9 22:35:20 2006	for sorting in output_subgraph()
+inline bool cmp_edge_array(boost::array<unsigned int, 2> e1, boost::array<unsigned int, 2> e2) { return e1[0] < e2[0]; }
+
 class cc_from_edge_list
 {
 	public:
@@ -51,6 +57,10 @@ class cc_from_edge_list
 	std::vector<Graph> subgraph_components(Graph &subgraph, Graph &graph, std::vector<int> component, int no_of_components);
 	std::vector<Graph> graph_components(Graph &graph, std::vector<int> component, int no_of_components);
 	void run(boost::python::list edge_list);
+	
+	//01-09-06 following is for PostFim.cc, but later, copied these to PostFim.cc because boost::python compilation problem
+	Graph init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector);
+	void output_subgraph(ofstream &out, Graph &subgraph, Graph &graph);
 	
 	//for input purpose
 	std::map<int, vertexDescriptor> geneNoMap;
