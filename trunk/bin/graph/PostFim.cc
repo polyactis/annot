@@ -16,6 +16,20 @@ PostFim::PostFim(int no_cc, int no_of_datasets, int min_cluster_size, std::strin
 	_out.open(node_outputfname.c_str());
 }
 
+PostFim::PostFim(char* input_filename, char* sig_vector_fname, char* output_filename, int no_of_datasets, \
+	int min_cluster_size, int no_cc)
+	:_no_of_datasets(no_of_datasets), _min_cluster_size(min_cluster_size),_no_cc(no_cc),_node_outputfname(output_filename)
+{
+	#if defined(DEBUG)
+		std::cerr<<"PostFim Begins"<<std::endl;
+		std::cerr<<no_of_datasets<<'\t'<<min_cluster_size<<'\t'<<no_cc<<std::endl;
+	#endif
+	_input_filename = input_filename;
+	_sig_vector_fname = sig_vector_fname;
+	_out.open(output_filename);
+}
+
+
 PostFim::~PostFim()
 {
 	_out.close();
@@ -48,9 +62,90 @@ void PostFim::add_pattern_signature(boost::python::list pattern_sig_list)
 	freq_of_signature_vector.push_back(extract<int>(pattern_sig_list[len-1]));
 }
 
+void PostFim::read_input_filename(char* input_filename, int no_of_datasets)
+/*
+*01-10-06
+read pattern signature and its frequency
+*/
+{
+	std::cerr<<"Read "<<input_filename<<"..."<<std::endl;
+	
+	std::ifstream datafile(input_filename);
+
+	boost::dynamic_bitset<> sig_bitset(no_of_datasets);	
+	boost::char_separator<char> sep(" \t()");		//blank, '\t' or '(' or ')' is the separator
+	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
+	std::vector<unsigned int> signature_frequency_vector;
+	for (std::string line; std::getline(datafile, line);)
+	{
+		tokenizer line_toks(line, sep);
+		for (tokenizer::iterator tokenizer_iter = line_toks.begin(); tokenizer_iter!=line_toks.end();++tokenizer_iter)
+		{
+			#if defined(DEBUG0)
+				std::cerr<<*tokenizer_iter<<'\t';
+			#endif
+			signature_frequency_vector.push_back(atoi((*tokenizer_iter).c_str()));
+		}
+		#if defined(DEBUG0)
+			std::cerr<<std::endl<<"size: "<<signature_frequency_vector.size()<<std::endl;
+		#endif
+		for (int i=0; i<signature_frequency_vector.size()-2; i++)	//exclude the last frequency
+			sig_bitset[signature_frequency_vector[i]-1] = 1;
+		#if defined(DEBUG0)
+			std::cerr<<sig_bitset<<std::endl;
+		#endif
+		pattern_bitset_vector.push_back(sig_bitset);
+		#if defined(DEBUG0)
+			std::cerr<<signature_frequency_vector[signature_frequency_vector.size()-2]<<std::endl;
+		#endif
+		sig_bitset.reset();
+		freq_of_signature_vector.push_back(signature_frequency_vector[signature_frequency_vector.size()-2]);	//the last element is frequency
+		signature_frequency_vector.clear();
+	}
+	
+	datafile.close();
+	std::cerr<<"Done."<<std::endl;
+}
+
+
+void PostFim::read_sig_vector_fname(char* sig_vector_fname, int no_of_datasets)
+/*
+*01-10-06
+read edge name and sig_vector
+*/
+{
+	std::cerr<<"Read "<<sig_vector_fname<<"..."<<std::endl;
+	
+	std::ifstream datafile(sig_vector_fname);
+	boost::dynamic_bitset<> sig_bitset(no_of_datasets);	
+	boost::char_separator<char> sep(" \t");		//blank, '\t' is the separator
+	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
+	for (std::string line; std::getline(datafile, line);) {
+		tokenizer line_toks(line, sep);
+		int i=0;
+		for (tokenizer::iterator tokenizer_iter = line_toks.begin(); tokenizer_iter!=line_toks.end();++tokenizer_iter)
+		{
+			if ((i==0)||(i==1))	//first 2 digits are for edge tuple
+				edge_tuple_vector.push_back(atoi((*tokenizer_iter).c_str()));
+			else
+				sig_bitset[i-2] = atoi((*tokenizer_iter).c_str());
+			i++;
+		}
+		edge_bitset_vector.push_back(sig_bitset);
+		#if defined(DEBUG1)
+			std::cerr<<"size:"<<i<<"\t sig_bitset:"<<sig_bitset<<std::endl;
+		#endif
+		sig_bitset.reset();
+	}
+	datafile.close();
+	std::cerr<<"Done."<<std::endl;
+}
 
 void PostFim::patternFormation()
 {
+	#if defined(DEBUG)
+		std::cerr << "patternFormation..."<<std::endl;
+	#endif
 	std::vector<int> edge_id_vector;
 	for (int i = 0; i<pattern_bitset_vector.size(); i++)
 	{
@@ -61,7 +156,7 @@ void PostFim::patternFormation()
 		}
 		if (freq_of_signature_vector[i]==edge_id_vector.size())
 		{
-			outputCcFromEdgeList(edge_id_vector, edge_tuple_vector, _min_cluster_size, _no_cc);
+			outputCcFromEdgeList(_out, edge_id_vector, edge_tuple_vector, _min_cluster_size, _no_cc);
 		}
 		else
 		{
@@ -74,10 +169,12 @@ void PostFim::patternFormation()
 	//clear all patterns, pattern_bitset_vector and freq_of_signature_vector
 	pattern_bitset_vector.clear();
 	freq_of_signature_vector.clear();
-	
+	#if defined(DEBUG)
+		std::cerr << "done" <<std::endl;
+	#endif
 }
 
-void PostFim::outputCcFromEdgeList(std::vector<int> &edge_id_vector, \
+void PostFim::outputCcFromEdgeList(ofstream &out, std::vector<int> &edge_id_vector, \
 	std::vector<unsigned int > &edge_tuple_vector, int min_cluster_size, int no_cc)
 /*
 *01-09-06
@@ -97,31 +194,12 @@ void PostFim::outputCcFromEdgeList(std::vector<int> &edge_id_vector, \
 	std::vector<Graph>::iterator g_iterator;
 	for(g_iterator=vector_subgraph.begin();g_iterator!=vector_subgraph.end();++g_iterator)
 		if (num_vertices(*g_iterator)>=min_cluster_size)
-			output_subgraph(_out, *g_iterator, g);
+			output_subgraph(out, *g_iterator, g);
 	#if defined(DEBUG)
 		std::cerr << "done" <<std::endl;
 	#endif
 }
 
-std::vector<Graph> PostFim::cc2subgraph(Graph &graph)
-{
-	std::vector<int> component(num_vertices(graph));
-	int no_of_components = connected_components(graph, &component[0]);
-	//initialize the vector_subgraph with the number of components
-	std::vector<Graph> vector_subgraph(no_of_components);
-	for(int i=0;i<no_of_components;i++)
-		vector_subgraph[i] = graph.create_subgraph();
-	//vertex_descriptor
-	boost::graph_traits<Graph>::vertex_descriptor vertex_of_graph;
-
-	for(int i=0; i<component.size(); i++)
-	{
-		int component_no = component[i];
-		add_vertex(i, vector_subgraph[component_no]);
-	}
-	
-	return vector_subgraph;
-}
 
 Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector)
 /*
@@ -130,6 +208,9 @@ Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vecto
 *
 */
 {
+	#ifdef DEBUG
+		std::cerr<<"init_graph_from_edge_tuple_vector..."<<std::endl;
+	#endif
 	Graph graph;
 	std::map<int, vertexDescriptor> gene_no2vertexDescriptor;
 	std::map<int, vertexDescriptor>::iterator pos;
@@ -139,6 +220,9 @@ Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vecto
 	vertex_name_type vertex2name = get(vertex_name, graph);
 	for (int i=0; i<edge_id_vector.size(); i++)
 	{
+		gene1 = edge_tuple_vector[edge_id_vector[i]*2];	//edge_tuple_vector is 2*len(edge_bitset_vector)
+		gene2 = edge_tuple_vector[edge_id_vector[i]*2+1];
+		
 		tie(pos, inserted) = gene_no2vertexDescriptor.insert(std::make_pair(gene1, vertexDescriptor()));
 		if (inserted) {
 			u = add_vertex(graph);
@@ -157,6 +241,30 @@ Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vecto
 		add_edge(u, v, graph);
 	}
 	return graph;
+}
+
+
+std::vector<Graph> PostFim::cc2subgraph(Graph &graph)
+{
+	#ifdef DEBUG
+		std::cerr<<"cc2subgraph..."<<std::endl;
+	#endif
+	std::vector<int> component(num_vertices(graph));
+	int no_of_components = connected_components(graph, &component[0]);
+	//initialize the vector_subgraph with the number of components
+	std::vector<Graph> vector_subgraph(no_of_components);
+	for(int i=0;i<no_of_components;i++)
+		vector_subgraph[i] = graph.create_subgraph();
+	//vertex_descriptor
+	boost::graph_traits<Graph>::vertex_descriptor vertex_of_graph;
+
+	for(int i=0; i<component.size(); i++)
+	{
+		int component_no = component[i];
+		add_vertex(i, vector_subgraph[component_no]);
+	}
+	
+	return vector_subgraph;
 }
 
 void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
@@ -235,6 +343,18 @@ void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
 }
 
 
+void PostFim::run()
+/*
+01-10-06
+	for standalone program
+*/
+{
+	read_input_filename(_input_filename, _no_of_datasets);
+	read_sig_vector_fname(_sig_vector_fname, _no_of_datasets);
+	patternFormation();
+}
+
+
 BOOST_PYTHON_MODULE(PostFim)
 {
 	class_<PostFim, boost::noncopyable>("PostFim", init<int, int, int, std::string>())
@@ -244,42 +364,45 @@ BOOST_PYTHON_MODULE(PostFim)
 	;
 }
 
-/*
+
 
 void print_usage(FILE* stream,int exit_code)
 {
 	assert(stream !=NULL);
-        fprintf(stream,"Usage: PostFim options inputfile\n");
+        fprintf(stream,"Usage: PostFim options -i inputfile -s sig_vector_fname -n no_of_datasets\n");
 	fprintf(stream,"\t-h  --help	Display the usage infomation.\n"\
 		"\t-o ..., --output=...	Write output to file, gph_output(default)\n"\
-		"\t-n ..., --name=...	Same as output_filename(default)\n"\
-		"\t-p .., --p_value_cut_off=...	p_value significance cutoff,0.01(default)\n"\
-		"\t-c ..., --cor_cut_off=...	correlation cutoff, 0.6(default)\n"\
-		"\t\tif p_value_cut_off=0, this cut_off is used instead.\n"\
-		"\t-t ..., --top_percentage=...	0.01(default).\n"\
-		"\t\t if p_value_cut_off=0 and cor_cut_off=0, top_percentage is used to select edges.\n"\
-		"\t-d ..., --max_degree=...	maximum degree of freedom(#columns-2), 10000,(default).\n"\
-		"\t-l, --leave_one_out	leave_one_out.\n"\
+		"\t-i ..., --input=...	input_filename\n"\
+		"\t-s .., --sig_vector_fname=...	sig_vector_fname\n"\
+		"\t-n ..., --no_of_datasets=...	no_of_datasets\n"\
+		"\t-m ..., --min_cluster_size=...	5(default).\n"\
+		"\t-x, --no_cc	no connected_components.\n"\
 		"\tFor long option, = or ' '(blank) is same.\n"\
-		"\tLine tokenizer is one space, tab, or \\r\n");
+		"\tLine tokenizer is one tab\n");
 	exit(3);
 }
 
 int main(int argc, char* argv[])
 {
 	int next_option;
-	const char* const short_options="ho:i:s:";
+	const char* const short_options="ho:i:s:n:m:x";
 	const struct option long_options[]={
 	  {"help",0,NULL,'h'},
 	  {"output",1,NULL,'o'},
 	  {"input",1,NULL,'i'},
 	  {"sig_vector", 1, NULL, 's'},
+	  {"no_of_datasets", 1, NULL, 'n'},
+	  {"min_cluster_size", 1, NULL, 'm'},
+	  {"no_cc", 0, NULL, 'x'},
 	  {NULL,0,NULL,0}
 	};
 	
 	char* output_filename = "PostFim.output";
 	char* input_filename = NULL;
 	char* sig_vector_fname = NULL;
+	int no_of_datasets = 0;
+	int min_cluster_size = 5;
+	int no_cc = 0;
 
 	do
 	{
@@ -298,6 +421,15 @@ int main(int argc, char* argv[])
 		case 's':
 			sig_vector_fname = optarg;
 			break;
+		case 'n':
+			no_of_datasets = atoi(optarg);
+			break;
+		case 'm':
+			min_cluster_size = atoi(optarg);
+			break;
+		case 'x':
+			no_cc = 1;
+			break;
 		case '?':
 			print_usage(stderr,-1);
 		case -1:
@@ -310,11 +442,10 @@ int main(int argc, char* argv[])
 	if (input_filename!=NULL && sig_vector_fname!=NULL)
 	{
 		
-		graph_construct instance(input_filename, sig_vector_fname, output_filename);
+		PostFim instance(input_filename, sig_vector_fname, output_filename, no_of_datasets, min_cluster_size, no_cc);
 		instance.run();
 		
 	}
 	else
 		print_usage(stderr, 1);
 }
-*/

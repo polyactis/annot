@@ -53,15 +53,23 @@ class PostFim
 		std::vector<unsigned int > edge_tuple_vector;
 		std::vector<boost::dynamic_bitset<> > edge_bitset_vector;
 		
+		char* _input_filename;
+		char* _sig_vector_fname;
 		
+		PostFim(char* input_filename, char* sig_vector_fname, char* output_filename, int no_of_datasets, \
+			int min_cluster_size, int no_cc);	//for standalone program
 		PostFim(int no_cc, int no_of_datasets, int min_cluster_size, std::string node_outputfname);
 		~PostFim();
 		void add_edge_sig_vector(boost::python::list edge_sig_list);
 		void add_pattern_signature(boost::python::list pattern_sig_list);
-		
 		void patternFormation();
-		void outputCcFromEdgeList(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector,\
+		void outputCcFromEdgeList(ofstream &out, std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector,\
 			int min_cluster_size, int no_cc);
+		
+		//for standalone program
+		void read_input_filename(char* input_filename, int no_of_datasets);
+		void read_sig_vector_fname(char* sig_vector_fname, int no_of_datasets);
+		void run();
 		
 		std::vector<Graph> cc2subgraph(Graph &graph);
 		Graph init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector);
