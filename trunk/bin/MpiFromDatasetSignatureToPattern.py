@@ -8,7 +8,7 @@ Option:
 	-o ..., --outputfile=...	the output file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
-	-q ...,	edge_sig_vector_queue size for each computing node, 3,500,000(default, 0.7G mem)
+	-q ...,	message_size when transmitting pattern_sig_lists 25,000(default)
 	-z ...,	the minimum number of vertices, 5(default)
 	-n, --no_cc	no connected components extraction
 	-b, --debug	debug version.
@@ -29,7 +29,8 @@ import sys, os, getopt, csv, math, Numeric, cPickle
 sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from graph.cc_from_edge_list import cc_from_edge_list
-from codense.common import system_call, mpi_synchronize, db_connect
+from codense.common import system_call, mpi_synchronize, db_connect, output_node, input_node,\
+	computing_node
 from netmine_wrapper import netmine_wrapper
 from codense.codense2db import codense2db
 from sets import Set
@@ -39,6 +40,7 @@ if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 from threading import *
 from Queue import Queue
 edge2occurrence_vector = {}	#08-09-05	global structure to store the occurrence vectors of edges appearing in the patterns
+from graph.PostFim import PostFim	#01-10-06
 
 def outputCcFromEdgeList(of, signature, edge_list, codense2db_instance, min_cluster_size, no_cc):
 	"""
@@ -310,7 +312,7 @@ class MpiFromDatasetSignatureToPattern:
 		return no_of_datasets
 	
 	
-	def fillEdgeSigMatrix(self, communicator, free_computing_nodes, reader, edge_sig_block, queue_size, \
+	def sendEdgeSigMatrix(self, communicator, free_computing_nodes, sig_vector_fname, \
 		no_of_datasets, min_sup, max_sup, block_size=10000):
 		"""
 		08-24-05
@@ -326,65 +328,63 @@ class MpiFromDatasetSignatureToPattern:
 			use block_size instead of 5000
 		01-07-06
 			back to edge_sig_matrix, but topped by queue_size
+		01-11-06
+			split from fillEdgeSigMatrix()
 		"""
-		sys.stderr.write("Node %s getting edge recurrence_array...\n"%communicator.rank)
+		sys.stderr.write("Node %s sending edge recurrence_array...\n"%communicator.rank)
+		edge_sig_block = Numeric.zeros((block_size, 2+no_of_datasets), Numeric.Int)
 		node_rank = communicator.rank
-		edge_sig_matrix = []
 		counter = 0
-		edge_sig_matrix_counter = 0
-		if node_rank == 0:		
-			for row in reader:
-				edge_sig_vector = map(int, row)
-				frequency = sum(edge_sig_vector[2:])
-				if frequency>=min_sup and frequency<=max_sup:
-					edge_sig_block[counter] = edge_sig_vector
-					counter += 1
-					edge_sig_matrix_counter += 1
-					if counter == block_size:
-						for node in free_computing_nodes:	#send it to everyone
-							communicator.send(edge_sig_block, node, 0)
-							if self.debug:
-								sys.stderr.write("a block sent to %s.\n"%node)
-						counter = 0	#reset the counter
-					if edge_sig_matrix_counter >= queue_size:	#01-07-06	control the size of edge_sig_matrix
-						break
-				"""
-				elif self.debug:
-						sys.stderr.write("edge_sig_vector %s, not included.\n"%(repr(edge_sig_vector)))
-				"""
-			if counter>0 and counter<block_size:	#the last block is not empty and not sent.
-				edge_sig_block[counter][0] = -1	#-1 is used to mark the end of this incomplete edge_sig_block
-				for node in free_computing_nodes:	#send it to everyone
-					communicator.send(edge_sig_block, node, 0)
-					"""
-					if self.debug:
-						sys.stderr.write("a block sent to %s.\n"%node)
-					"""
-			#tell each node to exit the loop
-			edge_sig_block[0,0] = -1
-			for node in range(1, communicator.size):	#send it to everyone
+		reader = csv.reader(open(sig_vector_fname, 'r'), delimiter='\t')
+		for row in reader:
+			edge_sig_vector = map(int, row)
+			frequency = sum(edge_sig_vector[2:])
+			if frequency>=min_sup and frequency<=max_sup:
+				edge_sig_block[counter] = edge_sig_vector
+				counter += 1
+				if counter == block_size:
+					for node in free_computing_nodes:	#send it to everyone
+						communicator.send(edge_sig_block, node, 0)
+						if self.debug:
+							sys.stderr.write("a block sent to %s.\n"%node)
+					counter = 0	#reset the counter
+			"""
+			elif self.debug:
+					sys.stderr.write("edge_sig_vector %s, not included.\n"%(repr(edge_sig_vector)))
+			"""
+		if counter>0 and counter<block_size:	#the last block is not empty and not sent.
+			edge_sig_block[counter][0] = -1	#-1 is used to mark the end of this incomplete edge_sig_block
+			for node in free_computing_nodes:	#send it to everyone
 				communicator.send(edge_sig_block, node, 0)
-		else:
+				"""
+				if self.debug:
+					sys.stderr.write("a block sent to %s.\n"%node)
+				"""
+		#tell each node to exit the loop
+		edge_sig_block[0,0] = -1
+		for node in free_computing_nodes:	#send it to everyone
+			communicator.send(edge_sig_block, node, 0)
+		sys.stderr.write("Node %s ends sending.\n"%communicator.rank)
+		
+	def receiveEdgeSigMatrix(self, communicator, PostFim_instance, no_of_datasets, block_size=10000):
+		sys.stderr.write("Node %s receiving edge recurrence_array.\n"%communicator.rank)
+		edge_sig_block = Numeric.zeros((block_size, 2+no_of_datasets), Numeric.Int)
+		edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
+		while edge_sig_block:
+			if edge_sig_block[0,0]==-1:
+				"""
+				if debug:
+					sys.stderr.write("node %s breaked with %s edges.\n"%(node_rank, edge_sig_vector_queue.qsize()))
+				"""
+				break
+			else:
+				for edge_sig_vector in edge_sig_block:
+					if edge_sig_vector[0]==-1:	#reach the end of this edge_sig_block
+						break
+					PostFim_instance.add_edge_sig_vector(list(edge_sig_vector))
 			edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
-			while edge_sig_block:
-				if edge_sig_block[0,0]==-1:
-					"""
-					if debug:
-						sys.stderr.write("node %s breaked with %s edges.\n"%(node_rank, edge_sig_vector_queue.qsize()))
-					"""
-					break
-				else:
-					for edge_sig_vector in edge_sig_block:
-						if edge_sig_vector[0]==-1:	#reach the end of this edge_sig_block
-							break
-						if edge_sig_vector[0]<edge_sig_vector[1]:	#in ascending order
-							edge_sig_matrix.append([edge_sig_vector[0], edge_sig_vector[1], encodeOccurrenceBv(edge_sig_vector[2:])])
-						else:
-							edge_sig_matrix.append([edge_sig_vector[1], edge_sig_vector[0], encodeOccurrenceBv(edge_sig_vector[2:])])
-				edge_sig_block, source, tag, count = communicator.receive(edge_sig_block, 0, 0)	#get data from node 0
-		sys.stderr.write("Node %s edge recurrence_array fetching Done\n"%node_rank)
-		return edge_sig_matrix, counter
-	
+		sys.stderr.write("Node %s ends receiving.\n"%communicator.rank)
+
 	def createOffsetList(self, communicator, inputfile, no_of_nodes):
 		"""
 		08-06-05
@@ -508,6 +508,48 @@ class MpiFromDatasetSignatureToPattern:
 				del signature2pattern[signature]
 		sys.stderr.write("node %s patternFormation done.\n"%(communicator.rank))
 	
+	def input_handler(self, parameter_list, message_size, report=0):
+		"""
+		01-10-06
+		"""
+		if report:
+			sys.stderr.write("Fetching stuff...\n")
+		reader = parameter_list[0]
+		block = []
+		string_length = 0
+		for row in reader:
+			row[-1] = row[-1][1:-1]	#the last one frequency is like (123), remove ( and )
+			block.append(row)
+			string_length += len(row)	#the length to control MPI message size
+			if string_length>=message_size:
+				break
+		if report:
+			sys.stderr.write("Fetching done.\n")
+		return block
+	
+	def computing_node_handler(self, communicator, data, parameter_list):
+		"""
+		01-10-06
+		"""
+		node_rank = communicator.rank
+		sys.stderr.write("Node no.%s working...\n"%node_rank)
+		PostFim_instance = parameter_list[0]
+		data = cPickle.loads(data)
+		no_of_clusters = 0
+		for pattern_sig_list in data:
+			pattern_sig_list = map(int, pattern_sig_list)
+			PostFim_instance.add_pattern_signature(pattern_sig_list)
+			no_of_clusters += 1
+		PostFim_instance.patternFormation()	#the patterns stored in the PostFim_instance are cleared in the end of patternFormation()
+		sys.stderr.write("Node no.%s done with %s clusters.\n"%(node_rank, no_of_clusters))
+		return 1
+	
+	def output_node_handler(self, communicator, parameter_list, data):
+		"""
+		01-10-06
+		"""
+		pass
+	
 	def run(self):
 		"""
 		08-06-05
@@ -522,19 +564,29 @@ class MpiFromDatasetSignatureToPattern:
 		01-08-06
 			no threads
 			back to edge_sig_matrix
+		01-11-06
+			use the cc module, PostFim
 			
 			(rank==0)
-				--createOffsetList()
 				--get_no_of_datasets()
-			else:
-				--readin_signature2pattern()
+				--sendEdgeSigMatrix()
+			elif free_computing_nodes:
+				--PostFim()
+				--receiveEdgeSigMatrix()
 			
 			--mpi_synchronize()
-			--fillEdgeSigMatrix()
-			(loop)
-				--patternFormation()
-				--fillEdgeSigMatrix()
-					--encodeOccurrenceBv()
+			
+			(rank==0)
+				--input_node()
+					--input_handler()
+			elif free_computing_nodes:
+				--computing_node()
+					--computing_node_handler()
+			else:
+				--output_node()
+					--output_node_handler()
+			
+			--mpi_synchronize()
 			
 			(rank==0)
 				--receive node_outputfile
@@ -546,55 +598,44 @@ class MpiFromDatasetSignatureToPattern:
 			
 		"""
 		communicator = MPI.world.duplicate()
-		
-		free_computing_nodes = range(1,communicator.size)	#exclude the 1st node
-		edge_sig_vector_queue = Queue(self.queue_size)	#12-31-05	for thread
+		free_computing_nodes = range(1,communicator.size-1)	#exclude the 1st and last node
+		block_size = 10000
 		if communicator.rank == 0:
-			no_of_computing_nodes = len(free_computing_nodes)
-			offset_list = self.createOffsetList(communicator, self.inputfile, no_of_computing_nodes)
-			if self.debug:
-				sys.stderr.write("offset_list: %s\n"%repr(offset_list))
-			offset_list_pickle = cPickle.dumps(offset_list, -1)
 			no_of_datasets = self.get_no_of_datasets(self.sig_vector_fname)
 				#no_of_datasets is used in fillEdgeSigMatrix() and patternFormation()
 			for node in free_computing_nodes:
-				communicator.send(offset_list_pickle, node, 0)
 				communicator.send(str(no_of_datasets), node, 0)
-			
-			reader = csv.reader(open(self.sig_vector_fname, 'r'), delimiter='\t')
-		else:
-			data, source, tag = communicator.receiveString(0, 0)
-			offset_list = cPickle.loads(data)
+			self.sendEdgeSigMatrix(communicator, free_computing_nodes, self.sig_vector_fname, \
+				no_of_datasets, self.min_sup, self.max_sup, block_size=10000)
+		elif communicator.rank in free_computing_nodes:
 			data, source, tag = communicator.receiveString(0, 0)
 			no_of_datasets = int(data)	#take the data
-			
-			#01-07-06
 			offset = communicator.rank - 1
-			signature2pattern = self.readin_signature2pattern(communicator, self.inputfile, offset_list, offset)
-			
-			reader = None	#01-07-06 placeholder for fillEdgeSigMatrix()
-			node_outputfile = '%s.%s'%(self.outputfile, offset)	#the other thread will read after it's done
-			of = open(node_outputfile, 'w')
-
-		mpi_synchronize(communicator)
-		
-		block_size = 10000
-		edge_sig_block = Numeric.zeros((block_size, 2+no_of_datasets), Numeric.Int)
-		edge_sig_matrix, counter = self.fillEdgeSigMatrix(communicator, free_computing_nodes, \
-			reader, edge_sig_block, self.queue_size, no_of_datasets, self.min_sup, self.max_sup, block_size)
-		while len(edge_sig_matrix)>0 or counter>0:
-			if communicator.rank in free_computing_nodes:
-				self.patternFormation(communicator, signature2pattern, of, self.no_cc, edge_sig_matrix, \
-					no_of_datasets, self.min_cluster_size, debug)
-			
-			edge_sig_matrix, counter = self.fillEdgeSigMatrix(communicator, free_computing_nodes, \
-				reader, edge_sig_block, self.queue_size, no_of_datasets, self.min_sup, self.max_sup, block_size)
+			node_outputfile = '%s.%s'%(self.outputfile, offset)
+			PostFim_instance = PostFim(self.no_cc, no_of_datasets, self.min_cluster_size, node_outputfile)
+			self.receiveEdgeSigMatrix(communicator, PostFim_instance, no_of_datasets, block_size)
 		
 		mpi_synchronize(communicator)
+		
+		if communicator.rank == 0:
+			reader = csv.reader(open(self.inputfile, 'r'), delimiter=' ')
+			parameter_list = [reader]
+			input_node(communicator, parameter_list, free_computing_nodes, self.queue_size, \
+				self.report, input_handler=self.input_handler)
+			del reader
+		elif communicator.rank in free_computing_nodes:
+			parameter_list = [PostFim_instance]
+			computing_node(communicator, parameter_list, self.computing_node_handler, report=self.report)
+		else:
+			parameter_list = []
+			output_node(communicator, free_computing_nodes, parameter_list, self.output_node_handler, self.report)
+			
+		mpi_synchronize(communicator)
+		
 		if communicator.rank == 0:
 			#12-31-05 wait until of_name_list is full
 			of_name_list = []
-			while len(of_name_list)<no_of_computing_nodes:
+			while len(of_name_list)<len(free_computing_nodes):
 				data, source, tag = communicator.receiveString(None, 1)
 				of_name_list.append(data)
 			#collecting
@@ -602,13 +643,8 @@ class MpiFromDatasetSignatureToPattern:
 			netmine_wrapper_instance = netmine_wrapper()
 			netmine_wrapper_instance.collect_and_merge_output(of_name_list, intermediateFile)
 			self.uniqueSort(intermediateFile, self.outputfile)
-		else:
-			of.close()
-			if len(signature2pattern)>1:
-				sys.stderr.write('Weird %s signatures are still available\n'%len(signature2pattern))
-				if debug:
-					sys.stderr.write('%s\n'%repr(signature2pattern))
-			communicator.send(node_outputfile, 0, 1)
+		elif communicator.rank in free_computing_nodes:
+			communicator.send(node_outputfile, 0, 1)	#send back the outputfile
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -629,7 +665,7 @@ if __name__ == '__main__':
 	outputfile = None
 	min_sup = 0
 	max_sup = 200
-	queue_size = 3500000
+	queue_size = 25000
 	min_cluster_size = 5
 	no_cc = 0
 	debug = 0
