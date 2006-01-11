@@ -33,6 +33,7 @@ Examples:
 11-15-05 22: Test_is_site_confirmed
 11-30-05 23: Test_get_neighbor_set
 11-30-05 24: Test_distinct_go_no_list_based_on_neighbor_set_graph
+01-10-06 25: Test_PostFim(output is /tmp/test_PostFim.out)
 """
 import unittest, os, sys, getopt, csv
 
@@ -1304,6 +1305,36 @@ class Test_distinct_go_no_list_based_on_neighbor_set_graph(unittest.TestCase):
 		print "%s go_no groups in cc_list, %s"%(len(cc_list),cc_list)
 		print "%s singleton go_nos in singleton_go_no_list, %s"%(len(singleton_go_no_list),singleton_go_no_list)
 
+class Test_PostFim(unittest.TestCase):
+	"""
+	01-10-06
+	"""
+	def test_postfim(self):
+		from graph.PostFim import PostFim
+		no_cc = 0
+		no_of_datasets = 10
+		min_cluster_size = 5
+		node_outputfname = '/tmp/test_PostFim.out'
+		instance = PostFim(no_cc, no_of_datasets, min_cluster_size, node_outputfname)
+		edge_sig_matrix = [\
+			[2,3, 1,0,1,1,1,0,1,0,1,0],
+			[3,4, 1,1,0,1,1,0,0,1,1,0],
+			[4,5, 1,0,0,1,1,0,0,0,1,1],
+			[5,6, 1,0,0,1,1,1,0,0,0,0],
+			[6,7, 0,1,0,1,1,1,1,0,0,0],
+			[6,8, 0,1,0,1,0,1,0,0,1,0],
+			]
+		pattern_sig_matrix = [\
+			[1,4,5, 4],
+			[1,4,5,9, 3],
+			[4,5, 5],
+			]
+		for edge_sig_list in edge_sig_matrix:
+			instance.add_edge_sig_vector(edge_sig_list)
+		for pattern_sig_list in pattern_sig_matrix:
+			instance.add_pattern_signature(pattern_sig_list)
+		instance.patternFormation()
+		
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1339,7 +1370,8 @@ if __name__ == '__main__':
 		21: Test_cal_hg_p_value,
 		22: Test_is_site_confirmed,
 		23: Test_get_neighbor_set,
-		24: Test_distinct_go_no_list_based_on_neighbor_set_graph}
+		24: Test_distinct_go_no_list_based_on_neighbor_set_graph,
+		25: Test_PostFim}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
