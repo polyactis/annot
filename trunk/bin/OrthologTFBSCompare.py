@@ -6,7 +6,10 @@ Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database(IGNORE)
+	-i ...,	ReformatTRANSFACOutput_fname list, separated by ','
 	-p ...,	output prefix
+	-y ...,	type, 1(gene_id2mt_no_set from transfac.binding_site, default),
+		2(from ReformatTRANSFACOutput_fname)
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
@@ -18,7 +21,7 @@ Description:
 	Program to draw histogram of tfbs_similarity_ls between two groups
 		of homologenes.
 """
-import os, sys, getopt, random
+import os, sys, getopt, random, csv, fileinput
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from codense.common import db_connect
 from sets import Set
@@ -28,14 +31,82 @@ class OrthologTFBSCompare:
 	"""
 	01-05-06
 	"""
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None,\
-		output_prefix=None, debug=0, report=0):
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, input_fname_list=None, \
+		output_prefix=None, type=1, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
+		self.input_fname_list = input_fname_list
 		self.output_prefix = output_prefix
+		self.type = int(type)
 		self.debug = int(debug)
 		self.report = int(report)
+	
+	def get_prom_id2gene_id(self, curs, prom_seq_table='transfac.prom_seq'):
+		"""
+		01-06-06
+			promoter id to Entrez gene id
+			only upstream(prom_type_id=1)
+		"""
+		sys.stderr.write("Getting prom_id2gene_id...\n")
+		prom_id2gene_id = {}
+		curs.execute("DECLARE crs CURSOR FOR select id, prom_acc from %s where prom_type_id=1"%prom_seq_table)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		counter = 0
+		while rows:
+			for row in rows:
+				prom_id, gene_id = row
+				gene_id = int(gene_id)
+				prom_id2gene_id[prom_id] = gene_id
+				counter += 1
+			if self.report:
+				sys.stderr.write("%s%s"%('\x08'*20, counter))
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		sys.stderr.write("Done.\n")
+		return prom_id2gene_id
+	
+	def get_mt_id2no(self, curs, matrix_table='transfac.matrix'):
+		"""
+		01-06-06
+		"""
+		sys.stderr.write("Getting mt_id2no...\n")
+		curs.execute("select mt_id, id from %s"%matrix_table)
+		mt_id2no = {}
+		rows = curs.fetchall()
+		for row in rows:
+			mt_id, no = row
+			mt_id2no[mt_id] = no
+		sys.stderr.write("Done.\n")
+		return mt_id2no
+	
+	def get_gene_id2mt_no_set_from_file(self, ReformatTRANSFACOutput_fname_list, mt_id2no, prom_id2gene_id):
+		"""
+		01-06-06
+		"""
+		sys.stderr.write("Getting gene_id2mt_no_set from ReformatTRANSFACOutput_fname...\n")
+		aggregated_inf = fileinput.input(ReformatTRANSFACOutput_fname_list)
+		reader = csv.reader(aggregated_inf, delimiter='\t')
+		gene_id2mt_no_set = {}
+		counter = 0
+		inner_counter = 0
+		for row in reader:
+			mt_id, prom_id, strand, bs_disp_start, bs_disp_end, core_similarity_score, matrix_similarity_score, sequence, order = row
+			prom_id = int(prom_id)
+			if prom_id in prom_id2gene_id:
+				gene_id = prom_id2gene_id[prom_id]
+				mt_no = mt_id2no[mt_id]
+				if gene_id not in gene_id2mt_no_set:
+					gene_id2mt_no_set[gene_id] = Set()
+				gene_id2mt_no_set[gene_id].add(mt_no)
+				inner_counter += 1
+			counter += 1
+			if counter%100000==0:
+				sys.stderr.write("%s%s/%s"%('\x08'*20, counter, inner_counter))
+		sys.stderr.write("Done.\n")
+		return gene_id2mt_no_set
 	
 	def get_gene_id2mt_no_set(self, curs, binding_site_table='transfac.binding_site', \
 		prom_seq_table='transfac.prom_seq', matrix_table='transfac.matrix'):
@@ -130,7 +201,7 @@ class OrthologTFBSCompare:
 	def draw_tfbs_similarity_ls_histogram(self, tfbs_similarity_ls, output_fname):
 		sys.stderr.write("Drawing histogram for tfbs_similarity_ls...")
 		if len(tfbs_similarity_ls)>10:
-			r.png('%s.png'%output_fname)
+			r.png('%s'%output_fname)
 			r.hist(tfbs_similarity_ls, main='histogram',xlab='tfbs_similarity',ylab='freq')
 			r.dev_off()
 			sys.stderr.write("Done.\n")
@@ -143,10 +214,22 @@ class OrthologTFBSCompare:
 		
 			--db_connect()
 			--get_gene_id2mt_no_set()
-			--
+			--get_ortholog_pairs()
+				--get_homo_genes_for_2_tax_ids()
+			--get_tfbs_similarity_ls()
+				--calculate_tfbs_similarity()
+			--draw_tfbs_similarity_ls_histogram()
 		"""
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-		gene_id2mt_no_set = self.get_gene_id2mt_no_set(curs)
+		if self.type==1:
+			gene_id2mt_no_set = self.get_gene_id2mt_no_set(curs)
+		elif self.type==2:
+			if self.input_fname_list==[]:
+				sys.stderr.write("Please specify -i, type=2 needs that.\n")
+				sys.exit(2)
+			prom_id2gene_id = self.get_prom_id2gene_id(curs)
+			mt_id2no = self.get_mt_id2no(curs)
+			gene_id2mt_no_set = self.get_gene_id2mt_no_set_from_file(self.input_fname_list, mt_id2no, prom_id2gene_id)
 		hs_gene_id_list, mm_gene_id_list = self.get_ortholog_pairs(curs)
 		tfbs_similarity_ls = self.get_tfbs_similarity_ls(hs_gene_id_list, mm_gene_id_list, gene_id2mt_no_set)
 		ortholog_pair_hist_fname = '%s_ortholog_pair_hist.png'%self.output_prefix
@@ -165,12 +248,14 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema="]
-	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:br", long_options_list)
+	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:p:y:br", long_options_list)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = None
+	input_fname = None
 	output_prefix = None
+	type = 1
 	debug = 0
 	report = 0
 
@@ -184,16 +269,20 @@ if __name__ == '__main__':
 			dbname = arg
 		elif opt in ("-k", "--schema"):
 			schema = arg
+		elif opt in ("-i",):
+			input_fname = arg.split(',')
 		elif opt in ("-p",):
 			output_prefix = arg
+		elif opt in ("-y",):
+			type = int(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-r",):
 			report = 1
 		
 	if output_prefix:
-		instance = OrthologTFBSCompare(hostname, dbname, schema, output_prefix, \
-			debug, report)
+		instance = OrthologTFBSCompare(hostname, dbname, schema, input_fname, output_prefix, \
+			type, debug, report)
 		instance.run()
 	else:
 		print __doc__
