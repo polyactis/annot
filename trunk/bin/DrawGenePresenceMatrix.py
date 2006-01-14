@@ -25,8 +25,13 @@ Description:
 		3. gene frequency histogram for each dataset
 		4. enrich_index.csv
 """
-
-import os, sys, csv, getopt, math
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import csv, getopt
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from graph.complete_cor_vector import complete_cor_vector
 from sets import Set

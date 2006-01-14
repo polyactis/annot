@@ -3,8 +3,13 @@
 functions or classes common to all programs
 
 """
-
-import csv, os, sys, cPickle
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import csv, cPickle
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 import psycopg
 from sets import Set

@@ -16,8 +16,13 @@ Description:
 	draw histogram of pairwise correlations generated from a microarray dataset.
 	(output of MpiGrahModeling.py)
 """
-
-import sys, os, re, getopt, csv, math
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import re, getopt, csv
 import MLab
 from MA import array
 from Preprocess import PreprocessEdgeData

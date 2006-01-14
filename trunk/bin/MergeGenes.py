@@ -16,10 +16,16 @@ Description:
 	Merge the expression values of same genes.
 	Inputfiles will be sorted before transforming by calling 'sort'.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+	sys.path += [os.path.expanduser('~/script64/microarray/bin')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+	sys.path += [os.path.expanduser('~/script/microarray/bin')]
 import sys, os, re, getopt, csv, math
 import MLab
-sys.path += [os.path.expanduser('~/script/microarray/bin')]
 from microarraydb import microarraydb
 from MA import array, average, maximum
 from Preprocess import PreprocessEdgeData

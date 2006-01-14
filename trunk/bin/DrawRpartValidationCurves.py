@@ -19,9 +19,13 @@ Description:
 	Program to draw acc2cp and no_of_genes2cp plots.
 	In parameter_list, -1 means variant, only one parameter could be -1.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
 import sys, os, getopt, csv, math
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from rpy import r
 
 class DrawRpartValidationCurves:

@@ -20,9 +20,13 @@ Examples:
 Description:
 	Draw function_map and gene_function_map.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
 import os, sys, csv, getopt
-sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
 from codense.common import get_char_dimension, get_text_region, db_connect,\
 	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name, \
 	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid
