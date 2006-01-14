@@ -10,6 +10,7 @@ Option:
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
 	-q ...,	message_size when transmitting pattern_sig_lists 25,000(default)
 	-z ...,	the minimum number of vertices, 5(default)
+	-t ...,	the temporary directory for sort, /scratch (default)
 	-n, --no_cc	no connected components extraction
 	-b, --debug	debug version.
 	-r, --report	enable report flag
@@ -28,9 +29,9 @@ Description:
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
 if bit_number>40:       #64bit
-	sys.path += [os.path.expanduser('~/lib64/python')]
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
 else:   #32bit
-	sys.path += [os.path.expanduser('~/lib/python')]
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 import getopt, csv, Numeric, cPickle
 from Scientific import MPI
 from graph.cc_from_edge_list import cc_from_edge_list
@@ -284,7 +285,7 @@ class PatternFormThread(Thread):
 class MpiFromDatasetSignatureToPattern:
 	def __init__(self, inputfile=None,\
 		sig_vector_fname=None, outputfile=None, min_sup=0, max_sup=200, queue_size=3000000,\
-		min_cluster_size=5, no_cc=0, debug=0, report=0):
+		min_cluster_size=5, tmpdir='/scratch', no_cc=0, debug=0, report=0):
 		"""
 		08-07-05
 			Program to handle the fim_closed output over the edge-transaction mining
@@ -299,6 +300,7 @@ class MpiFromDatasetSignatureToPattern:
 		self.max_sup = int(max_sup)
 		self.queue_size = int(queue_size)
 		self.min_cluster_size = int(min_cluster_size)
+		self.tmpdir = tmpdir
 		self.no_cc = int(no_cc)
 		self.debug = int(debug)
 		self.report = int(report)
@@ -413,13 +415,13 @@ class MpiFromDatasetSignatureToPattern:
 		sys.stderr.write("done.\n")
 		return offset_list
 	
-	def uniqueSort(self, inputfile, outputfile):
+	def uniqueSort(self, inputfile, outputfile, tmpdir='/scratch'):
 		"""
 		08-07-05
 			sort the file (unique it simutaneouly)
 		"""
 		sys.stderr.write("Starting to sort and unique %s..."%inputfile)
-		commandline = 'sort -u %s > %s'%(inputfile, outputfile)
+		commandline = 'sort -T %s -u %s -o %s'%(tmpdir, inputfile, outputfile)
 		exit_code = system_call(commandline)
 		#os.remove(inputfile)
 		sys.stderr.write("Done.\n")
@@ -647,7 +649,7 @@ class MpiFromDatasetSignatureToPattern:
 			intermediateFile = '%s.unsorted'%self.outputfile	#intermediateFile to store concatenated results
 			netmine_wrapper_instance = netmine_wrapper()
 			netmine_wrapper_instance.collect_and_merge_output(of_name_list, intermediateFile)
-			self.uniqueSort(intermediateFile, self.outputfile)
+			self.uniqueSort(intermediateFile, self.outputfile, self.tmpdir)
 		elif communicator.rank in free_computing_nodes:
 			communicator.send(node_outputfile, 0, 1)	#send back the outputfile
 
@@ -657,7 +659,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hk:i:s:o:m:x:q:z:nbr", ["help", \
+		opts, args = getopt.getopt(sys.argv[1:], "hk:i:s:o:m:x:q:z:t:nbr", ["help", \
 			"inputfile=", "outputfile=", "min_sup", "max_sup=", \
 			"no_cc", "debug", "report"])
 	except:
@@ -672,6 +674,7 @@ if __name__ == '__main__':
 	max_sup = 200
 	queue_size = 25000
 	min_cluster_size = 5
+	tmpdir = '/scratch'
 	no_cc = 0
 	debug = 0
 	report = 0
@@ -695,6 +698,8 @@ if __name__ == '__main__':
 			queue_size = int(arg)
 		elif opt in ("-z",):
 			min_cluster_size = int(arg)
+		elif opt in ("-t",):
+			tmpdir = arg
 		elif opt in ("-n", "--no_cc"):
 			no_cc = 1
 		elif opt in ("-b", "--debug"):
@@ -703,7 +708,7 @@ if __name__ == '__main__':
 			report = 1
 	if inputfile and outputfile and sig_vector_fname:
 		instance = MpiFromDatasetSignatureToPattern(inputfile, sig_vector_fname, outputfile, \
-			min_sup, max_sup, queue_size, min_cluster_size, no_cc, debug, report)
+			min_sup, max_sup, queue_size, min_cluster_size, tmpdir, no_cc, debug, report)
 		instance.run()
 	else:
 		print __doc__
