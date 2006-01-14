@@ -21,9 +21,13 @@ Description:
 		2. tf_line picture.
 	data is from transfac.binding_site and transfac.prom_seq
 """
-
-import os, sys, getopt, math
-sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import getopt, math
 from codense.common import get_char_dimension, get_text_region, db_connect
 from sets import Set
 import Image, ImageDraw

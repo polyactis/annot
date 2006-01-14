@@ -31,8 +31,13 @@ Description:
 	modes: parameter_a=connectivity, parameter_b=size
 	splat: parameter_a=min_support, parameter_b=min_cut
 """
-
-import sys, os, psycopg, getopt, csv, numarray
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import psycopg, getopt, csv, numarray
 from graphlib import Graph
 from sets import Set
 

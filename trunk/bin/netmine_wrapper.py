@@ -60,8 +60,13 @@ Description:
 	This node will run netmine. Nodes in the rank_range will run netmine2nd.
 """
 
-
-import sys, os, math, getopt, time, csv, Numeric, random
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import getopt, time, csv, Numeric, random
 from Scientific import MPI
 from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize
 from sets import Set

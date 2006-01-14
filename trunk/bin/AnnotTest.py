@@ -35,6 +35,12 @@ Examples:
 11-30-05 24: Test_distinct_go_no_list_based_on_neighbor_set_graph
 01-10-06 25: Test_PostFim(output is /tmp/test_PostFim.out)
 """
+import os,sys,math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:	#64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:	#32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
 import unittest, os, sys, getopt, csv
 
 class TestGeneStatPlot(unittest.TestCase):

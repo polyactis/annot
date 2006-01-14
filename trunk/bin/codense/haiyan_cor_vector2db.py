@@ -21,8 +21,13 @@ Description:
 	
 """
 
-
-import sys, os, getopt, psycopg, csv
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import getopt, psycopg, csv
 from common import *
 
 	

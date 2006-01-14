@@ -41,8 +41,13 @@ Description:
 	vector is output in another file.
 
 """
-
-import sys, os, getopt, csv, re, math, psycopg
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import getopt, csv, re, math, psycopg
 import graph_modeling
 from Scientific import MPI
 from sets import Set

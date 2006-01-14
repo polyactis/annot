@@ -25,8 +25,13 @@ Description:
 	
 """
 
-import sys, os, getopt, csv, math, Numeric, cPickle
-sys.path += [os.path.expanduser('~/script/annot/bin')]
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import getopt, csv, Numeric, cPickle
 from Scientific import MPI
 from graph.cc_from_edge_list import cc_from_edge_list
 from codense.common import system_call, mpi_synchronize, db_connect, output_node, input_node,\

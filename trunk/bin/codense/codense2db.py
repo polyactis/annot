@@ -36,7 +36,13 @@ Description:
 """
 
 
-import sys, os, psycopg, getopt, csv, numarray, re
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import psycopg, getopt, csv, numarray, re
 from common import db_connect, get_haiyan_no2gene_no, get_gene_id2gene_no, \
 	get_gene_no2incidence_array, get_vertex_set_gim_array, \
 	get_known_genes_dict	#10-14-05	used to get unknown_gene_ratio

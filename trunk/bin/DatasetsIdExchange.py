@@ -20,8 +20,13 @@ Description:
 	type: 1 means given a list of tg_gene_id_list, just take the sorted-smallest one
 		2 means outputs them all(copy)
 """
-
-import sys, os, re, getopt, csv
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import re, getopt, csv
 from codense.common import get_unigene2gene_list, org2tax_id, org_short2long
 
 class DatasetsIdExchange:

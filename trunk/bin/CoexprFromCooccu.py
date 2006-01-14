@@ -20,8 +20,13 @@ Description:
 	This program finds the co-expression modules which are from the same cooccurrence module.
 
 """
-
-import sys, os, psycopg, getopt, csv, numarray, re
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path += [os.path.expanduser('~/lib64/python')]
+else:   #32bit
+	sys.path += [os.path.expanduser('~/lib/python')]
+import psycopg, getopt, csv, numarray, re
 from codense.common import db_connect
 from sets import Set
 
