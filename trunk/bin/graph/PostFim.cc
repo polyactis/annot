@@ -142,6 +142,10 @@ read edge name and sig_vector
 }
 
 void PostFim::patternFormation()
+/*
+01-13-06
+	pre-stop when edge_id_vector has reached the frequency
+*/
 {
 	#if defined(DEBUG)
 		std::cerr << "patternFormation..."<<std::endl;
@@ -152,7 +156,11 @@ void PostFim::patternFormation()
 		for (int j = 0; j<edge_bitset_vector.size(); j++)
 		{
 			if ((pattern_bitset_vector[i] & edge_bitset_vector[j])==pattern_bitset_vector[i])
+			{
 				edge_id_vector.push_back(j);
+				if (freq_of_signature_vector[i]==edge_id_vector.size())	//01-13-06
+					break;
+			}
 		}
 		if (freq_of_signature_vector[i]==edge_id_vector.size())
 		{
