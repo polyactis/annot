@@ -2093,3 +2093,27 @@ def get_gene_id2no_of_promoters(curs, tax_id, entrezgene_id2no_of_promoters_tabl
 		gene_id2no_of_promoters[gene_id] = int(no_of_promoters)
 	sys.stderr.write("End getting gene_id2no_of_promoters.\n")
 	return gene_id2no_of_promoters
+
+"""
+01-14-06
+"""
+def get_probe_id2gene_id_list(curs, organism=None, platform_id=None, probe2gene_table='id_linking.probe2gene'):
+	sys.stderr.write("Getting probe_id2gene_id_list...\n")
+	probe_id2gene_id_list = {}
+	where_condition = []
+	if organism:
+		where_condition.append( "organism = '%s'"%organism)
+	if platform_id:
+		where_condition.append("platform_id = '%s'"%platform_id)
+	if where_condition:
+		curs.execute("select distinct probe_id, id_linked from %s where %s"%(probe2gene_table, ' and '.join(where_condition)))
+	else:
+		curs.execute("select distinct probe_id, id_linked from %s"%probe2gene_table)
+	rows = curs.fetchall()
+	for row in rows:
+		probe_id, id_linked = row
+		if probe_id not in probe_id2gene_id_list:
+			probe_id2gene_id_list[probe_id] = []
+		probe_id2gene_id_list[probe_id].append(id_linked)
+	sys.stderr.write("End getting probe_id2gene_id_list.\n")
+	return probe_id2gene_id_list
