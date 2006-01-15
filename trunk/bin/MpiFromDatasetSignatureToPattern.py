@@ -11,6 +11,8 @@ Option:
 	-q ...,	message_size when transmitting pattern_sig_lists 25,000(default)
 	-z ...,	the minimum number of vertices, 5(default)
 	-t ...,	the temporary directory for sort, /scratch (default)
+	-d ...,	minimum line number, 0(not set default)
+	-e ...,	maximum line number, 0(not set default)
 	-n, --no_cc	no connected components extraction
 	-b, --debug	debug version.
 	-r, --report	enable report flag
@@ -286,7 +288,7 @@ class PatternFormThread(Thread):
 class MpiFromDatasetSignatureToPattern:
 	def __init__(self, inputfile=None,\
 		sig_vector_fname=None, outputfile=None, min_sup=0, max_sup=200, queue_size=3000000,\
-		min_cluster_size=5, tmpdir='/scratch', no_cc=0, debug=0, report=0):
+		min_cluster_size=5, tmpdir='/scratch', min_line_number=0, max_line_number=0, no_cc=0, debug=0, report=0):
 		"""
 		08-07-05
 			Program to handle the fim_closed output over the edge-transaction mining
@@ -302,6 +304,8 @@ class MpiFromDatasetSignatureToPattern:
 		self.queue_size = int(queue_size)
 		self.min_cluster_size = int(min_cluster_size)
 		self.tmpdir = tmpdir
+		self.min_line_number = int(min_line_number)
+		self.max_line_number = int(max_line_number)
 		self.no_cc = int(no_cc)
 		self.debug = int(debug)
 		self.report = int(report)
@@ -519,18 +523,31 @@ class MpiFromDatasetSignatureToPattern:
 	def input_handler(self, parameter_list, message_size, report=0):
 		"""
 		01-10-06
+		01-15-06
+			add min_line_number and max_line_number
 		"""
 		if report:
 			sys.stderr.write("Fetching stuff...\n")
-		reader = parameter_list[0]
+		reader, min_line_number, max_line_number = parameter_list
 		block = []
 		string_length = 0
 		for row in reader:
-			row[-1] = row[-1][1:-1]	#the last one frequency is like (123), remove ( and )
-			block.append(row)
-			string_length += len(row)	#the length to control MPI message size
-			if string_length>=message_size:
-				break
+			if min_line_number and max_line_number:	#01-15-06
+				self.line_number += 1
+				if self.line_number>=min_line_number and self.line_number<=max_line_number:
+					row[-1] = row[-1][1:-1]	#the last one frequency is like (123), remove ( and )
+					block.append(row)
+					string_length += len(row)	#the length to control MPI message size
+					if string_length>=message_size:
+						break
+				elif self.line_number>max_line_number:	#break
+					break
+			else:
+				row[-1] = row[-1][1:-1]	#the last one frequency is like (123), remove ( and )
+				block.append(row)
+				string_length += len(row)	#the length to control MPI message size
+				if string_length>=message_size:
+					break
 		if report:
 			sys.stderr.write("Fetching done.\n")
 		return block
@@ -574,6 +591,8 @@ class MpiFromDatasetSignatureToPattern:
 			back to edge_sig_matrix
 		01-11-06
 			use the cc module, PostFim
+		01-15-06
+			add min_line_number and max_line_number
 			
 			(rank==0)
 				--get_no_of_datasets()
@@ -627,7 +646,8 @@ class MpiFromDatasetSignatureToPattern:
 		
 		if communicator.rank == 0:
 			reader = csv.reader(open(self.inputfile, 'r'), delimiter=' ')
-			parameter_list = [reader]
+			parameter_list = [reader, self.min_line_number, self.max_line_number]	#01-15-06
+			self.line_number = 0	#01-15-06	used in input_handler()
 			input_node(communicator, parameter_list, free_computing_nodes, self.queue_size, \
 				self.report, input_handler=self.input_handler)
 			del reader
@@ -660,7 +680,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hk:i:s:o:m:x:q:z:t:nbr", ["help", \
+		opts, args = getopt.getopt(sys.argv[1:], "hk:i:s:o:m:x:q:z:t:d:e:nbr", ["help", \
 			"inputfile=", "outputfile=", "min_sup", "max_sup=", \
 			"no_cc", "debug", "report"])
 	except:
@@ -676,6 +696,8 @@ if __name__ == '__main__':
 	queue_size = 25000
 	min_cluster_size = 5
 	tmpdir = '/scratch'
+	min_line_number = 0
+	max_line_number = 0
 	no_cc = 0
 	debug = 0
 	report = 0
@@ -701,6 +723,10 @@ if __name__ == '__main__':
 			min_cluster_size = int(arg)
 		elif opt in ("-t",):
 			tmpdir = arg
+		elif opt in ("-d",):
+			min_line_number = int(arg)
+		elif opt in ("-e",):
+			max_line_number = int(arg)
 		elif opt in ("-n", "--no_cc"):
 			no_cc = 1
 		elif opt in ("-b", "--debug"):
@@ -709,7 +735,7 @@ if __name__ == '__main__':
 			report = 1
 	if inputfile and outputfile and sig_vector_fname:
 		instance = MpiFromDatasetSignatureToPattern(inputfile, sig_vector_fname, outputfile, \
-			min_sup, max_sup, queue_size, min_cluster_size, tmpdir, no_cc, debug, report)
+			min_sup, max_sup, queue_size, min_cluster_size, tmpdir, min_line_number, max_line_number, no_cc, debug, report)
 		instance.run()
 	else:
 		print __doc__
