@@ -29,13 +29,20 @@ Description:
 	ssh $HOSTNAME is used for qsub system because it doesn't allow thread.
 
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, csv, getopt
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, get_gene_no2gene_id, get_mt_no2tf_name, \
 	get_mcl_id2tf_set, dict_map, get_go_no2name, org_short2long, org2tax_id, \
 	get_gene_id2gene_symbol, dict_transfer, form_schema_tables
 from threading import *
+from sets import Set
 
 class tf_darwin_format(Thread):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, ofname=None, lm_bit='111', acc_cut_off=None, \
@@ -188,8 +195,26 @@ class pattern_darwin_format(Thread):
 		self.debug = int(debug)
 		self.report = int(report)
 
+	def get_mcl_id_set_from_good_cluster_table(self, curs, good_cluster_table):
+		"""
+		01-14-06
+			temporarily add, 
+		"""
+		sys.stderr.write("Getting mcl_id_set from good_cluster_table...\n")
+		curs.execute("DECLARE crs CURSOR FOR select mcl_id from %s"%good_cluster_table)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		mcl_id_set = Set()
+		while rows:
+			for row in rows:
+				mcl_id_set.add(row[0])
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		sys.stderr.write("mcl_id_set done.\n")
+		return mcl_id_set
 	
-	def _pattern_darwin_format(self, curs, pattern_table, gene_no2id, go_no2id, output_fname):
+	def _pattern_darwin_format(self, curs, pattern_table, gene_no2id, go_no2id, output_fname, mcl_id_set=None):
 		"""
 		format:
 			r:=[
@@ -209,6 +234,8 @@ class pattern_darwin_format(Thread):
 		while rows:
 			for row in rows:
 				mcl_id, vertex_set, recurrence_array, recurrence, connectivity, unknown_ratio = row
+				if mcl_id_set and mcl_id not in mcl_id_set:
+					continue
 				vertex_set = vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
 				vertex_set = dict_map(gene_no2id, vertex_set, type=2)
@@ -229,7 +256,9 @@ class pattern_darwin_format(Thread):
 			sys.stderr.write("ofname: %s and acc_cut_off: %s and lm_bit %s, NOT VALID\n"%(self.ofname, self.acc_cut_off, self.lm_bit))
 			sys.exit(2)
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
-		self._pattern_darwin_format(curs, schema_instance.pattern_table, self.gene_no2id, self.go_no2id, self.output_fname)
+		#mcl_id_set = self.get_mcl_id_set_from_good_cluster_table(curs, schema_instance.good_cluster_table)
+		mcl_id_set = None	#01-14-06
+		self._pattern_darwin_format(curs, schema_instance.pattern_table, self.gene_no2id, self.go_no2id, self.output_fname, mcl_id_set)
 		del conn, curs
 
 class prediction_darwin_format(Thread):
