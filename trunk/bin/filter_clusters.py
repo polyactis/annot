@@ -28,9 +28,15 @@ Description:
 	which are used to do function prediction.
 
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, p_gene_id_set_from_gene_p_table
 from sets import Set
 from Queue import Queue

@@ -39,9 +39,15 @@ Description:
 	id, gene_no, go_no, GradientScorePrediction_instance.depth, gradient_score, edge_gradient, \
 	is_correct, is_correct_L1, is_correct_lca, one_dim_list2string(lca_list)
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, math, Numeric, cPickle
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, get_gene_no2go_no_set, get_go_no2depth,\
 	get_go_no2edge_counter_list, combine_numerator_a_denominator_dict, one_dim_list2string, \

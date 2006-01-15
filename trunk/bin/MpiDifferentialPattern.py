@@ -26,9 +26,15 @@ Description:
 	Find patterns whose recurrence shows difference between the given
 	  dataset_signature and the rest.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, math, cPickle
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import mpi_synchronize, db_connect, output_node, draw_pattern,form_schema_tables,\
 	computing_node, input_node, get_gene_id2gene_no, get_gene_no2gene_id, get_gene_no2go_no

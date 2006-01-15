@@ -28,7 +28,14 @@ Description:
 	Biclustering on the edge matrix. MPI version.
 
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, psycopg, getopt, csv, re, random
 from sets import Set
 from codense.common import db_connect, get_vertex_edge_list_by_edge_id

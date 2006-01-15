@@ -18,7 +18,14 @@ Description:
 	Each file in DATADIR is Paul pavlidis' chip annotation files.
 	THis program filters out those parent annotations.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, psycopg, getopt, csv
 from GO_graphxml import GO_graphxml
 from graphlib import GraphDot

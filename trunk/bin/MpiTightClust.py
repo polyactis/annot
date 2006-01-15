@@ -37,7 +37,14 @@ Description:
 	
 """
 
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, math, getopt, time, csv, Numeric, psycopg
 from Scientific import MPI
 from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize, db_connect, get_go_no2depth, get_gene_no2go_no

@@ -29,7 +29,14 @@ Description:
 	This module merges the p_gene_ids whose predicted functions are
 	parent-child, for each gene in the gene_p table
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt
 from codense.common import db_connect, get_go_no2term_id, \
 	distinct_go_no_list_based_on_neighbor_set_graph, get_neighbor_set

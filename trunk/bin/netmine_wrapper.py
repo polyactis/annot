@@ -59,13 +59,14 @@ Description:
 	This program wraps netmine and netmine2nd(two parts of the copath).
 	This node will run netmine. Nodes in the rank_range will run netmine2nd.
 """
-
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
 if bit_number>40:       #64bit
-	sys.path += [os.path.expanduser('~/lib64/python')]
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
 else:   #32bit
-	sys.path += [os.path.expanduser('~/lib/python')]
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import getopt, time, csv, Numeric, random
 from Scientific import MPI
 from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize

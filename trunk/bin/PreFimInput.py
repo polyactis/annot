@@ -21,10 +21,16 @@ Examples:
 Description:
 	Prepare input for fim_closed.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, psycopg, getopt, csv
 from codense.common import db_connect
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
         from python2_3 import *
 

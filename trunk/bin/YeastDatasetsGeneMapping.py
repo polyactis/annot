@@ -17,7 +17,14 @@ Description:
 	Source of the map_file: 1. get all orfnames from the datasets
 	2. link against the gene.gene_symbol2id table to find the gene id
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, re, getopt, csv, math
 
 class YeastDatasetsGeneMapping:

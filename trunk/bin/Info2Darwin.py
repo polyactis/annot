@@ -63,9 +63,15 @@ Description:
 			...
 			[]]:
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, re
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, get_gene_id2gene_symbol, \
 	get_gene_id2no_of_events, get_org_from_tax_id, dict_map, get_gene_id2family_size, get_gene_id2no_of_promoters
 from sets import Set

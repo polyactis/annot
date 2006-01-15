@@ -15,7 +15,14 @@ Description:
 	this program fills in go_index in the table schema.go.
 	the go_index_file is outputted by Ming-chi's program.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import pickle,sys,os, psycopg, getopt, csv
 
 class go_table_setup:

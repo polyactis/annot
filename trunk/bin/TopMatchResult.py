@@ -20,10 +20,17 @@ Description:
 	The program reads the MATCH output files and only retain the top number of binding sites.
 	
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/transfac/src')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/transfac/src')))
 import sys, os, getopt, csv, cPickle, fileinput
-sys.path += [os.path.expanduser('~/script/annot/bin')]
-sys.path += [os.path.expanduser('~/script/transfac/src')]
 from codense.common import db_connect
 from binding_site2gene_id2mt_no import attr_of_mt_no	#01-03-06	for the top number
 

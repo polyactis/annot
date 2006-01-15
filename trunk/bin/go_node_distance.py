@@ -43,7 +43,14 @@ Description:
 		Now use the shorter index as fixed, and longer one as dynamic to be searched. Reverse
 		check from the end of the fixed_index whether there's a common one in dynamic_index.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, psycopg, getopt
 from graphlib import Graph, GraphAlgo
 from sets import Set

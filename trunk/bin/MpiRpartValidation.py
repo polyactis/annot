@@ -28,9 +28,15 @@ Examples:
 Description:
 	Program to do rpart validation. Inherit rpart_prediction.py
 """
-
-import sys, os, getopt, csv, cPickle, random
-sys.path += [os.path.expanduser('~/script/annot/bin')]
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+import getopt, csv, cPickle, random
 from Scientific import MPI
 from codense.common import db_connect, form_schema_tables, \
 	get_go_no2gene_no_set, get_no_of_total_genes, output_node, \

@@ -27,8 +27,15 @@ Examples:
 Description:
 	Program to do rpart fittng and prediction.
 """
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, random
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from codense.common import db_connect, form_schema_tables, cal_hg_p_value, \
 	get_go_no2gene_no_set, get_no_of_total_genes
 from MpiPredictionFilter import prediction_attributes, MpiPredictionFilter

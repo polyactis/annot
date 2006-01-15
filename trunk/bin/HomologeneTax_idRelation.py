@@ -19,10 +19,17 @@ Description:
 	Program to fill up homologene.tax_id_index and homologene.tax_id_relationship
 	
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/microarray/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/microarray/bin')))
 import sys, getopt, os, csv
-sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
-sys.path += [os.path.join(os.path.expanduser('~/script/microarray/bin'))]
 from codense.common import db_connect, org_short2long, org2tax_id
 from sets import Set
 from graphlib import Graph, GraphAlgo

@@ -21,11 +21,19 @@ Description:
 	are probably a subset from that organism's total datasets.
 	It depends on table graph.gene_id_to_no.
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import pickle, sys, os, psycopg, csv, getopt
 from sets import Set
-from codense.common import db_connect, get_gene_id2mt_no_list, get_global_gene_id2gene_no, org2tax_id, org_short2long
-
+from codense.common import db_connect, get_gene_id2mt_no_list, get_global_gene_id2gene_no, \
+	org2tax_id, org_short2long, get_gene_no2tf_set
+	
 class gene_table:
 	'''
 	Initialize the local gene_id:gene_no mapping in table schema.gene
@@ -108,6 +116,14 @@ class gene_table:
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		gene_id2gene_no = get_global_gene_id2gene_no(curs, self.organism)
 		tax_id = org2tax_id(self.organism)
+		"""
+		#01-14-06 comment it out for future 
+		gene_no2tf_set = get_gene_no2tf_set(curs)	#12-15-05 just yeast.
+		#12-15-05 convert gene_no(integer) into gene_id(string)
+		gene_id2mt_no_list = {}
+		for gene_no, tf_set in gene_no2tf_set.iteritems():
+			gene_id2mt_no_list[repr(gene_no)] = list(tf_set)
+		"""
 		gene_id2mt_no_list = get_gene_id2mt_no_list(tax_id)
 		gene_id_set = self.return_gene_id_set(self.dir, gene_id2gene_no, self.min_frequency)
 		self.submit(curs, output_table, gene_id_set, gene_id2gene_no, gene_id2mt_no_list)

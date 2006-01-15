@@ -27,9 +27,15 @@ Description:
 	and also gene_stat.py, depth_cut_off = 5, leave_one_out = 1, wu = 1,
 	report = 0, subgraph_cut_off = 0, debug = 0, new_table = 0
 """
-
+import sys, os, math
+bit_number = math.log(sys.maxint)/math.log(2)
+if bit_number>40:       #64bit
+	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+else:   #32bit
+	sys.path.insert(0, os.path.expanduser('~/lib/python'))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, math, Numeric
-sys.path += [os.path.expanduser('~/script/annot/bin')]
 from Scientific import MPI
 from codense.common import system_call, mpi_schedule_jobs, mpi_synchronize, db_connect
 from netmine_wrapper import netmine_wrapper
