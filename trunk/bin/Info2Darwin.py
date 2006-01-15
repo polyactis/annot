@@ -8,13 +8,13 @@ Option:
 	-k ..., --schema=...	which schema in the database, graph(default)
 	-t ...,	tax_id, 9606(default, human)
 	-o ...,	output filename
-	-l ...,	running bit, 1111111(default, all on)
+	-l ...,	running bit, 11111111(default, all on)
 	-b,	debug version
 	-h, --help              show this help
 	
 Examples:
 	#only family_size info
-	Info2Darwin.py -o -l 0000001 /tmp/yuhuang/graphdb_info.darwin
+	Info2Darwin.py -l 0000001  -o /tmp/yuhuang/graphdb_info.darwin
 
 Description:
 	Convert following info of an organism from database to darwin format.
@@ -60,6 +60,11 @@ Description:
 	7. gene_family_size(from ENSEMBL)
 		gene_family_size:=[
 			[gene_symbol, family_size],
+			...
+			[]]:
+	8. tissue info(from GNF)
+		gene_tissue:=[
+			[gene_symbol, [tissue1, tissue2, ... ] ],
 			...
 			[]]:
 """
@@ -158,6 +163,25 @@ def get_gene_id2tissue_list(curs, tax_id, ensembl_id2tissue_table='graph.ensembl
 	sys.stderr.write("Done.\n")
 	return gene_id2tissue_list
 
+def get_gnf_gene_id2tissue_list(curs, tax_id, gene_id2tissue_table='graph.gene_id2tissue', \
+	schema=None):
+	"""
+	01-15-06
+		gnf version of get_gene_id2tissue_list()
+	"""
+	sys.stderr.write("Getting Gnf gene_id2tissue_list...")
+	gene_id2tissue_list = {}
+	curs.execute("SELECT distinct e1.gene_id, e1.tissue from %s e1"%(gene_id2tissue_table))
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id, tissue = row
+		gene_id = int(gene_id)
+		if gene_id not in gene_id2tissue_list:
+			gene_id2tissue_list[gene_id] = []
+		gene_id2tissue_list[gene_id].append(tissue)
+	sys.stderr.write("Done.\n")
+	return gene_id2tissue_list
+
 class Info2Darwin:
 	def __init__(self, hostname='zhoudb', dbname='mdb', schema='protein_interaction', \
 		tax_id =9606, output_fname=None, running_bit='1111111', commit=0, debug=0):
@@ -237,6 +261,9 @@ class Info2Darwin:
 		if len(self.running_bit)>=7 and self.running_bit[6] =='1':
 			gene_id2family_size = get_gene_id2family_size(curs, self.tax_id)
 			self.dict2darwin(gene_id2family_size, 'gene_family_size', gene_id2symbol, outf)
+		if len(self.running_bit)>=8 and self.running_bit[7] =='1':
+			gnf_gene_id2tissue = get_gnf_gene_id2tissue_list(curs, self.tax_id)
+			self.dict2darwin(gnf_gene_id2tissue, 'gnf_gene_tissue', gene_id2symbol, outf)
 		#close output
 		outf.close()
 	
@@ -258,7 +285,7 @@ if __name__ == '__main__':
 	schema = 'graph'
 	tax_id = 9606
 	output_fname = None
-	running_bit = '1111111'
+	running_bit = '11111111'
 	debug = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
