@@ -148,15 +148,18 @@ class OrthologTFBSCompare:
 				tax_id2_gene_id_list.append(gene_id)
 		return tax_id1_gene_id_list, tax_id2_gene_id_list
 	
-	def get_ortholog_pairs(self, curs, homologene_table='homologene.homologene'):
+	def get_ortholog_pairs(self, curs, bad_ortholog_fname, homologene_table='homologene.homologene'):
 		"""
 		01-06-06, just hs and mm
 		01-06-06, fix a small bug, not crucial for histograms. replace hid with prev_hid when
 			reporting non 1to1 ortholog pairs
+		01-11-06
+			add bad_ortholog_fname
 		"""		
 		sys.stderr.write("Getting ortholog pairs...\n")
 		curs.execute("select hid, tax_id, gene_id from %s order by hid"%homologene_table)
 		rows = curs.fetchall()
+		bad_ortholog_f = open(bad_ortholog_fname, 'w')
 		prev_hid = None
 		hs_gene_id_list = []
 		mm_gene_id_list = []
@@ -174,11 +177,12 @@ class OrthologTFBSCompare:
 					hs_gene_id_list.append(tax_id1_gene_id_list[0])	#only the 1st one
 					mm_gene_id_list.append(tax_id2_gene_id_list[0])
 				if len(tax_id1_gene_id_list)!=1 or len(tax_id2_gene_id_list)!=1:
-					sys.stdout.write("hid %s has %s tax_id=%s genes, %s tax_id=%s genes.\n"%(prev_hid, \
+					bad_ortholog_f.write("hid %s has %s tax_id=%s genes, %s tax_id=%s genes.\n"%(prev_hid, \
 						len(tax_id1_gene_id_list), tax_id1, len(tax_id2_gene_id_list), tax_id2))	#here it is prev_hid
 				homo_group = []
 				prev_hid = hid
 			homo_group.append((tax_id, gene_id))
+		bad_ortholog_f.close()
 		sys.stderr.write("Done.\n")
 		return hs_gene_id_list, mm_gene_id_list
 	
@@ -211,6 +215,8 @@ class OrthologTFBSCompare:
 	def run(self):
 		"""
 		01-06-06
+		01-14-06
+			add kolmogorov-smirnov test
 		
 			--db_connect()
 			--get_gene_id2mt_no_set()
@@ -230,7 +236,10 @@ class OrthologTFBSCompare:
 			prom_id2gene_id = self.get_prom_id2gene_id(curs)
 			mt_id2no = self.get_mt_id2no(curs)
 			gene_id2mt_no_set = self.get_gene_id2mt_no_set_from_file(self.input_fname_list, mt_id2no, prom_id2gene_id)
-		hs_gene_id_list, mm_gene_id_list = self.get_ortholog_pairs(curs)
+		#get ortholog pairs
+		bad_ortholog_fname = '%s.bad_ortholog'%self.output_prefix
+		hs_gene_id_list, mm_gene_id_list = self.get_ortholog_pairs(curs, bad_ortholog_fname)
+		
 		tfbs_similarity_ls = self.get_tfbs_similarity_ls(hs_gene_id_list, mm_gene_id_list, gene_id2mt_no_set)
 		ortholog_pair_hist_fname = '%s_ortholog_pair_hist.png'%self.output_prefix
 		self.draw_tfbs_similarity_ls_histogram(tfbs_similarity_ls, ortholog_pair_hist_fname)
@@ -241,6 +250,9 @@ class OrthologTFBSCompare:
 		random_pair_hist_fname = '%s_random_pair_hist.png'%self.output_prefix
 		self.draw_tfbs_similarity_ls_histogram(random_tfbs_similarity_ls, random_pair_hist_fname)
 		
+		#do a kolmogorov-smirnov test
+		ks_result = r.ks_test(tfbs_similarity_ls,random_tfbs_similarity_ls)
+		print "kolmogorov-smirnov test p-value:", ks_result['p.value']
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
