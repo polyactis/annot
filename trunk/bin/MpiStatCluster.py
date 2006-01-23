@@ -219,7 +219,10 @@ class GradientScorePrediction(gradient_class):
 		self.min_layer2_ratio = float(min_layer2_ratio)
 		
 		#get the no_of_total_edges from 0's value
-		self.no_of_total_edges = go_no2edge_counter_list[0][0]+go_no2edge_counter_list[0][1]+go_no2edge_counter_list[0][3]
+		if go_no2edge_counter_list:	#01-22-06
+			self.no_of_total_edges = go_no2edge_counter_list[0][0]+go_no2edge_counter_list[0][1]+go_no2edge_counter_list[0][3]
+		else:
+			self.no_of_total_edges = None
 		self.no_of_total_genes = len(gene_no2go)	#get the no_of_total_genes from gene_no2go
 		self.vertex_set = None
 		self.edge_set = None
@@ -826,8 +829,11 @@ class MpiStatCluster:
 			if self.go_no2edge_counter_list_fname:
 				go_no2edge_counter_list = cPickle.load(open(self.go_no2edge_counter_list_fname,'r'))
 			else:
-				gene_no2go_no = get_gene_no2go_no_set(curs)
-				go_no2edge_counter_list = get_go_no2edge_counter_list(curs, gene_no2go_no, self.edge_type2index)
+				if self.eg_d_type==2:
+					go_no2edge_counter_list = None
+				else:
+					gene_no2go_no = get_gene_no2go_no_set(curs)
+					go_no2edge_counter_list = get_go_no2edge_counter_list(curs, gene_no2go_no, self.edge_type2index)
 			go_no2edge_counter_list_pickle = cPickle.dumps(go_no2edge_counter_list, -1)
 			for node in range(1, communicator.size-2):	#send it to the computing_node
 				communicator.send(go_no2edge_counter_list_pickle, node, 0)
