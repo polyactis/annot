@@ -13,6 +13,11 @@
 
 #include <iostream>			// for std::cout
 #include <vector>			//for vector
+//01-23-06
+#include <ext/hash_map>	//for hash_map
+#include <utility>	///for pair
+#define hash_edge_name(o1, o2) ((o1<<30) + o2)
+#include <boost/dynamic_bitset.hpp> //for dynamic_bitset
 
 using namespace boost;
 using namespace boost::python;
@@ -26,13 +31,16 @@ typedef graph_traits<Graph>::edge_descriptor edgeDescriptor;
 class johnson_sp
 {
 	public:
-	void init_graph_from_vertex_edge_list(boost::python::list vertex_list, boost::python::list edge_list, Graph &graph);
+	johnson_sp();	//01-23-06
+	johnson_sp(int no_of_datasets);	//01-23-06
+	void add_edge_sig_vector(boost::python::list edge_sig_list);	//01-23-06
 	
-	void calculate_sp(Graph &graph, boost::python::list &D_matrix);
-	void run(boost::python::list vertex_list, boost::python::list edge_list);
+	std::pair<Graph, std::vector<boost::dynamic_bitset<> > > init_graph_from_vertex_edge_list(boost::python::list vertex_list, boost::python::list edge_list);
+	boost::python::list calculate_sp(Graph &graph);
+	boost::python::list py_shortest_distance(boost::python::list vertex_list, boost::python::list edge_list);
+	boost::python::list py_recurrence_list();
 	
-	//for input purpose
-	std::map<int, vertexDescriptor> geneNoMap;
-	Graph g;
-	boost::python::list D;
+	__gnu_cxx::hash_map<unsigned long, boost::dynamic_bitset<> > edge2bitset;
+	const int _no_of_datasets;
+	std::vector<boost::dynamic_bitset<> > _recurrence_bitset_vector;
 };
