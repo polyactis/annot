@@ -9,6 +9,9 @@ Option:
 	-i ...,	inputfile
 	-o ...,	outputfile
 	-s ...,	message_size, 1000000(default)
+	-g ...,	sig_vector file
+	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
+	-x ..., --max_sup=...	maximum support of an edge, 200(default)
 	-n,	output_table is new(IGNORE)
 	-c,	commit the database transaction(IGNORE)
 	-b,	debug version.
@@ -17,7 +20,7 @@ Option:
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiBFSCluster.py
-	-i -o -r
+	-i -o -s -r
 	
 Description:
 	Program to do BFS search for each vertex and record down the layer.
@@ -39,6 +42,7 @@ from codense.common import mpi_synchronize, db_connect, output_node, \
 	form_schema_tables, input_node, computing_node
 from sets import Set
 from graph.johnson_sp import johnson_sp
+from MpiFromDatasetSignatureToPattern import MpiFromDatasetSignatureToPattern
 
 """
 class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
@@ -73,7 +77,8 @@ class MpiBFSCluster:
 	09-19-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
-		outputfile=None, size=2000, new_table=0, commit=0, debug=0, report=0):
+		outputfile=None, size=2000, sig_vector_fname=None, min_sup=0, max_sup=200, \
+		new_table=0, commit=0, debug=0, report=0):
 		"""
 		"""
 		self.hostname = hostname
@@ -82,6 +87,9 @@ class MpiBFSCluster:
 		self.inputfile = inputfile
 		self.outputfile = outputfile
 		self.size = int(size)
+		self.sig_vector_fname = sig_vector_fname
+		self.min_sup = int(min_sup)
+		self.max_sup = int(max_sup)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
@@ -116,9 +124,13 @@ class MpiBFSCluster:
 			edge_set in the input is tuple-list, use '), (' as a delimiter
 			input doesn't have recurrence_array(row[2])
 			edge_set is already sorted
+		01-23-06
+			j_instance directly from parameter_list
+			j_instance also calculates the recurrence_array
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
+		j_instance = parameter_list[0]
 		data = cPickle.loads(data)
 		result = []
 		for row in data:
@@ -132,17 +144,17 @@ class MpiBFSCluster:
 					edge_set[i] = edge_set[i].split(',')
 					edge_set[i] = map(int, edge_set[i])
 					#edge_set[i].sort()	#10-28-05	#01-01-06
-				j_instance = johnson_sp()
-				j_instance.run(vertex_set, edge_set)
-				j_instance.D
+				D = j_instance.py_shortest_distance(vertex_set, edge_set)
+				recurrence_array = j_instance.py_recurrence_list()	#MUST be after py_shortest_distance()
 				#edge_set.sort()	#10-28-05 to ease codense2db.py	#01-01-06
-				row = [repr(vertex_set), repr(edge_set), repr(j_instance.D)]	#10-28-05, #01-01-06
+				row = [vertex_set, edge_set, recurrence_array, D]	#10-28-05, #01-01-06
 				result.append(row)
 			except:
 				common_string = "Node %s error"%communicator.rank
 				print common_string, sys.exc_info()
 				print common_string, "vertex_set",vertex_set,"edge_set",edge_set
-				print common_string, "d_matrix",j_instance.D
+				print common_string, "d_matrix",D
+				print common_string, "recurrence_array", recurrence_array
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
@@ -208,6 +220,16 @@ class MpiBFSCluster:
 		10-09-05 input_node() add mcl_table
 		10-24-05 create new views for splat_table and mcl_table
 		10-28-05 no views, no new pattern_table, read from inputfile, write to outputfile
+		01-24-06 copy a whole block from MpiFromDatasetSignatureToPattern.py to read in edge sig matrix
+			
+			(rank==0)
+				--get_no_of_datasets()
+				--sendEdgeSigMatrix()
+			elif free_computing_nodes:
+				--PostFim()
+				--receiveEdgeSigMatrix()
+			
+			mpi_synchronize()
 			
 			--input_node()
 				--input_handler()
@@ -219,14 +241,33 @@ class MpiBFSCluster:
 		"""
 		communicator = MPI.world.duplicate()
 		node_rank = communicator.rank		
-		free_computing_nodes = range(1,communicator.size-1)
+		free_computing_nodes = range(1,communicator.size-1)	#exclude the last node
+		
+		#01-24-06 following block is directly copied from MpiFromDatasetSignatureToPattern.py
+		block_size = 10000
+		MpiFromDatasetSignatureToPattern_instance = MpiFromDatasetSignatureToPattern()
+		if communicator.rank == 0:
+			no_of_datasets = MpiFromDatasetSignatureToPattern_instance.get_no_of_datasets(self.sig_vector_fname)
+				#no_of_datasets is used in fillEdgeSigMatrix() and patternFormation()
+			for node in free_computing_nodes:
+				communicator.send(str(no_of_datasets), node, 0)
+			MpiFromDatasetSignatureToPattern_instance.sendEdgeSigMatrix(communicator, free_computing_nodes, self.sig_vector_fname, \
+				no_of_datasets, self.min_sup, self.max_sup, block_size)
+		elif communicator.rank in free_computing_nodes:
+			data, source, tag = communicator.receiveString(0, 0)
+			no_of_datasets = int(data)	#take the data
+			j_instance = johnson_sp(no_of_datasets)
+			MpiFromDatasetSignatureToPattern_instance.receiveEdgeSigMatrix(communicator, j_instance, no_of_datasets, block_size)
+		
+		mpi_synchronize(communicator)
+		
 		if node_rank == 0:
 			inf = csv.reader(open(self.inputfile,'r'), delimiter='\t')
 			parameter_list = [inf]
 			input_node(communicator, parameter_list, free_computing_nodes, self.size, self.report, input_handler=self.input_handler)
 			del inf
-		elif node_rank<=communicator.size-2:	#exclude the last node
-			parameter_list = []
+		elif node_rank in free_computing_nodes:	#exclude the last node
+			parameter_list = [j_instance]
 			computing_node(communicator, parameter_list, self.node_fire, self.cleanup_handler, self.report)
 		elif node_rank==communicator.size-1:
 			writer = csv.writer(open(self.outputfile, 'w'), delimiter='\t')
@@ -240,7 +281,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:g:m:x:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -252,6 +293,9 @@ if __name__ == '__main__':
 	inputfile = None
 	outputfile = None
 	size = 1000000
+	sig_vector_fname = None
+	min_sup = 0
+	max_sup = 200
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -272,6 +316,12 @@ if __name__ == '__main__':
 			outputfile = arg
 		elif opt in ("-s",):
 			size = int(arg)
+		elif opt in ("-g", ):
+			sig_vector_fname = arg
+		elif opt in ("-m", "--min_sup"):
+			min_sup = int(arg)
+		elif opt in ("-x", "--max_sup"):
+			max_sup = int(arg)
 		elif opt in ("-n",):
 			new_table = 1
 		elif opt in ("-c",):
@@ -280,9 +330,9 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r",):
 			report = 1
-	if inputfile and outputfile:
+	if inputfile and outputfile and sig_vector_fname:
 		instance = MpiBFSCluster(hostname, dbname, schema, inputfile, outputfile,\
-			size, new_table, commit, debug, report)
+			size, sig_vector_fname, min_sup, max_sup, new_table, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
