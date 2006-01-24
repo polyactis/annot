@@ -34,6 +34,7 @@ Examples:
 11-30-05 23: Test_get_neighbor_set
 11-30-05 24: Test_distinct_go_no_list_based_on_neighbor_set_graph
 01-10-06 25: Test_PostFim(output is /tmp/test_PostFim.out)
+01-24-06 26: Test_johnson_sp
 """
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
@@ -1342,7 +1343,37 @@ class Test_PostFim(unittest.TestCase):
 		for pattern_sig_list in pattern_sig_matrix:
 			instance.add_pattern_signature(pattern_sig_list)
 		instance.patternFormation()
+
+class Test_johnson_sp(unittest.TestCase):
+	"""
+	01-24-06
+	"""
+	def test_johnson_sp(self):
+		from graph.johnson_sp import johnson_sp
+		no_of_datasets = 10
+		instance = johnson_sp(no_of_datasets)
+		edge_sig_matrix = [\
+			[2,3, 1,0,1,1,1,0,1,0,1,0],
+			[3,4, 1,1,0,1,1,0,0,1,1,0],
+			[4,5, 1,0,0,1,1,0,0,0,1,1],
+			[5,6, 1,0,0,1,1,1,0,0,0,0],
+			[6,7, 0,1,0,1,1,1,1,0,0,0],
+			[6,8, 0,1,0,1,0,1,0,0,1,0],
+			]
+		vertex_set = [2,3,4,5,6,7,8]
+		edge_set = [[2,3], [3,4], [4,5], [5,6], [6,7], [6,8]]
+		for edge_sig_list in edge_sig_matrix:
+			instance.add_edge_sig_vector(edge_sig_list)
 		
+		D_matrix = instance.py_shortest_distance(vertex_set, edge_set)
+		recurrence_list = instance.py_recurrence_list()
+		
+		print "vertex_set:", vertex_set
+		print "edge_set:", edge_set
+		print "D_matrix:", D_matrix
+		print "recurrence_list:", recurrence_list
+
+	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
 		print __doc__
@@ -1379,7 +1410,8 @@ if __name__ == '__main__':
 		22: Test_is_site_confirmed,
 		23: Test_get_neighbor_set,
 		24: Test_distinct_go_no_list_based_on_neighbor_set_graph,
-		25: Test_PostFim}
+		25: Test_PostFim,
+		26: Test_johnson_sp}
 	type = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
