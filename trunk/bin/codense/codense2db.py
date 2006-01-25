@@ -33,6 +33,7 @@ Description:
 	The recurrence_array's and recurrence_cut_off's in all the tables of schema
 	are changed to be type float.
 	10-28-05, fimbfs: vertex_set and edge_set are pre-sorted
+	01-24-06, cluster.cluster_id is submitted to pattern_table(run with caution)
 """
 
 import sys, os, math
@@ -499,21 +500,23 @@ class codense2db:
 		10-28-05 handle d_matrix
 		12-06-05
 			add gim_array
+		01-24-06
+			cluster_id is submitted to pattern_table
 		"""
 		#try:
 		#inserting into the pattern_table
 		if cluster.d_matrix:
-			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
-			connectivity, unknown_gene_ratio, recurrence_array, recurrence, d_matrix, gim_array) values (ARRAY%s, \
+			curs.execute("insert into %s(id, vertex_set, edge_set, no_of_vertices, no_of_edges, \
+			connectivity, unknown_gene_ratio, recurrence_array, recurrence, d_matrix, gim_array) values (%s, ARRAY%s, \
 			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s, ARRAY%s, ARRAY%s)"%\
-			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
+			(pattern_table, cluster.cluster_id, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
 			cluster.splat_connectivity, cluster.unknown_gene_ratio, repr(cluster.recurrence_array), \
 			sum(cluster.recurrence_array), cluster.d_matrix, repr(cluster.gim_array)))
 		else:
-			curs.execute("insert into %s(vertex_set, edge_set, no_of_vertices, no_of_edges, \
-			connectivity, unknown_gene_ratio, recurrence_array, recurrence) values (ARRAY%s, \
+			curs.execute("insert into %s(id, vertex_set, edge_set, no_of_vertices, no_of_edges, \
+			connectivity, unknown_gene_ratio, recurrence_array, recurrence) values (%s, ARRAY%s, \
 			ARRAY%s, %d, %d, %s, %s, ARRAY%s, %s)"%\
-			(pattern_table, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
+			(pattern_table, cluster.cluster_id, repr(cluster.vertex_set), repr(cluster.edge_set), len(cluster.vertex_set), cluster.no_of_edges, \
 			cluster.splat_connectivity, cluster.unknown_gene_ratio, repr(cluster.recurrence_array), sum(cluster.recurrence_array)))
 		"""
 		except:
