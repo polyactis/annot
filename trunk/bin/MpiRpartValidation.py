@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env mpipython
 """
 Usage: MpiRpartValidation.py -k -i -j
 
@@ -248,7 +248,7 @@ class MpiRpartValidation(rpart_prediction):
 					--get_no_of_mismatches_for_site()
 		"""
 		communicator = MPI.world.duplicate()
-		node_rank = communicator.rank	
+		node_rank = communicator.rank
 		free_computing_nodes = range(1,communicator.size-1)	#exclude the last node
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
