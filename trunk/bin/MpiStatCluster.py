@@ -18,8 +18,8 @@ Option:
 	-l ...,	maximum layer, 5(default)
 	-q ...,	exponent of the normalization factor in edge-gradient's denominator, 0.8(default)
 	-t ...,	edge_gradient type, 1 (edge_gradient), 0(edge gradient_score),2(vertex_gradient, default)
-	-x ...,	recurrence_x, either to do cutoff, or exponent, 5(default)	(IGNORE)
-	-w ...,	recurrence_x's type, 0(nothing), 1(cutoff), 2(exponent, default)	(IGNORE)
+	-x ...,	recurrence_x, either to do cutoff, or exponent, 5(default)
+	-w ...,	recurrence_x's type, 0(nothing), 1(cutoff), 2(exponent, default)
 	-v ...,	the size of message(by string_length of each prediction), 10000000(default)
 	-f ...,	file contains the go_no2edge_counter_list data structure
 	-n,	need to createGeneTable()	(IGNORE)
@@ -638,6 +638,8 @@ class MpiStatCluster:
 		01-02-06
 			the stuff from input_handler() changed due to the input of the program
 			starts to come from plain file
+		01-24-06
+			add recurrence_array to get recurrence
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
@@ -648,7 +650,7 @@ class MpiStatCluster:
 		prediction_ls = []
 		for pattern in data:
 			#01-02-06
-			id, vertex_set_string, edge_set_string, d_matrix_string = pattern
+			id, vertex_set_string, edge_set_string, recurrence_array_string, d_matrix_string = pattern
 			edge_set = edge_set_string[2:-2].split('], [')
 			for i in range(len(edge_set)):
 				edge_set[i] = edge_set[i].split(',')
@@ -656,6 +658,13 @@ class MpiStatCluster:
 			no_of_edges = len(edge_set)
 			vertex_set = vertex_set_string[1:-1].split(',')
 			vertex_set = map(int, vertex_set)
+			
+			#01-24-06
+			recurrence_array = recurrence_array_string[1:-1].split(',')
+			recurrence_array = map(float, recurrence_array)
+			if functor:     #if functor is None, just the simple sum
+				recurrence_array = map(functor, recurrence_array)
+			recurrence = sum(recurrence_array)
 			
 			#Before call its get_prediction(), setup the vertex_set, edge_set, d_matrix
 			GradientScorePrediction_instance.setup_cluster_info(vertex_set, edge_set, d_matrix_string)
@@ -666,8 +675,8 @@ class MpiStatCluster:
 					communicator.send(cPickle.dumps([gene_no, go_no], -1), communicator.size-2, 3)	#tag is 3
 					data, source, tag = communicator.receiveString(communicator.size-2, 3)
 					is_correct, is_correct_L1, is_correct_lca, lca_list = cPickle.loads(data)
-					#01-02-06 reshuffle the row
-					row = [id, gene_no, go_no, GradientScorePrediction_instance.depth, gradient_score, edge_gradient, \
+					#01-02-06 reshuffle the row, 01-24-06 add recurrence
+					row = [id, gene_no, go_no, GradientScorePrediction_instance.depth, recurrence, gradient_score, edge_gradient, \
 						is_correct, is_correct_L1, is_correct_lca, one_dim_list2string(lca_list)]
 					prediction_ls.append(row)
 					no_of_predictions += 1
