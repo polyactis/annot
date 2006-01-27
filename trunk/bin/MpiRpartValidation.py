@@ -12,7 +12,7 @@ Option:
 	-y ...,	is_correct type (2 lca, default)
 	-p ...,	rpart cp value list (0.01, default)
 	-l ...,	loss matrix list, 0,1,1,0 (default) i.e. 0,1,1,0=0,2,1,0
-	-o ...,	prior prob list, 0.5 (default)
+	-o ...,	prior prob list, 0.5 (default), 0 means proportional to the observed data.
 	-s ...,	percentage of data selected to do training, 0.8(default)
 	-x ...,	no_of_validations, 10(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
