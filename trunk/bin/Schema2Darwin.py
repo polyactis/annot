@@ -344,6 +344,16 @@ class Schema2Darwin:
 		self.debug = int(debug)
 		self.report = int(report)
 	
+	def replace_prime_in_gene_id2symbol(self, gene_id2symbol):
+		"""
+		01-26-06
+			some symbols contain ', which darwin can't handle
+		"""
+		for gene_id, symbol in gene_id2symbol.iteritems():
+			symbol = symbol.replace("'", '\prime')
+			gene_id2symbol[gene_id] = symbol
+		return gene_id2symbol
+	
 	def run(self):
 		"""
 		09-28-05
@@ -371,6 +381,9 @@ class Schema2Darwin:
 		tax_id = org2tax_id(self.organism)
 		#gene_no2id = get_gene_no2gene_id(curs)	#Watch, if unigene, should use this.
 		gene_id2symbol = get_gene_id2gene_symbol(curs, tax_id)
+		
+		gene_id2symbol = self.replace_prime_in_gene_id2symbol(gene_id2symbol)	#01-26-06
+		
 		#gene_no2symbol = dict_transfer(gene_no2id, gene_id2symbol)
 			#Jasmine wants the gene symbol 09-28-05
 			#gene_id is integer in gene.gene table and same as gene_no, so just use it.
