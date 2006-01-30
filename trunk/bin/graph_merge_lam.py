@@ -176,10 +176,13 @@ class graph_merge:
 			change the communication type
 		12-27-05
 			define signal ahead, don't make it on the fly when sending message
+		01-29-05
+			use a dictionary counter, no_of_edges to replace len(self.graph_dict)
 		"""
 		good_signal = Numeric.array([1])
 		add_signal = Numeric.array([2])
 		bad_signal = Numeric.array([0])
+		no_of_edges = 0
 		while 1:
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, None)	#12-27-05
 			if data[0]==-1:	#12-27-05
@@ -195,9 +198,10 @@ class graph_merge:
 					communicator.send(good_signal,0, 3)
 				else:
 					#not present
-					if len(self.graph_dict)<threshold:
+					if no_of_edges<threshold:
 						#not full and add this edge
 						self.graph_dict[edge] = 1
+						no_of_edges += 1
 						communicator.send(add_signal,0,4)
 					else:
 						#full
