@@ -201,21 +201,25 @@ class gene_p_map_redundancy:
 		"""
 		03-01-05
 			initial, modeled after return_distinct_functions() of gene_stat_plot.py
+		01-29-06
+			value of p_gene_id2go_no is changed because of _p_gene_map_network_topology()
+			change here accordingly
+			replace p_value_cut_off with mcl_id
 		"""
 		p_gene_id_list = p_gene_id2go_no.keys()
 		for i in range(len(p_gene_id_list)):
 			p_gene_id1 = p_gene_id_list[i]
 			if p_gene_id1 not in p_gene_id_map:
-				go_no1,p_value_cut_off = p_gene_id2go_no[p_gene_id1]
+				go_no1,mcl_id, depth_cut_off = p_gene_id2go_no[p_gene_id1]	#01-29-06
 				#not mapped, first encounter, it's the source, mapp to itself
-				p_gene_id_map[p_gene_id1] = [p_gene_id1, p_value_cut_off]
+				p_gene_id_map[p_gene_id1] = [p_gene_id1, mcl_id]
 				if self.debug:
 					print "%s not in p_gene_id_map yet,mapped to itself"%p_gene_id1
 				for j in range(i+1, len(p_gene_id_list)):
 					p_gene_id2 = p_gene_id_list[j]
 					if p_gene_id2 not in p_gene_id_map:
 						#the p_gene_id hasn't found its source
-						go_no2, p_value_cut_off = p_gene_id2go_no[p_gene_id2]
+						go_no2, mcl_id, depth_cut_off = p_gene_id2go_no[p_gene_id2]
 						if go_no1 < go_no2:
 							key= (go_no1, go_no2)
 						else:
@@ -229,7 +233,7 @@ class gene_p_map_redundancy:
 							print "jasmine_distance of %s and %s is %s"%(go_no1, go_no2, jasmine_distance)
 						if jasmine_distance == 0:
 							#jasmine_distance=0 means they are parent-child
-							p_gene_id_map[p_gene_id2] = [p_gene_id1, p_value_cut_off]
+							p_gene_id_map[p_gene_id2] = [p_gene_id1, mcl_id]
 							if self.debug:
 								print "%s not in p_gene_id_map, mapped to %s"%(p_gene_id2, p_gene_id1)
 					
@@ -287,6 +291,8 @@ class gene_p_map_redundancy:
 			update the gene_p_table to reflect the mapping
 		03-04-05
 			operation update is too slow, so drop it first and create it later.
+		01-29-06
+			p_value_cut_off here is actually mcl_id
 		"""
 		sys.stderr.write("Updating table %s..."%gene_p_table)
 		curs.execute("end")
