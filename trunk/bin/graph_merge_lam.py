@@ -53,7 +53,9 @@ class graph_merge:
 			input: an edge
 			output: either '-1'(incremented) or a threshold_indicator_list
 		12-26-05 speed up
-		
+		01-29-06
+			fix a bug, "no break after '1' and '2' signal			
+			
 			check which node has this edge, 
 			return '1': that node has it, increment its counter in its graph_dict
 			return '2': not have it but memory not full and add it
@@ -67,6 +69,9 @@ class graph_merge:
 					sys.stderr.write("Error: machine, %s, adding this edge, %s is not half_full_machine_no, %s.\n"\
 						%(dest, edge, half_full_machine_no))
 				dict_size_of_half_full_machine += 1
+				break
+			elif data[0] == 1:
+				break
 		if data[0]==0:
 			sys.stderr.write("Error: edge %s neither inserted nor incremented.\n"%edge)
 		return dict_size_of_half_full_machine
