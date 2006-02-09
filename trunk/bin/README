@@ -96,20 +96,20 @@ shell/annot.sh
 		annot/PreFimInput.py
 		fim_closed(big memory node, node29)
 		annot/MpiFromDatasetSignatureToPattern.py
-		shell/cluster_stat.sh
-		annot/bin/MpiCrackSplat.py
-		shell/cluster_stat.sh
+		annot/MpiBFSCluster.py
+		annot/MpiStatCluster.py
+		annot/SelectClusterPrediction.py
 
-shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py)
-	MpiBFSCluster.py(10-26-05)
-	annot/bin/codense/codense2db.py
-	annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py or MpiStatCluster.py(10-26-05)
-	annot/bin/gene_stat.py
-	rpart_prediction.py
-	shell/cluster_stat2.sh
-
+	shell/cluster_stat.sh (parallel if MpiClusterGeneStat.py,)
+		#ignore this, directly use cluster_stat2.sh 02-08-06
+		annot/bin/cluster_stat.py(ssh itself, R thread not allowed in qsub) or MpiClusterGeneStat.py or MpiStatCluster.py(10-26-05)
+		annot/bin/codense/codense2db.py
+		annot/bin/gene_stat.py
+		rpart_prediction.py
+		shell/cluster_stat2.sh
 
 	shell/cluster_stat2.sh (big mem node due to p_gene_lm.py)
+		rpart_prediction.py
 		shell/p_gene_lm.sh(p_gene_lm.py 1. needs R library(lapack.so) exported in .bash_profile 2. R thread not allowed, ssh itself to run p_gene_lm.sh)  or OneParameterCutoffSeeker.py
 		annot/bin/p_gene_analysis.py
 		annot/bin/gene_p_map_redundancy.py
