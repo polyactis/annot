@@ -90,6 +90,8 @@ class GenePairGui:
 	def on_button2_clicked(self, button):
 		'''
 		gene selected
+		02-15-06
+			use --process_gene_id_list()
 		'''
 		pathlist = []
 		gene_id_list = []
@@ -97,31 +99,38 @@ class GenePairGui:
 		if len(pathlist) >0:
 			for i in range(len(pathlist)):
 				gene_id_list.append(self.liststore[pathlist[i][0]][0])
-			filename = self.GenePair_instance.gene_pair_analyze(gene_id_list)
-			if filename:
-				self.show_plot(filename)
-		else:
-			sys.stderr.write("Have you selected genes?\n")
-
+		self.process_gene_id_list(gene_id_list)
+	
 	def on_button3_clicked(self, button):
 		gtk.main_quit()
 		
 	def on_button4_clicked(self, button):
 		'''
 		input gene_ids done
+		02-15-06
+			use --process_gene_id_list()
 		'''
 		textbuffer = self.textview1.get_buffer()
 		startiter, enditer = textbuffer.get_bounds()
 		text  = textbuffer.get_text(startiter, enditer)
 		gene_id_list = text.split("\n")
-		if self.GenePair_instance:
-			if len(gene_id_list) >0:
-				filename = self.GenePair_instance.gene_pair_analyze(gene_id_list)
-				if filename:
-					self.show_plot(filename)
+		self.process_gene_id_list(gene_id_list)
+	
+	def process_gene_id_list(self, gene_id_list):
+		"""
+		02-15-06
+			split from on_button2_clicked() and on_button4_clicked()
+		"""
+		if len(gene_id_list) >0:
+			filename = self.GenePair_instance.gene_pair_analyze(gene_id_list)
+			scatter_plot_fname = self.GenePair_instance.scatter_plot(gene_id_list)	#02-15-06
+			if filename:
+				self.show_plot(filename)
+			if scatter_plot_fname:
+				self.show_plot(scatter_plot_fname)
 		else:
 			sys.stderr.write("Have you selected a dataset?\n")
-
+	
 	def show_plot(self, filename):
 		textbuffer = self.textview2.get_buffer()
 		im = Image.open(filename)
