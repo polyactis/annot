@@ -127,7 +127,6 @@ class GenePair:
 			ylab='expression value', col=self.no_of_curves)
 		else:
 			r.lines(x_list, y_list, type='o',pch='*',col=self.no_of_curves)
-
 	
 	"""
 	#function deprecated
@@ -174,7 +173,39 @@ class GenePair:
 			return self.plot_file
 		else:
 			return None
-
+	
+	def scatter_plot(self, gene_id_list, output_fname='/tmp/scatter_plot.ps'):
+		"""
+		02-15-06
+			1st gene is regarded as X, all others genes are treated as Y
+		"""
+		vector_list = []
+		#gene_id_list may contain some inexistent genes
+		real_gene_id_list = []
+		for gene_id in gene_id_list:
+			if gene_id in self.gene_id2expr_array:
+				real_gene_id_list.append(gene_id)
+				vector_list.append(self.gene_id2expr_array[gene_id])	
+			else:
+				sys.stderr.write("%s doesn't appear in the dataset\n"%(gene_id))
+		
+		if len(real_gene_id_list)>0:
+		
+			r.postscript("%s"%output_fname)
+			axis_range = self.get_min_max(vector_list)
+			no_of_curves = 1	#counting starts from 1st gene itself.
+			
+			no_of_curves += 1
+			r.plot(vector_list[0], vector_list[1], xlab='value of %s'%real_gene_id_list[0], xlim=axis_range, ylim=axis_range, \
+				ylab='other genes values', col=no_of_curves)
+			for i in range(2, len(vector_list)):
+				no_of_curves += 1
+				r.points(vector_list[0], vector_list[i], col=no_of_curves)
+			r.legend(axis_range[1], axis_range[1], gene_id_list, col=range(1, no_of_curves+1), lty=1, xjust=1)
+			r.dev_off()
+			return output_fname
+		else:
+			return None
 	
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
