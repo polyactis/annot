@@ -21,13 +21,15 @@ bit_number = math.log(sys.maxint)/math.log(2)
 if bit_number>40:       #64bit
 	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+	sys.path.insert(0, os.path.expanduser('~/script64/microarray/bin'))
 else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+	sys.path.insert(0, os.path.expanduser('~/script/microarray/bin'))
 import sys, os, re, getopt, csv, math
 import MLab
 from microarraydb import microarraydb
-from MA import array, average, maximum
+from MA import array, average, maximum, minimum
 from Preprocess import PreprocessEdgeData
 from sets import Set
 if sys.version_info[:2] < (2, 3):	#python2.2 or lower needs some extra
@@ -51,16 +53,34 @@ class MergeGenes:
 		"""
 		gene_id_set.remove(bad_gene_id)
 		gene_id = gene_id_set.pop()
+		if self.debug:
+			print gene_id
 		ar = array(data_ls_2d, mask = mask_ls_2d)
 		if len(data_ls_2d)==1:	#no need to do average
 			ar = array(data_ls_2d[0], mask=mask_ls_2d[0])
+			if self.debug:
+				print ar
 			return gene_id, ar
 		max_ls = []
+		"""
 		for i in range(ar.shape[0]):
-			max_value = maximum(ar[i,:])
+			signed_max_value = maximum(ar[i,:])
+			signed_min_value = minimum(ar[i,:])
+			max_value = max(abs(signed_max_value), abs(signed_min_value))	#02-17-06
 			max_ls.append(max_value)
+			if self.debug:
+				print "ar", ar
+				print "max_value", max_value
+				print "max_ls", max_ls
 			ar[i,:] = ar[i,:]/max_value
-		new_ar = average(ar)*max(max_ls)
+			if self.debug:
+				print "ar divided by max_value", ar
+		"""
+		new_ar = average(ar) #*max(max_ls)	#02-17-06
+		if self.debug:
+			print "average(ar)", average(ar)
+			print "max(max_ls)", max(max_ls)
+			print "new_ar(after average and multiplication of max(max_ls)", new_ar
 		return gene_id, new_ar
 		
 	def transform_one_file(self, src_pathname, delimiter, outputdir, PreprocessEdgeData_instance,\
@@ -110,7 +130,7 @@ class MergeGenes:
 				pre_gene_id, ar = self.mergeBlock(data_ls_2d, mask_ls_2d, gene_id_set, gene_id)
 				if self.debug:
 					print 'final block is ', ar
-					raw_input("Continue?(Y/n)")
+					#raw_input("Continue?(Y/n)")
 				if ar.mask():
 					writer.writerow([pre_gene_id] + PreprocessEdgeData_instance.ls_NA_fillin(ar))
 				else:	#no mask, just list
