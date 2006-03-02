@@ -282,15 +282,33 @@ class prediction_darwin_format(Thread):
 		"""
 		12-01-05
 			deal with lca_list={}
+		03-01-06
+			add no_of_distinct_funcitons_from_gene_p_table in the output
 		
 		format:
 			r:=[
-			[gene_id, go_id, is_correct_lca, p_value, mcl_id, lca_list],
+			[gene_id, go_id, is_correct_lca, p_value, mcl_id, lca_list, no_of_distinct_funcitons_from_gene_p_table],
 			[...],
 			[]]:
 		"""
 		sys.stderr.write("prediction...\n")
-		of = open(output_fname, 'w')
+		#03-01-06 firstly get the gene_no2p_gene_id_src_set
+		curs.execute("DECLARE crs_1 CURSOR FOR SELECT p.gene_no, g.p_gene_id_src from %s p, %s g\
+			where p.p_gene_id=g.p_gene_id_src"%(p_gene_table, gene_p_table))
+		curs.execute("fetch 5000 from crs_1")
+		rows = curs.fetchall()
+		gene_no2p_gene_id_src_set = {}
+		while rows:
+			for row in rows:
+				gene_no, p_gene_id_src = row
+				if gene_no not in gene_no2p_gene_id_src_set:
+					gene_no2p_gene_id_src_set[gene_no] = Set()
+				gene_no2p_gene_id_src_set[gene_no].add(p_gene_id_src)
+			curs.execute("fetch 5000 from crs_1")
+			rows = curs.fetchall()
+		curs.execute("close crs_1")
+		
+		of = open(output_fname, 'w')		
 		of.write('r:=[\n')
 		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.is_correct_lca, p.avg_p_value, p.mcl_id, p.lca_list\
 			from %s p, %s g where g.p_gene_id = p.p_gene_id"%(p_gene_table, gene_p_table))
@@ -305,12 +323,13 @@ class prediction_darwin_format(Thread):
 					lca_list = dict_map(go_no2id, lca_list, type=2)
 				else:
 					lca_list = []
-				of.write("['%s', '%s', %s, %s, %s, %s],\n"%(gene_no2id.get(gene_no) or gene_no, go_no2id[go_no], is_correct_lca,\
-					p_value, mcl_id, repr(lca_list)))
+				of.write("['%s', '%s', %s, %s, %s, %s, %s],\n"%(gene_no2id.get(gene_no) or gene_no, go_no2id[go_no], is_correct_lca,\
+					p_value, mcl_id, repr(lca_list), len(gene_no2p_gene_id_src_set[gene_no])))	#03-01-06
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		of.write('[]]:\n')	#add the last blank list
 		del of
+		curs.execute("close crs")
 		sys.stderr.write("prediction darwin format done.\n")
 	
 	def run(self):
