@@ -194,6 +194,8 @@ class MpiRpartValidation(rpart_prediction):
 			take the unknown result from validation
 		11-26-05
 			remove the data structure which stores the frequencies of predictions
+		03-03-06
+			fix a bug here
 		"""
 		writer, setting2validation_stat, setting2unknown_known_acc_ls, no_of_validations = parameter_list
 		data = cPickle.loads(data)
@@ -221,7 +223,7 @@ class MpiRpartValidation(rpart_prediction):
 			"""
 		else:
 			setting2unknown_known_acc_ls[key] = [data[1], data[2]]
-		if len(setting2validation_stat[key][0])==no_of_validations and key in setting2unknown_known_acc_ls:
+		if key in setting2validation_stat and len(setting2validation_stat[key][0])==no_of_validations and key in setting2unknown_known_acc_ls:
 			#11-19-05 all validations are done and non-validation is also done
 			testing_sum_stat = self.summary_stat_of_accuracy_ls(setting2validation_stat[key][0])
 			training_sum_stat = self.summary_stat_of_accuracy_ls(setting2validation_stat[key][1])
