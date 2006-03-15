@@ -35,6 +35,9 @@ from sets import Set
 if sys.version_info[:2] < (2, 3):	#python2.2 or lower needs some extra
 	from python2_3 import *
 
+from graph import graph_modeling
+import cPickle
+
 class MergeGenes:
 	def __init__(self, file_list, outputdir, delimiter, debug=0):
 		""" 
@@ -45,17 +48,27 @@ class MergeGenes:
 		self.outputdir = outputdir
 		self.delimiter = delimiter
 		self.debug = int(debug)
-
+		#02-24-06 a must before using graph_modeling
+		p_value_cut_off = 0
+		cor_cut_off = 0.6
+		graph_modeling.cor_cut_off_vector_construct(p_value_cut_off, cor_cut_off)
+		
+		#02-24-06 a temporary data structure to show how correlations between probes
+		#pointing to the same gene are distributed
+		self.cor_list = []
+	
 	def mergeBlock(self, data_ls_2d, mask_ls_2d, gene_id_set, bad_gene_id):
 		"""
 		08-28-05
 			merge the block of same genes
+		02-24-06
+			just average
 		"""
 		gene_id_set.remove(bad_gene_id)
 		gene_id = gene_id_set.pop()
 		if self.debug:
 			print gene_id
-		ar = array(data_ls_2d, mask = mask_ls_2d)
+		ar = array(data_ls_2d, mask = mask_ls_2d, fill_value=100000000)	#02-24-06 fill_value for graph_modeling
 		if len(data_ls_2d)==1:	#no need to do average
 			ar = array(data_ls_2d[0], mask=mask_ls_2d[0])
 			if self.debug:
@@ -81,6 +94,16 @@ class MergeGenes:
 			print "average(ar)", average(ar)
 			print "max(max_ls)", max(max_ls)
 			print "new_ar(after average and multiplication of max(max_ls)", new_ar
+		
+		"""
+		#02-24-06
+		for i in range(len(ar)):
+			for j in range(i+1, len(ar)):
+				edge_data = graph_modeling.ind_cor(ar[i].tolist(), ar[j].tolist(), -1)
+				#print "correlation between %s and %s is %s"%(i, j, edge_data.value)
+				#raw_input("Continue? : ")
+				self.cor_list.append(edge_data.value)
+		"""
 		return gene_id, new_ar
 		
 	def transform_one_file(self, src_pathname, delimiter, outputdir, PreprocessEdgeData_instance,\
@@ -158,7 +181,19 @@ class MergeGenes:
 			sys.stderr.write("%d/%d:\t%s"%(self.files.index(f)+1,len(self.files),f))
 			self.transform_one_file(f, self.delimiter, self.outputdir, PreprocessEdgeData_instance, microarraydb_instance)
 			sys.stderr.write(".\n")
-
+		"""
+		#02-24-06
+		print self.cor_list[:10]
+		cor_f = open('cor_list.data', 'w')
+		cPickle.dump(self.cor_list, cor_f)
+		cor_f.close()
+		
+		from rpy import r
+		r.png('cor_hist.png')
+		r.hist(self.cor_list[:1000],main='histogram',xlab='something',ylab='freq')
+		r.dev_off()
+		"""
+	
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
