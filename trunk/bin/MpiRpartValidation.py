@@ -15,8 +15,12 @@ Option:
 	-o ...,	prior prob list, 0.5 (default), 0 means proportional to the observed data.
 	-s ...,	percentage of data selected to do training, 0.8(default)
 	-x ...,	no_of_validations, 10(default)
+	-t ...,	type, 1(default, rpart), 2(randomForest)
+	-m ...,	mty list(see rpart_prediction.py's doc)
+			0(default, automatically choosen by randomForest)
+	-b ...,	bit_string, '11111'(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
-	-b,	enable debug flag
+	-u,	enable debug flag
 	-c,	commit the database transaction(IGNORE)
 	-r,	enable report flag
 	-h,	Display the usage infomation.
@@ -42,6 +46,7 @@ from codense.common import db_connect, form_schema_tables, \
 	get_go_no2gene_no_set, get_no_of_total_genes, output_node, \
 	computing_node, mpi_synchronize
 from rpart_prediction import rpart_prediction
+import rpy
 from rpy import r
 from sets import Set
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
@@ -50,18 +55,23 @@ if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 class MpiRpartValidation(rpart_prediction):
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname=None, output_file=None, \
 		filter_type=1, is_correct_type=2, rpart_cp_ls=[0.01], loss_matrix_ls=[[0,1,1,0]], prior_prob_ls=[0.5], \
-		training_perc=0.8, no_of_validations=10, need_cal_hg_p_value=0, debug=0, commit=0, report=0):
+		training_perc=0.8, no_of_validations=10, type=1, mty_ls=[0], bit_string='11111', need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
 		11-19-05 add no_of_validations
+		03-17-06
+			add type, mty_ls, bit_string
 		"""
 		rpart_prediction.__init__(self, hostname, dbname, schema, fname, fname, \
 			filter_type, is_correct_type, 0.01, [0,1,1,0], None, training_perc, \
-			need_cal_hg_p_value, debug, commit, report)
+			type, 2, bit_string, need_cal_hg_p_value, debug, commit, report)
 		self.fname = fname
 		self.output_file = output_file
 		self.rpart_cp_ls = rpart_cp_ls
 		self.loss_matrix_ls = loss_matrix_ls
 		self.prior_prob_ls  = prior_prob_ls
+		self.type = int(type)
+		self.mty_ls = mty_ls
+		self.bit_string = bit_string
 		self.no_of_validations = int(no_of_validations)
 	
 	def form_setting_ls(self, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, no_of_validations):
@@ -131,29 +141,46 @@ class MpiRpartValidation(rpart_prediction):
 			separate fit and prediction
 			in validation, do prediction on unknown_data, return function-prediction set
 		11-26-05 unknown_data doesn't need the prediction_set
+		03-17-06
+			rpart_prediction.py changed interface and added randomForest
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
 		data = cPickle.loads(data)
-		unknown_data, known_data, training_perc, no_of_validations = parameter_list
+		unknown_data, known_data, training_perc, no_of_validations, model_type, bit_string = parameter_list
 		rpart_cp, loss_matrix, prior_prob, type_code = data	#11-19-05 type_code
+		parameter_list_for_fit = [rpart_cp, loss_matrix, prior_prob]	#03-17-06
 		if type_code==0:
 			training_data, testing_data = self.sample_data(known_data, training_perc)
-			fit_model = self.rpart_fit(training_data, rpart_cp, loss_matrix, prior_prob)
-			pred_testing = self.rpart_predict(fit_model, testing_data)
-			pred_training = self.rpart_predict(fit_model, training_data)
-			pred_unknown = self.rpart_predict(fit_model, unknown_data)	#11-23-05
+			fit_model = self.fit_function_dict[model_type](training_data, parameter_list_for_fit, bit_string)
+			pred_testing = self.predict_function_dict[model_type](fit_model, testing_data)
+			pred_training = self.predict_function_dict[model_type](fit_model, training_data)
+			pred_unknown = self.predict_function_dict[model_type](fit_model, unknown_data)	#11-23-05
+			#03-17-06
+			if model_type==2:	#randomForest's model has its own oob prediction
+				fit_model_py = fit_model.as_py(rpy.BASIC_CONVERSION)
+				training_acc_ls = self.cal_accuracy(training_data,  fit_model_py['predicted'], pred_type=1)
+			else:
+				training_acc_ls = self.cal_accuracy(training_data, pred_training, pred_type=model_type)
+			
 			result = [data,\
-				self.cal_accuracy(testing_data, pred_testing),\
-				self.cal_accuracy(training_data, pred_training),\
-				self.cal_accuracy(unknown_data, pred_unknown)]	#11-23-05	#11-26-05 don't need the prediction_set
+				self.cal_accuracy(testing_data, pred_testing, pred_type=model_type),\
+				training_acc_ls,\
+				self.cal_accuracy(unknown_data, pred_unknown, pred_type=model_type)]	#11-23-05	#11-26-05 don't need the prediction_set
 		else:
-			fit_model = self.rpart_fit(known_data, rpart_cp, loss_matrix, prior_prob)
-			known_pred = self.rpart_predict(fit_model, known_data)
-			unknown_pred = self.rpart_predict(fit_model, unknown_data)
+			fit_model = self.fit_function_dict[model_type](known_data, parameter_list_for_fit, bit_string)
+			known_pred = self.predict_function_dict[model_type](fit_model, known_data)
+			unknown_pred = self.predict_function_dict[model_type](fit_model, unknown_data)
+			#03-17-06
+			if model_type==2:	#randomForest's model has its own oob prediction
+				fit_model_py = fit_model.as_py(rpy.BASIC_CONVERSION)
+				training_acc_ls = self.cal_accuracy(known_data,  fit_model_py['predicted'], pred_type=1)
+			else:
+				training_acc_ls = self.cal_accuracy(known_data, known_pred, pred_type=model_type)
+			
 			result = [data,\
-				self.cal_accuracy(unknown_data, unknown_pred),\
-				self.cal_accuracy(known_data, known_pred)]
+				self.cal_accuracy(unknown_data, unknown_pred, pred_type=model_type),\
+				training_acc_ls]
 		"""
 		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, training_perc, rpart_cp, \
 			loss_matrix, prior_prob, no_of_validations)
@@ -290,10 +317,17 @@ class MpiRpartValidation(rpart_prediction):
 			
 		mpi_synchronize(communicator)
 		if node_rank == 0:
-			setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls, self.no_of_validations)
+			if self.type==1:
+				setting_ls = self.form_setting_ls(self.rpart_cp_ls, self.loss_matrix_ls, self.prior_prob_ls, self.no_of_validations)
+			elif self.type==2:
+				#randomForest replaces rpart_cp_ls with mty_ls, others are ignored later
+				setting_ls = self.form_setting_ls(self.mty_ls, self.loss_matrix_ls, self.prior_prob_ls, self.no_of_validations)
+			else:
+				sys.stderr.write("type %s not supported.\n"%self.type)
+				sys.exit(3)
 			self.input_node(communicator, setting_ls, free_computing_nodes, self.report)
 		elif node_rank in free_computing_nodes:
-			parameter_list = [unknown_data, known_data, self.training_perc, self.no_of_validations]
+			parameter_list = [unknown_data, known_data, self.training_perc, self.no_of_validations, self.type, self.bit_string]	#03-17-06 add type, bit_string
 			computing_node(communicator, parameter_list, self.computing_handler, report=self.report)
 		elif node_rank==communicator.size-1:
 			setting2validation_stat = {}
@@ -309,7 +343,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:x:gbcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:x:t:m:b:gucr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -327,6 +361,9 @@ if __name__ == '__main__':
 	prior_prob_ls = [0.5]
 	training_perc = 0.8
 	no_of_validations = 10
+	type = 1
+	mty_ls = [0]
+	bit_string = '11111'
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
@@ -362,9 +399,15 @@ if __name__ == '__main__':
 			training_perc = float(arg)
 		elif opt in ("-x",):
 			no_of_validations = int(arg)
+		elif opt in ("-t",):
+			type = int(arg)
+		elif opt in ("-m",):
+			mty_ls = map(int, arg.split(','))
+		elif opt in ("-b",):
+			bit_string = arg
 		elif opt in ("-g",):
 			need_cal_hg_p_value = 1
-		elif opt in ("-b",):
+		elif opt in ("-u",):
 			debug = 1
 		elif opt in ("-c",):
 			commit = 1
@@ -373,7 +416,7 @@ if __name__ == '__main__':
 	if schema and fname and output_file:
 		instance = MpiRpartValidation(hostname, dbname, schema, fname, output_file, \
 			filter_type, is_correct_type, rpart_cp_ls, loss_matrix_ls, prior_prob_ls, training_perc, \
-			no_of_validations, need_cal_hg_p_value, debug, commit, report)
+			no_of_validations, type, mty_ls, bit_string, need_cal_hg_p_value, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
