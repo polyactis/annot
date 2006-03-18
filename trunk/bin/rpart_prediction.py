@@ -8,14 +8,18 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-i ...,	fname of setting1
 	-j ...,	fname of setting2
-	-f ...,	filter type
+	-f ...,	filter type (1, default, recurrence order)
 	-y ...,	is_correct type (2 lca, default)
 	-p ...,	rpart cp value(0.01, default)
 	-l ...,	loss matrix, 0,1,1,0 (default)
 	-o ...,	prior prob for the 1st class, None (default, i.e. 0.65)
 	-s ...,	percentage of data selected to do training, 0.8(default)
+	-t ...,	type, 1(default, rpart), 2(randomForest)
+	-m ...,	(randomForest)Number of variables randomly sampled as candidates at each split
+			0(default, automatically choosen by randomForest)
+	-b ...,	bit_string, '11111'(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
-	-b,	enable debug flag
+	-u,	enable debug flag
 	-c,	commit the database transaction
 	-r,	enable report flag
 	-h,	Display the usage infomation.
@@ -26,15 +30,19 @@ Examples:
 
 Description:
 	Program to do rpart fittng and prediction.
+	bit_string corresponds to p_value, recurrence, connectivity, cluster_size, gradient
+	
 """
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
 if bit_number>40:       #64bit
 	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+	lib_path = os.path.expanduser('~/lib64')
 else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+	lib_path = os.path.expanduser('~/lib')
 import sys, os, getopt, csv, random
 from codense.common import db_connect, form_schema_tables, cal_hg_p_value, \
 	get_go_no2gene_no_set, get_no_of_total_genes
@@ -42,13 +50,16 @@ from MpiPredictionFilter import prediction_attributes, MpiPredictionFilter
 from numarray import array
 from rpy import r, set_default_mode,NO_CONVERSION,BASIC_CONVERSION
 from sets import Set
+#03-17-06 to deal with rpy's "Execution halted"
+os.environ["DISPLAY"] = "hpc-cmb.usc.edu:0.0"
 
 class rpart_prediction:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, fname2=None, \
 		filter_type=1, is_correct_type=2, rpart_cp=0.01, loss_matrix=[0,1,1,0], prior_prob=None, training_perc=0.8,\
-		need_cal_hg_p_value=0, debug=0, commit=0, report=0):
+		type=1, mty=0, bit_string='11111', need_cal_hg_p_value=0, debug=0, commit=0, report=0):
 		"""
 		11-09-05 add rpart_cp
+		03-17-06 add type, mty, bit_string
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -61,10 +72,22 @@ class rpart_prediction:
 		self.loss_matrix = loss_matrix
 		self.prior_prob = prior_prob
 		self.training_perc = float(training_perc)
+		self.type = int(type)
+		self.mty = int(mty)
+		self.bit_string = bit_string
 		self.need_cal_hg_p_value = int(need_cal_hg_p_value)
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
+		
+		self.fit_function_dict = {1: self.rpart_fit,
+			2: self.randomForest_fit}
+		
+		self.predict_function_dict = {1: self.rpart_predict,
+			2: self.randomForest_predict}
+		
+		self.parameter_list_dict = {1: [self.rpart_cp, self.loss_matrix, self.prior_prob],
+			2: [self.mty]}
 
 	def data_fetch(self, curs, schema_instance, filter_type, is_correct_type, \
 		no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value=0):
@@ -139,7 +162,7 @@ class rpart_prediction:
 		sys.stderr.write("Done fetching data.\n")
 		return unknown_prediction_ls, known_prediction_ls, unknown_data, known_data
 	
-	def rpart_fit(self, known_data, rpart_cp, loss_matrix, prior_prob, bit_string='11111'):
+	def rpart_fit(self, known_data, parameter_list, bit_string='11111'):
 		"""
 		11-09-05
 			1st use known_data to get the fit model
@@ -152,9 +175,14 @@ class rpart_prediction:
 			split fit and predict. rpart_fit_and_predict() is split into rpart_fit() and rpart_predict()
 		11-27-05
 			r cleanup
+		03-17-06
+			use parameter_list instead
 		"""
 		if self.debug:
 			sys.stderr.write("Doing rpart_fit...\n")
+		#03-17-06
+		rpart_cp, loss_matrix, prior_prob = parameter_list
+		
 		#11-27-05 r cleanup
 		from rpy import r
 		r.library('rpart')
@@ -181,7 +209,7 @@ class rpart_prediction:
 		if self.debug:
 			sys.stderr.write("Done rpart_fit.\n")
 		return fit
-	
+
 	def rpart_predict(self, fit_model, data):
 		"""
 		11-23-05
@@ -199,7 +227,58 @@ class rpart_prediction:
 		if self.debug:
 			sys.stderr.write("Done rpart_predict.\n")
 		return pred
-	
+
+	def randomForest_fit(self, known_data, parameter_list, bit_string='11111'):
+		"""
+		03-17-06
+		"""
+		if self.debug:
+			sys.stderr.write("Fitting randomForest...\n")
+		mty = parameter_list[0]
+		
+		from rpy import r
+		r._libPaths(os.path.join(lib_path, 'R'))	#better than r.library("randomForest", lib_loc=os.path.join(lib_path, "R")) (see plone doc)
+		r.library('randomForest')
+		
+		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'gradient']
+		formula_list = []
+		for i in range(len(bit_string)):
+			if bit_string[i] == '1':
+				formula_list.append(coeff_name_list[i])
+		formula = r("is_correct~%s"%'+'.join(formula_list))
+		
+		known_data = array(known_data)
+		set_default_mode(NO_CONVERSION)
+		data_frame = r.as_data_frame({"p_value":known_data[:,0], "recurrence":known_data[:,1], "connectivity":known_data[:,2], \
+			"cluster_size":known_data[:,3], "gradient":known_data[:,4], "is_correct":r.factor(known_data[:,-1])})	#03-17-06, watch r.factor
+		
+		if mty>0:
+			fit = r.randomForest(formula, data=data_frame, mty=mty)
+		else:
+			fit = r.randomForest(formula, data=data_frame)
+		
+		del data_frame
+		if self.debug:
+			sys.stderr.write("Done fitting randomForest.\n")
+		return fit
+
+	def randomForest_predict(self, fit_model, data):
+		"""
+		03-17-06
+		"""
+		if self.debug:
+			sys.stderr.write("Predicting by randomForest...\n")
+		data = array(data)
+		set_default_mode(NO_CONVERSION)
+		data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
+			"cluster_size":data[:,3], "gradient":data[:,4], "is_correct":r.factor(data[:,-1])})
+		set_default_mode(BASIC_CONVERSION)
+		pred = r.predict(fit_model, data_frame)
+		del data_frame
+		if self.debug:
+			sys.stderr.write("Done randomForest prediction.\n")
+		return pred
+
 	def get_vertex_list(self, curs, schema_instance, mcl_id):
 		"""
 		11-10-05 for data_fetch() to cal_hg_p_value
@@ -243,19 +322,25 @@ class rpart_prediction:
 				testing_data.append(data[i])
 		return training_data, testing_data
 	
-	def cal_accuracy(self, data, pred, need_prediction_set=0):
+	def cal_accuracy(self, data, pred, need_prediction_set=0, pred_type=1):
 		"""
 		11-17-05
 			for parameter tuning purpose
 		11-23-05
 			When doing validation on unknown data, need_prediction_set=1
+		03-17-06
+			add pred_type, 1 is dict, rpart's prediction result (also randomForest fit model's 'predicted')
+				2 is list, randomForest's prediction result
 		"""
 		no_of_correct_predictions = 0
 		gene_set = Set()
 		prediction_set = Set()	#11-23-05
 		for i in range(len(data)):
 			p_value, recurrence, connectivity, cluster_size, edge_gradient, gene_no, go_no, is_correct = data[i]
-			key_in_pred = repr(i+1)	#WATCH R's index starts from 1
+			if pred_type==1:
+				key_in_pred = repr(i+1)	#WATCH R's index starts from 1
+			elif pred_type==2:
+				key_in_pred = i
 			if pred[key_in_pred] == '1':
 				prediction_set.add((gene_no, go_no))	#11-23-05
 				gene_set.add(gene_no)
@@ -270,7 +355,7 @@ class rpart_prediction:
 			return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set), prediction_set]
 		else:
 			return [accuracy, no_of_correct_predictions, no_of_total_predictions, len(gene_set)]
-	
+
 	def rpart_validation(self, known_data, training_perc, rpart_cp, loss_matrix, prior_prob, no_of_validations=10):
 		"""
 		11-17-05
@@ -326,18 +411,26 @@ class rpart_prediction:
 		print testing_acc_ls
 		print training_acc_ls
 		"""
-		fit_model = self.rpart_fit(known_data, self.rpart_cp, self.loss_matrix, self.prior_prob)
-		known_pred = self.rpart_predict(fit_model, known_data)
-		unknown_pred = self.rpart_predict(fit_model, unknown_data)
+		fit_model = self.fit_function_dict[self.type](known_data, self.parameter_list_dict[self.type], self.bit_string)
+		known_pred = self.predict_function_dict[self.type](fit_model, known_data)
+		unknown_pred = self.predict_function_dict[self.type](fit_model, unknown_data)
 		
-		MpiPredictionFilter_instance = MpiPredictionFilter()
-		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
-		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
-		MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
-		MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
-		self.record_data(curs, MpiPredictionFilter_instance, unknown_prediction_ls, unknown_pred, new_schema_instance)
-		self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance)
+		if self.debug:
+			if self.type==2:
+				#randomForest's model has its own oob prediction
+				fit_model_py = fit_model.as_py(BASIC_CONVERSION)
+				print self.cal_accuracy(known_data,  fit_model_py['predicted'], pred_type=1)
+			print self.cal_accuracy(known_data, known_pred, pred_type=self.type)
+			print self.cal_accuracy(unknown_data, unknown_pred, pred_type=self.type)
+		
 		if self.commit:
+			MpiPredictionFilter_instance = MpiPredictionFilter()
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.splat_table, new_schema_instance.splat_table)
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
+			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
+			MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
+			self.record_data(curs, MpiPredictionFilter_instance, unknown_prediction_ls, unknown_pred, new_schema_instance)
+			self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance)
 			curs.execute("end")
 		
 
@@ -347,7 +440,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:gbcr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:t:m:b:gucr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -364,6 +457,9 @@ if __name__ == '__main__':
 	loss_matrix = [0,1,1,0]
 	prior_prob = None
 	training_perc = 0.8
+	type = 1
+	mty = 0
+	bit_string = '11111'
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
@@ -394,9 +490,15 @@ if __name__ == '__main__':
 			prior_prob = float(arg)
 		elif opt in ("-s",):
 			training_perc = float(arg)
+		elif opt in ("-t",):
+			type = int(arg)
+		elif opt in ("-m",):
+			mty = int(arg)
+		elif opt in ("-b",):
+			bit_string = arg
 		elif opt in ("-g",):
 			need_cal_hg_p_value = 1
-		elif opt in ("-b",):
+		elif opt in ("-u",):
 			debug = 1
 		elif opt in ("-c",):
 			commit = 1
@@ -405,7 +507,7 @@ if __name__ == '__main__':
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, fname2, \
 			filter_type, is_correct_type, rpart_cp, loss_matrix, prior_prob, training_perc, \
-			need_cal_hg_p_value, debug, commit, report)
+			type, mty, bit_string, need_cal_hg_p_value, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
