@@ -14,7 +14,8 @@ Option:
 	-t ..., --type=...	output format, 0(default, full), 1(stat), 2(between)
 	-n ..., --node_type=...	1(all, default), 2(informative), 3(level 4), 4(biggest-first-break 
 		control no of nodes), 5(biggest-first-break-level-by-level, similar to 4)
-	-l ..., --level=...	for node_type=3 or 4, this determines the level of a qualified go, 4(default)
+	-l ..., --level=...	for node_type=3 or 4, this determines the level of the initial
+		function candidates 4(default)
 	-c ...,	branch, 1(molecular_function), 2(biological_process, default), 3(cellular_component)
 	-u,	debug
 	-h, --help      show this help
@@ -53,8 +54,9 @@ else:   #32bit
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, psycopg, getopt, csv
 from kjbuckets import *
-from heapq import heappush, heappop, heapreplace
+from heapq import heappush, heappop, heapreplace, heapify
 from sets import Set
+from graphlib import Graph
 
 class go_informative_node:
 	def __init__(self, go_association, go_index, size, type):
@@ -246,6 +248,8 @@ class go_informative_node_bfs:
 		11-07-05 add the complement_go_graph
 		12-30-05
 			flexible, adjut to self.branch
+		03-11-06
+			count #total genes
 		"""
 		sys.stderr.write("Loading Data STructure...")
 		#biological_process, not obsolete, not biological_process unknown.
@@ -256,21 +260,26 @@ class go_informative_node_bfs:
 			t.term_type='%s' and t.acc!='%s' and t.is_obsolete=0"%(self.branch_name_dict[self.branch],
 			self.branch_unknown_acc_dict[self.branch]))
 		"""
-		
+		#not obsolete, not unknown
 		self.curs.execute("select a.go_id, g.gene_id from graph.association a, go.term t,\
 			gene g where g.gene_id=a.gene_id and t.acc=a.go_id and\
 			t.term_type='%s' and t.acc!='%s' and t.is_obsolete=0"%(self.branch_name_dict[self.branch],
 			self.branch_unknown_acc_dict[self.branch]))
+		
+		#03-11-06 used to count #genes in total
+		self.total_gene_id_set = Set()
 		
 		rows = self.curs.fetchall()
 		for row in rows:
 		#setup the go_id2gene_id_dict structure
 			go_id = row[0]
 			gene_id = row[1]
+			self.total_gene_id_set.add(gene_id)	#03-11-06
 			if go_id not in self.go_id2gene_id_dict:
 				self.go_id2gene_id_dict[go_id] = kjSet([gene_id])
 			else:
 				self.go_id2gene_id_dict[go_id].add(gene_id)
+		
 		#get the non-obsolete biological_process GO DAG
 		#12-30-05
 		self.curs.execute("select t2t.term1_id, t2t.term2_id, t1.acc, t2.acc,t1.depth, t2.depth from \
@@ -306,124 +315,97 @@ class go_informative_node_bfs:
 		
 		sys.stderr.write("Done\n")
 	
+	def keep_source_and_singletons_from_candidates(self, go_graph, go_id_descendent2gene_id_dict, candidates_set):
+		"""
+		03-23-06
+			to avoid parent-child relationships in candidates
+		"""
+		graph_of_candidates = Graph.Graph()
+		for go_id in candidates_set:
+			graph_of_candidates.add_node(go_id)
+		candidates_list = list(candidates_set)
+		for i in range(len(candidates_list)):
+			for j in range(i+1, len(candidates_list)):
+				if go_graph.reachable(candidates_list[j]).member(candidates_list[i]):
+					graph_of_candidates.add_edge(candidates_list[j], candidates_list[i])
+					if self.debug:
+						sys.stderr.write("In candidates: %s => %s\n"%(candidates_list[j], candidates_list[i]))
+				if go_graph.reachable(candidates_list[i]).member(candidates_list[j]):
+					graph_of_candidates.add_edge(candidates_list[i], candidates_list[j])
+					if self.debug:
+						sys.stderr.write("In candidates: %s => %s\n"%(candidates_list[i], candidates_list[j]))
+		new_candidates_set = Set()
+		new_candidates_queue = []
+		for go_id in graph_of_candidates.node_list():
+			if graph_of_candidates.inc_degree(go_id)==0:
+				if self.debug:
+					sys.stderr.write("new candidate: %s\n"%go_id)
+				new_candidates_set.add(go_id)
+				heappush(new_candidates_queue, [-len(go_id_descendent2gene_id_dict[go_id]), go_id])
+		return new_candidates_queue, new_candidates_set
+	
 	def node_type_4(self, init_candidates_queue, init_candidates_set, go_graph, complement_go_graph, \
 		go_id_descendent2gene_id_dict, max_no_of_nodes, size):
 		"""
 		11-06-05 total 5 data structures to check
-		1. candidates_queue: big nodes to be investigated
-		2. candidates_set: all good nodes(big + small)
-		3. no_of_big_nodes: total big nodes
-		4. trash_child_node2parent: child node discovered but has parent in candidates_set
-		5. parent2trash_child_node: reverse map of 4
+		1. candidates_queue: big nodes to be investigated #a min queue, each entry is (-size, go_id), sorted by -size
+		2. candidates_set: all nodes(big) wanted
+		
+		03-23-06 overhaul it to be much simpler
+			get almost identical result as node_type 2(informative node), but longer time
 		"""
 		sys.stderr.write("Getting nodes for node type 4...\n")
-		#remove childs among init_candidates_queue, start from the smallest one
-		candidates_queue = []	#a min queue, each entry is (-size, go_id), sorted by -size
 		candidates_set = Set()
-		no_of_big_nodes = 0
 		while init_candidates_queue:
 			node_size, go_id = heappop(init_candidates_queue)
-			parent_set = Set(complement_go_graph.neighbors(go_id))
-			if parent_set&init_candidates_set:	#there's a parent
-				init_candidates_set.remove(go_id)
-			else:
-				if node_size >= size:
-					no_of_big_nodes += 1
-					heappush(candidates_queue, [-node_size, go_id])	#WATCH minus(-) ahead of node_size
+			if node_size>=size:
 				candidates_set.add(go_id)
+		candidates_queue, candidates_set = self.keep_source_and_singletons_from_candidates(go_graph, go_id_descendent2gene_id_dict, candidates_set)
+		
 		if self.debug:
-			print "no_of_big_nodes", no_of_big_nodes
-			print "candidates_queue", candidates_queue
-			print "candidates_set", candidates_set
+			sys.stderr.write("no of big_nodes %s\n"%len(candidates_queue))
+			sys.stderr.write("candidates_queue %s\n"%repr(candidates_queue))
+			sys.stderr.write("candidates_set %s\n"%repr(candidates_set))
 		#following two mappings are used to decide whether some childs should be picked back
 		trash_child_node2parent = {}
 		parent2trash_child_node = {}
-		while no_of_big_nodes<max_no_of_nodes and candidates_queue:
+		terminal_good_node_list = []
+		while len(candidates_set)<max_no_of_nodes and candidates_queue:
 			node_size, go_id = heappop(candidates_queue)
 			node_size = -node_size	#WATCH minus(-) ahead of node_size
 			if self.debug:
-				sys.stderr.write("Checking %s(size=%s)  no_of_big_nodes:%s...\n"%(go_id, node_size, no_of_big_nodes))
+				sys.stderr.write("Checking %s(size=%s)  no_of_big_nodes:%s...\n"%(go_id, node_size, len(candidates_set) ))
 			neighbor_list = go_graph.neighbors(go_id)
-			valid_neighbor = 0	#a flag to check whether there's a valid child node
+			valid_neighbor = 0
 			for neighbor in neighbor_list:
 				neighbor_size = len(go_id_descendent2gene_id_dict[neighbor])
 				if neighbor_size>=size:
 					if self.debug:
 						sys.stderr.write("One child %s exceeds the size %s.\n"%(neighbor, neighbor_size))
 					valid_neighbor = 1
-					break
+					candidates_set.add(neighbor)
 			if valid_neighbor:
-				#1st remove this node
+				#remove this node
 				if self.debug:
 					sys.stderr.write("%s removed from candidates_set.\n"%go_id)
-				no_of_big_nodes -= 1	#previous condition check ensures that its size >self.size
 				candidates_set.remove(go_id)
-				#2nd release trash_child_node if possible
-				if go_id in parent2trash_child_node:
-					if self.debug:
-						sys.stderr.write("%s appears in parent2trash_child_node.\n"%go_id)
-					for trash_child_node in parent2trash_child_node[go_id]:
-						trash_child_node2parent[trash_child_node].remove(go_id)
-						no_of_parents = len(trash_child_node2parent[trash_child_node])
-						if no_of_parents==0:
-							if self.debug:
-								sys.stderr.write("trash_child_node %s  has no parents now and revives.\n"%trash_child_node)
-							del trash_child_node2parent[trash_child_node]
-							trash_child_node_size = len(go_id_descendent2gene_id_dict[trash_child_node])
-							if trash_child_node_size>=size:
-								if self.debug:
-									sys.stderr.write("trash_child_node %s has %s associated genes.\n"%(trash_child_node, trash_child_node_size))
-								no_of_big_nodes += 1
-								heappush(candidates_queue, [-trash_child_node_size, trash_child_node])	#WATCH minus(-) ahead of trash_child_node_size
-							if trash_child_node_size>0:	#skip empty nodes
-								candidates_set.add(trash_child_node)
-					#remove it
-					del parent2trash_child_node[go_id]
-				#3rd pick good child
-				for neighbor in neighbor_list:
-					neighbor_size = len(go_id_descendent2gene_id_dict[neighbor])
-					if neighbor_size==0:	#skip empty nodes
-						continue
-					parent_set = Set(complement_go_graph.neighbors(neighbor))
-					parent_in_candidates = parent_set&candidates_set
-					if parent_in_candidates:
-						if self.debug:
-							sys.stderr.write("unfortunately, %s 's child %s has parent %s in candidates_set.\n"%(go_id, neighbor, parent_in_candidates))
-						#fill in trash_child_node2parent and parent2trash_child_node
-						if neighbor not in trash_child_node2parent:
-							trash_child_node2parent[neighbor] = Set()
-						trash_child_node2parent[neighbor] |= parent_in_candidates
-						for parent in parent_in_candidates:
-							if parent not in parent2trash_child_node:
-								parent2trash_child_node[parent] = Set()
-							parent2trash_child_node[parent].add(neighbor)
-					else:
-						#good child
-						if self.debug:
-							sys.stderr.write("fortunately, %s 's child %s has no parent in candidates_set.\n"%(go_id, neighbor))
-						if neighbor_size >= size and neighbor not in candidates_set:	#some of them are already checked int by other parents
-							if self.debug:
-								sys.stderr.write("furthermore, %s 's child %s has %s associated genes, into candidates_queue.\n"%(go_id, neighbor, neighbor_size))
-							no_of_big_nodes += 1
-							heappush(candidates_queue, [-neighbor_size, neighbor])	#WATCH minus(-) ahead of neighbor_size
-						candidates_set.add(neighbor)
-						#deal with trash_child_node
-						neighbor_s_child_set = Set(go_graph.neighbors(neighbor))
-						trash_child_node_set = Set(trash_child_node2parent)
-						neighbor_s_trash_child_set = neighbor_s_child_set&trash_child_node_set
-						if neighbor_s_trash_child_set:
-							if self.debug:
-								sys.stderr.write("oh, %s 's child %s has %s grand_trash_children, update two dicts.\n"%(go_id, neighbor, neighbor_s_trash_child_set))
-							for trash_child_node in neighbor_s_trash_child_set:
-								trash_child_node2parent[trash_child_node].add(neighbor)
-							if neighbor not in parent2trash_child_node:
-								parent2trash_child_node[neighbor] = Set()
-							parent2trash_child_node[neighbor] |= neighbor_s_trash_child_set
+			else:	#real good nodes, no big child
+				if self.debug:
+					sys.stderr.write("%s moved from candidates_set to final set.\n"%go_id)
+				candidates_set.remove(go_id)
+				terminal_good_node_list.append(go_id)
+			candidates_queue, candidates_set = self.keep_source_and_singletons_from_candidates(go_graph, go_id_descendent2gene_id_dict, candidates_set)
+		
+		#add those terminal nodes back into candidates_set
+		for go_id in terminal_good_node_list:
+			candidates_set.add(go_id)
+		
 		#finally, come to fruit
 		informative_node_dict = {}
 		for node in candidates_set:
-			informative_node_dict[node] = 1
-		sys.stderr.write("Done getting nodes for node type 4 with %s/%s nodes.\n"%(len(candidates_set), no_of_big_nodes))
+				informative_node_dict[node] = 1
+		
+		sys.stderr.write("Done getting nodes for node type 4 with %s nodes.\n"%(len(candidates_set)) )
 		return informative_node_dict
 	
 	def node_type_5(self, init_candidates_queue, init_candidates_set, go_graph, complement_go_graph, \
@@ -539,7 +521,7 @@ class go_informative_node_bfs:
 		informative_node_dict = {}
 		for node in candidates_set:
 			informative_node_dict[node] = 1
-		sys.stderr.write("Done getting nodes for node type 4 with %s/%s nodes.\n"%(len(candidates_set), no_of_big_nodes))
+		sys.stderr.write("Done getting nodes for node type 5 with %s/%s nodes.\n"%(len(candidates_set), no_of_big_nodes))
 		return informative_node_dict
 	
 	def run(self):
@@ -610,12 +592,26 @@ class go_informative_node_bfs:
 			self.informative_node_dict = self.node_type_5(init_candidates_queue, init_candidates_set,\
 				self.go_graph, self.complement_go_graph, self.go_id_descendent2gene_id_dict, self.max_no_of_nodes, self.size)
 		self.output()
-	
+		"""
+		#03-12-06 to see how the informative_node's are distributed, designed for node_type=2
+		self.output_go_graph_above_informative_nodes(self.root, self.go_graph, self.informative_node_dict, \
+			self.go_id_descendent2gene_id_dict, '/tmp/informative_node.dot', self.size)
+		"""
+		
 	def output(self):
+		"""
+		03-11-06 count #genes in informative nodes
+		"""
+		gene_id_in_informative_nodes_set = Set()
 		for go_id,value in self.informative_node_dict.iteritems():
-			if value == 1:	
+			if value == 1:
 				gene_id_list = self.go_id_descendent2gene_id_dict[go_id].items()
 				self._output(go_id, gene_id_list)
+				#03-11-06
+				for gene_id in gene_id_list:
+					gene_id_in_informative_nodes_set.add(gene_id)
+		sys.stderr.write("%s-%s=%s, #genes lost.\n"%(len(self.total_gene_id_set), len(gene_id_in_informative_nodes_set),\
+			len(self.total_gene_id_set) - len(gene_id_in_informative_nodes_set)))
 	
 	def output_full(self, go_id, gene_id_list):
 		for gene_id in gene_id_list:
@@ -626,6 +622,76 @@ class go_informative_node_bfs:
 
 	def output_between(self, go_id, gene_id_list):
 		sys.stdout.write("%s\t%s\t%s\n"%(go_id, self.go_id2go_name[go_id], '\t'.join(gene_id_list)))
+
+	def output_go_graph_above_informative_nodes(self, root, go_graph, informative_node_dict, \
+			go_id_descendent2gene_id_dict, output_fname, size):
+		"""
+		03-12-06
+			use the boost.graph to output part of GO graph which is above informative_node
+		"""
+		sys.stderr.write("Layout the informative_node's...")
+		import boost.graph as bgl
+		g = bgl.Graph()
+		edge_weight_map = g.edge_property_map('integer')
+		vertex_color_map = g.vertex_property_map('string')
+		vertex_label_map = g.vertex_property_map('string')
+		
+		#informative_node_set is the boundary of the BFS search
+		informative_node_set = Set()
+		for go_id, value in informative_node_dict.iteritems():
+			if value==1:
+				informative_node_set.add(go_id)
+		
+		#this anti_vertex_label_map is used for add_edge() of g
+		#give each vertex a node_id for graphviz
+		anti_vertex_label_map = {}
+		vertex_label2node_id = {}
+		list_queue = [root]
+		vertex_descriptor = g.add_vertex()
+		anti_vertex_label_map[root] = vertex_descriptor
+		vertex_label2node_id[root] = len(vertex_label2node_id) + 1
+		vertex_label_map[vertex_descriptor] = str(vertex_label2node_id[root])
+		
+		
+		#repeat the informative_node search algorithm
+		another_informative_node_dict = {}
+		another_informative_node_dict[root] = 1
+		while list_queue:
+			go_id = list_queue.pop(0)
+			neighbor_list = go_graph.neighbors(go_id)
+			add_neighbor_list_to_queue = 1	#an indicator whether to continue BFS on this neighbor_list
+			for neighbor in neighbor_list:
+				if neighbor not in anti_vertex_label_map:
+					vertex_descriptor = g.add_vertex()
+					anti_vertex_label_map[neighbor] = vertex_descriptor
+					vertex_label2node_id[neighbor] = len(vertex_label2node_id) + 1
+					vertex_label_map[vertex_descriptor] = str(vertex_label2node_id[neighbor])
+					
+				if neighbor in informative_node_set:	#one child of go_id is in informative_node_set, so stop BFS from this go_id
+					vertex_color_map[anti_vertex_label_map[neighbor]] = 'red'
+					add_neighbor_list_to_queue = 0
+				if len(go_id_descendent2gene_id_dict[neighbor])>0:	#if no genes in this node, ignore the edge
+					e = g.add_edge(anti_vertex_label_map[go_id], anti_vertex_label_map[neighbor])
+					#the weight is used to show the percentage of genes inherited by the child
+					weight = int(float(len(go_id_descendent2gene_id_dict[neighbor]))/len(go_id_descendent2gene_id_dict[go_id])*100)
+					edge_weight_map[e] = weight
+					#decide whether the neighbor should be added to list_queue(similar as in run())
+					if len(go_id_descendent2gene_id_dict[neighbor]) >= size:
+						another_informative_node_dict[go_id] = 0
+						if neighbor not in another_informative_node_dict:
+							#trick is here. informative_node candidates and first touch
+							list_queue.append(neighbor)
+						another_informative_node_dict[neighbor] = 1
+		
+		#'label', not 'weight' is drawn graphviz
+		g.edge_properties['label'] = edge_weight_map
+		#write_graphviz() needs 'node_id' map, not 'label'
+		g.vertex_properties['node_id'] = vertex_label_map
+		g.vertex_properties['color'] = vertex_color_map
+		#output it in dot format
+		g.write_graphviz(output_fname)
+		sys.stderr.write("Done.\n")
+
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
