@@ -188,21 +188,32 @@ void PostFim::outputCcFromEdgeList(ofstream &out, std::vector<int> &edge_id_vect
 *01-09-06
 *	most functions used here copied from  cc_from_edge_list
 *	no_cc is not handled right now
-*	--init_graph_from_edge_tuple_vector()
-*	--cc2subgraph()
-*	(loop)
-*		--output_subgraph()
+*03-29-06
+*	no_cc is handled
+*
+*	if (no_cc)
+*		--outputWholeGraph()
+*	else
+*		--init_graph_from_edge_tuple_vector()
+*		--cc2subgraph()
+*		(loop)
+*			--output_subgraph()
 */
 {
 	#ifdef DEBUG
 		std::cerr<<"Get cc from edge list and output..."<<std::endl;
 	#endif
-	Graph g = init_graph_from_edge_tuple_vector(edge_id_vector, edge_tuple_vector);
-	std::vector<Graph> vector_subgraph = cc2subgraph(g);
-	std::vector<Graph>::iterator g_iterator;
-	for(g_iterator=vector_subgraph.begin();g_iterator!=vector_subgraph.end();++g_iterator)
-		if (num_vertices(*g_iterator)>=min_cluster_size)
-			output_subgraph(out, *g_iterator, g);
+	if (no_cc)
+		outputWholeGraph(out, edge_id_vector, edge_tuple_vector);
+	else
+	{
+		Graph g = init_graph_from_edge_tuple_vector(edge_id_vector, edge_tuple_vector);
+		std::vector<Graph> vector_subgraph = cc2subgraph(g);
+		std::vector<Graph>::iterator g_iterator;
+		for(g_iterator=vector_subgraph.begin();g_iterator!=vector_subgraph.end();++g_iterator)
+			if (num_vertices(*g_iterator)>=min_cluster_size)
+				output_subgraph(out, *g_iterator, g);
+	}
 	#if defined(DEBUG)
 		std::cerr << "done" <<std::endl;
 	#endif
@@ -350,6 +361,71 @@ void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
 	#endif
 }
 
+void PostFim::outputWholeGraph(ofstream &outf, std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector)
+/*
+03-28-06
+	to output the whole graph
+*/
+{
+	#if defined(DEBUG)
+		std::cerr << "outputting whole graph ...";
+	#endif
+	std::map<int, int> gene_no_dict;
+	std::map<int, int>::iterator pos;
+	std::vector<unsigned int> vertex_vector;
+	std::vector<boost::array<unsigned int, 2> > edge_array_vector;
+	boost::array<unsigned int, 2> edge_array;
+	
+	bool inserted;
+	unsigned int gene1, gene2;
+	for (int i=0; i<edge_id_vector.size(); i++)
+	{
+		gene1 = edge_tuple_vector[edge_id_vector[i]*2];	//edge_tuple_vector is 2*len(edge_bitset_vector)
+		gene2 = edge_tuple_vector[edge_id_vector[i]*2+1];
+		
+		tie(pos, inserted) = gene_no_dict.insert(std::make_pair(gene1, 1));
+		if (inserted)
+			vertex_vector.push_back(gene1);
+		
+		tie(pos, inserted) = gene_no_dict.insert(std::make_pair(gene2, 1));
+		if (inserted)
+			vertex_vector.push_back(gene2);
+		if (gene1<gene2)	//in ascending order
+		{
+			edge_array[0] = gene1;
+			edge_array[1] = gene2;
+		}
+		else
+		{
+			edge_array[0] = gene2;
+			edge_array[1] = gene1;
+		}
+		edge_array_vector.push_back(edge_array);
+	}
+	
+	sort(vertex_vector.begin(), vertex_vector.end());	//sort it in ascending order
+	outf<<"[";
+	for (int i=0; i<vertex_vector.size(); i++)
+	{
+		outf<<vertex_vector[i];
+		if (i!= vertex_vector.size()-1)
+			outf << ", ";	//the difference from the middle to the end
+	}		
+	outf<<"]\t";
+	
+	sort(edge_array_vector.begin(), edge_array_vector.end(), cmp_edge_array);	//sort the edges
+	outf<<"[";
+	for (int i=0; i<edge_array_vector.size(); i++)
+	{
+		outf << "(" << edge_array_vector[i][0] << ", " << edge_array_vector[i][1] << ")";
+		if (i != edge_array_vector.size()-1)	//the difference from the middle to the end
+			outf<<", ";
+	}
+	outf<<"]"<<std::endl;
+	#if defined(DEBUG)
+		std::cerr << "done" <<std::endl;
+	#endif
+}
 
 void PostFim::run()
 /*

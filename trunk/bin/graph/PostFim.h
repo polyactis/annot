@@ -74,4 +74,6 @@ class PostFim
 		std::vector<Graph> cc2subgraph(Graph &graph);
 		Graph init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector);
 		void output_subgraph(ofstream &out, Graph &subgraph, Graph &graph);
+		//03-28-06
+		void outputWholeGraph(ofstream &out, std::vector<int> &edge_id_vector, std::vector<unsigned int > &edge_tuple_vector);
 };
