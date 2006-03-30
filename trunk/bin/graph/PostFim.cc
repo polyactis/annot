@@ -150,6 +150,27 @@ void PostFim::patternFormation()
 	#if defined(DEBUG)
 		std::cerr << "patternFormation..."<<std::endl;
 	#endif
+	
+	/*
+	//03-30-06 some temporary stuff to output edge_bitset_vector and edge_tuple_vector
+	ofstream edge_out;
+	edge_out.open("/home/cmb-qfs/yuhuang/tmp/edge_sig_vector.postfim");
+	for (int i=0; i<edge_bitset_vector.size(); i++)
+	{
+		if (edge_tuple_vector[2*i] <= edge_tuple_vector[2*i+1])
+			edge_out<<edge_tuple_vector[2*i]<<" "<<edge_tuple_vector[2*i+1];
+		else
+			edge_out<<edge_tuple_vector[2*i+1]<<" "<<edge_tuple_vector[2*i];
+		for (boost::dynamic_bitset<>::size_type j = 0; j < edge_bitset_vector[i].size(); ++j)
+		{
+			if (edge_bitset_vector[i][j]==1)
+    			edge_out <<" " << j+1;
+		}
+		edge_out<<std::endl;
+	}
+	edge_out.close();
+	*/
+	
 	std::vector<int> edge_id_vector;
 	for (int i = 0; i<pattern_bitset_vector.size(); i++)
 	{
