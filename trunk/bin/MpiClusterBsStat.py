@@ -1,7 +1,7 @@
 #!/usr/bin/env mpipython
 """
 Usage: MpiClusterBsStat.py -k SCHEMA -g GOOD_CLUSTER_TABLE
-	-l CLUSTER_BS_TABLE [OPTION]
+	-v sig_vector_fname -l CLUSTER_BS_TABLE [OPTION]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
@@ -16,6 +16,7 @@ Option:
 	-p ...,	p_value_cut_off, 0.001(default)
 	-o ...,	output_file, fuzzyDense.out(default)
 	-x ...,	tax_id, 4932(default, yeast), for get_gene_id2gene_symbol
+	-v ...,	sig_vector_fname
 	-n,	CLUSTER_BS_TABLE is new
 	-c,	commit the database transaction
 	-b,	debug version.
@@ -24,7 +25,7 @@ Option:
 	
 Examples:
 	mpirun -np 20 -machinefile ~/hostfile /usr/bin/mpipython ~/script/annot/bin/MpiClusterBsStat.py
-	-k mm_fim_97 -g good_clusters -l cluster_bs
+	-k mm_fim_97 -g good_clusters -l cluster_bs -v
 	
 Description:
 	Program to do binding site enrichment analysis for a module.
@@ -46,14 +47,16 @@ from sets import Set
 from TF_functions import cluster_bs_analysis
 from MpiCrackSplat import MpiCrackSplat	#12-18-05	for fill_edge2encodedOccurrence()
 from fuzzyDense import fuzzyDense	#12-18-05	for fuzzyDense()
-
+if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
+	from python2_3 import *
+	
 class MpiClusterBsStat:
 	"""
 	09-19-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
 		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, top_number=5, degree_cut_off=0.3, p_value_cut_off=0.001, \
-		output_file='fuzzyDense.out', tax_id=4932, new_table=0, commit=0, debug=0, report=0):
+		output_file='fuzzyDense.out', tax_id=4932, sig_vector_fname=None, new_table=0, commit=0, debug=0, report=0):
 		"""
 		12-15-05
 			add p_value_cut_off
@@ -72,6 +75,7 @@ class MpiClusterBsStat:
 		self.p_value_cut_off = float(p_value_cut_off)
 		self.output_file = output_file
 		self.tax_id = int(tax_id)
+		self.sig_vector_fname = sig_vector_fname
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
@@ -131,6 +135,53 @@ class MpiClusterBsStat:
 		sys.stderr.write("Node no.%s done with constructing two dicts.\n"%(node_rank))
 		return gene_no2bs_no_set, bs_no2gene_no_set
 	
+	def return_total_vertex_set(self, curs, good_cluster_table):
+		"""
+		04-06-06
+		"""
+		sys.stderr.write("Getting total vertex_set...\n")
+		curs.execute("DECLARE crs CURSOR FOR select vertex_set from %s "%(good_cluster_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		total_vertex_set = Set()
+		while rows:
+			for row in rows:
+				vertex_set = row[0][1:-1].split(',')
+				for vertex in vertex_set:
+					total_vertex_set.add(int(vertex))
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		sys.stderr.write("Done with total vertex_set.\n")
+		return total_vertex_set
+	
+	def fill_edge2encodedOccurrence(self, sig_vector_fname, min_sup, max_sup, total_vertex_set=None):
+		"""
+		04-04-06
+		"""
+		sys.stderr.write("Getting edge2encodedOccurrence...\n")
+		from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv
+		edge2encodedOccurrence = {}
+		reader = csv.reader(open(sig_vector_fname), delimiter='\t')
+		no_of_datasets = 0
+		counter = 0
+		for row in reader:
+			edge = row[:2]
+			edge = map(int, edge)
+			#04-06-06 any vertex of the edge doesn't appear in total_vertex_set, skip the edge
+			if total_vertex_set and (edge[0] not in total_vertex_set or edge[1] not in total_vertex_set):
+				continue
+			edge.sort()	#04-06-06 in ascending order
+			sig_vector = row[2:]
+			sig_vector = map(int, sig_vector)
+			if no_of_datasets==0:
+				no_of_datasets = len(sig_vector)
+			if sum(sig_vector)>=min_sup and sum(sig_vector)<=max_sup:
+				edge2encodedOccurrence[tuple(edge)] = encodeOccurrenceBv(sig_vector)
+		sys.stderr.write("Done.\n")
+		del reader
+		return edge2encodedOccurrence, no_of_datasets
+	
 	def fetch_cluster_block(self, curs, size):
 		"""
 		09-19-05
@@ -162,78 +213,6 @@ class MpiClusterBsStat:
 		cluster_block = Numeric.array(cluster_block)
 		return cluster_block
 	
-	def input_node(self, communicator, curs, good_cluster_table, size):
-		"""
-		10-19-05
-			ask output_node for a free_computing_node
-		"""
-		sys.stderr.write("Reading clusters from tables...\n")
-		node_rank = communicator.rank
-		curs.execute("DECLARE crs CURSOR FOR select distinct mcl_id, vertex_set, recurrence_array\
-			from %s "%(good_cluster_table))
-		cluster_block = self.fetch_cluster_block(curs, size)
-		counter = 0	#10-19-05
-		while cluster_block:
-			communicator.send(Numeric.array([-2.0]), communicator.size-1, 1)	#10-19-05 WATCH: tag is 1, to the output_node. Message is array,Float.
-			free_computing_node, source, tag = communicator.receiveString(communicator.size-1, 2)	#10-19-05
-				#WATCH: tag is 2, from the output_node
-			#node_to_receive_block = counter%(communicator.size-2)+1	#it's -2, work like this. 10-19-05 bad scheduling mechanism
-			#	#"counter%(communicator.size-2)" is in range (0,size-3). Regard node 1 to size-2 as 0 to size-3. So need +1.
-			communicator.send(cluster_block, int(free_computing_node), 0)	#10-19-05	#WATCH: int()
-			if self.report:
-				sys.stderr.write("block %s sent to %s.\n"%(counter, free_computing_node))	#10-19-05
-			cluster_block = self.fetch_cluster_block(curs, size)
-			counter += 1	#10-19-05
-		#tell computing_node to exit the loop
-		stop_signal = Numeric.zeros((1,1), Numeric.Int)
-		stop_signal[0,0] = -1
-		for node in range(1, communicator.size-1):	#send it to the computing_node
-			communicator.send(stop_signal, node, 0)
-		sys.stderr.write("Node no.%s reading done\n"%(node_rank))
-	
-	def encode_result_block(self, mcl_id, ls_to_return):
-		block = [mcl_id]
-		for ls in ls_to_return:
-			score, score_type, bs_no_list, gene_no_list, global_ratio, local_ratio, expected_ratio, unknown_ratio = ls
-			no_of_bs_nos = len(bs_no_list)
-			no_of_genes = len(gene_no_list)
-			row = [no_of_bs_nos, no_of_genes] + bs_no_list + gene_no_list + \
-				[global_ratio, local_ratio, expected_ratio, unknown_ratio, score, score_type, -1]
-			block += row
-		return Numeric.array(block, Numeric.Float)
-	
-	def node_fire(self, communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off):
-		"""
-		09-19-05
-		12-15-05
-			add p_value_cut_off
-		12-18-05
-			fuzzyDense
-		"""
-		node_rank = communicator.rank
-		sys.stderr.write("Node no.%s working...\n"%node_rank)
-		tmp_list =[]
-		for no in data:
-			if no==-1:
-				mcl_id = tmp_list[0]
-				gene_no_list = tmp_list[1:]
-				tmp_list = []
-			elif no==-2:
-				recurrence_array = tmp_list
-				core_vertex_list, on_dataset_index_ls =  fuzzyDense_instance.get_core_vertex_set(gene_no_list, recurrence_array, degree_cut_off)
-				if core_vertex_list:
-					ls_to_return = cluster_bs_analysis(core_vertex_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-						top_number, p_value_cut_off)
-				else:
-					ls_to_return = []
-				result_block = self.encode_result_block(mcl_id, ls_to_return)
-				communicator.send(result_block, communicator.size-1, 1)
-				tmp_list = []
-			else:
-				tmp_list.append(no)
-		sys.stderr.write("Node no.%s done.\n"%node_rank)
-	
 	def computing_node_handler(self, communicator, data, parameter_list):
 		"""
 		12-20-05
@@ -260,37 +239,18 @@ class MpiClusterBsStat:
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
-	def computing_node(self, communicator, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off):
-		"""
-		09-19-05
-		10-21-05
-			stop_signal's dimension is 1. In fact, dimension (1,1) is same as (1).
-		12-15-05
-			add p_value_cut_off
-		12-18-05
-		"""
-		node_rank = communicator.rank
-		data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
-		while 1:
-			if data[0]==-1:
-				if self.debug:
-					sys.stderr.write("node %s breaked.\n"%node_rank)
-				break
-			else:
-				self.node_fire(communicator, data, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-					top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off)
-			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)	#get data from node 0
-		#tell the last node to stop
-		stop_signal = Numeric.zeros((1), Numeric.Float)
-		stop_signal[0] = -1.0
-		communicator.send(stop_signal, communicator.size-1, 1)
 	
 	def create_cluster_bs_table(self, curs, cluster_bs_table):
+		"""
+		04-06-06
+			add core_vertex_ls and on_dataset_index_ls
+		"""
 		sys.stderr.write("Creating %s...\n"%cluster_bs_table)
 		curs.execute("create table %s(\
 			id	serial primary key,\
 			mcl_id	integer,\
+			core_vertex_ls	integer[],\
+			on_dataset_index_ls	integer[],\
 			bs_no_list	integer[],\
 			gene_no_list	integer[],\
 			global_ratio	float,\
@@ -305,31 +265,20 @@ class MpiClusterBsStat:
 		"""
 		09-20-05
 			data is Float
+		04-06-06
+			the format of 'data' is changed
+			add core_vertex_ls, on_dataset_index_ls
 		"""
 		curs, cluster_bs_table = parameter_list
-		mcl_id = int(data[0])
-		row = []
-		for no in data[1:]:
-			if no==-1.0:
-				no_of_bs_nos = int(row[0])
-				no_of_genes = int(row[1])
-				offset1 = no_of_bs_nos + 2
-				offset2 = no_of_bs_nos + no_of_genes + 2
-				bs_no_list = row[2:offset1]
-				bs_no_list = map(int, bs_no_list)
-				gene_no_list = row[offset1: offset2]
-				gene_no_list = map(int, gene_no_list)
-				global_ratio, local_ratio, expected_ratio, unknown_ratio, score, score_type = row[offset2:]
-				score_type = int(score_type)
-				curs.execute("insert into %s(mcl_id, bs_no_list, gene_no_list, global_ratio, local_ratio, \
-					expected_ratio, unknown_ratio, score, score_type) values(%s, '{%s}', '{%s}', %s, %s,\
-					%s, %s, %s, %s)"%(cluster_bs_table, mcl_id, repr(bs_no_list)[1:-1], repr(gene_no_list)[1:-1],\
+		data = cPickle.loads(data)
+		for row in data:
+			id, core_vertex_ls, on_dataset_index_ls, ls_to_return = row
+			for tfbs_row in ls_to_return:
+				score, score_type, bs_no_list, target_gene_no_list, global_ratio, local_ratio, expected_ratio, unknown_ratio = tfbs_row
+				curs.execute("insert into %s(mcl_id, core_vertex_ls, on_dataset_index_ls, bs_no_list, gene_no_list, global_ratio, local_ratio, \
+					expected_ratio, unknown_ratio, score, score_type) values(%s, ARRAY%s, ARRAY%s, '{%s}', '{%s}', %s, %s,\
+					%s, %s, %s, %s)"%(cluster_bs_table, id, repr(core_vertex_ls), repr(on_dataset_index_ls), repr(bs_no_list)[1:-1], repr(target_gene_no_list)[1:-1],\
 					global_ratio, local_ratio, expected_ratio, unknown_ratio, score, score_type))
-				row = []
-			else:
-				row.append(no)
-		if len(data)==1:	#no cluster_bs_analysis result
-			curs.execute("insert into %s(mcl_id) values(%s)"%(cluster_bs_table, mcl_id))
 	
 	def output_cluster_bs_data(self, communicator, parameter_list, data):
 		"""
@@ -394,10 +343,11 @@ class MpiClusterBsStat:
 			#12-18-05 get edge2encodedOccurrence
 			MpiCrackSplat_instance = MpiCrackSplat()
 			edge2encodedOccurrence = {}
-			min_sup = 3	#need to expose them
-			max_sup = 30
-			no_of_datasets = MpiCrackSplat_instance.fill_edge2encodedOccurrence(self.hostname, self.dbname, \
-				self.schema, edge2encodedOccurrence, min_sup, max_sup)
+			min_sup = 5	#need to expose them
+			max_sup = 40
+			total_vertex_set = self.return_total_vertex_set(curs, self.good_cluster_table)
+			edge2encodedOccurrence, no_of_datasets = self.fill_edge2encodedOccurrence(\
+				self.sig_vector_fname, min_sup, max_sup, total_vertex_set)
 			edge2encodedOccurrence_pickle = cPickle.dumps(edge2encodedOccurrence, -1)
 			for node in free_computing_nodes:	#send it to the computing_node
 				communicator.send(edge2encodedOccurrence_pickle, node, 0)
@@ -420,35 +370,24 @@ class MpiClusterBsStat:
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			#self.input_node(communicator, curs, self.good_cluster_table, self.size)
-			
-			#12-20-05
 			curs.execute("DECLARE crs CURSOR FOR select distinct id, vertex_set, recurrence_array\
 				from %s "%(self.good_cluster_table))
 			input_node(communicator, curs, free_computing_nodes, self.size, self.report)
 			curs.execute("close crs")
 			
 		elif node_rank<=communicator.size-2:	#exclude the last node
-			#12-18-05
-			#fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
-			#degree_cut_off = 0.3
-			
-			#self.computing_node(communicator, gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
-				#self.top_number, self.p_value_cut_off, fuzzyDense_instance, degree_cut_off)				#12-15-05 add p_value_cut_off
-			
-			#12-20-05
 			fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
 			parameter_list = [gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
 				self.top_number, self.p_value_cut_off, fuzzyDense_instance, self.degree_cut_off]
 			computing_node(communicator, parameter_list, self.computing_node_handler, report=self.report)
 			
 		elif node_rank==communicator.size-1:
-			"""
+			
 			#12-20-05 comment out
 			if self.new_table:
 				self.create_cluster_bs_table(curs, self.cluster_bs_table)
 			parameter_list = [curs, self.cluster_bs_table]
-			output_node(communicator, free_computing_nodes, parameter_list, self.submit_cluster_bs_table, report=self.report, type=Numeric.Float)
+			output_node(communicator, free_computing_nodes, parameter_list, self.submit_cluster_bs_table, report=self.report)
 			if self.commit:
 				curs.execute("end")
 			"""
@@ -459,6 +398,7 @@ class MpiClusterBsStat:
 			
 			outf.write('[]]:\n')
 			outf.close()
+			"""
 
 
 if __name__ == '__main__':
@@ -467,7 +407,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:v:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -485,6 +425,7 @@ if __name__ == '__main__':
 	p_value_cut_off = 0.001
 	output_file = 'fuzzyDense.out'
 	tax_id = 4932
+	sig_vector_fname = None
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -519,17 +460,19 @@ if __name__ == '__main__':
 			output_file = arg
 		elif opt in ("-x",):
 			tax_id = int(arg)
+		elif opt in ("-v",):
+			sig_vector_fname = arg
 		elif opt in ("-c",):
 			commit = 1
 		elif opt in ("-b",):
 			debug = 1
 		elif opt in ("-r",):
 			report = 1
-	if schema and good_cluster_table:
+	if schema and good_cluster_table and sig_vector_fname:
 		if cluster_bs_table or output_file:
 			instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
 				cluster_bs_table, size, ratio_cutoff, top_number, degree_cut_off, p_value_cut_off, output_file, \
-				tax_id, new_table, commit, debug, report)
+				tax_id, sig_vector_fname, new_table, commit, debug, report)
 			instance.run()
 	else:
 		print __doc__
