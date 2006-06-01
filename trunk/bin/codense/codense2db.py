@@ -16,6 +16,7 @@ Option:
 	-f ..., --cor_cut_off=...	the cor_cut_off for an edge to be valid, 0(default)
 		NOTICE: 0 means the binary conversion won't be used, just summing the floats.
 	-y ..., --parser_type=...	the type of parser to use, 1(copath, default), 2(codense), 3(fim), 4(fimbfs)
+		5(haifeng's output)
 	-s ..., --min_cluster_size=...	the minimum number of vertices, 5(default)
 	-l ..., --delimiter=...	the delimiter for the DATAFILE, \t (default)
 	-b, --debug	debug version.
@@ -114,7 +115,8 @@ class codense2db:
 		self.parser_dict = {1:self.copath_parser,
 			2: self.codense_parser,
 			3: self.fim_parser,
-			4: self.fimbfs_parser}
+			4: self.fimbfs_parser,
+			5: self.haifeng_output_parser}
 		
 		self.cluster_no = 0
 		self.cooccurrent_cluster_id = 0
@@ -415,6 +417,57 @@ class codense2db:
 		self.cluster_no += 1
 		self.cooccurrent_cluster_id += 1
 		return cluster_list
+
+	def haifeng_output_parser(self, row, argument=None, argument2=None):
+		"""
+		05-31-06 parse haifeng's output, only first two columns
+			based on fimbfs_parser()
+		"""
+		
+		cluster_list = []
+		gene_no2incidence_array = argument
+		curs = argument2
+		cluster = cluster_dstructure()
+		#initialize two sets
+		cluster.vertex_set = row[0][1:-1].split(',')
+		cluster.vertex_set = map(int, cluster.vertex_set)
+		cluster.vertex_set.sort()
+		
+		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
+		cluster.cluster_id = self.cluster_no
+		
+		cluster.edge_set = row[1][2:-2].split('), (')
+		for i in range(len(cluster.edge_set)):
+			cluster.edge_set[i] = cluster.edge_set[i].split(',')
+			cluster.edge_set[i] = map(int, cluster.edge_set[i])
+			cluster.edge_set[i].sort()
+		cluster.edge_set.sort()
+		
+		cluster.no_of_edges = len(cluster.edge_set)
+		no_of_nodes = len(cluster.vertex_set)
+		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
+		
+		cluster.connectivity = cluster.splat_connectivity
+		#05-31-06 fake recurrence_array
+		cluster.recurrence_array = [0,0,0]
+		#05-31-06 forget about the d_matrix
+		#cluster.d_matrix = 
+		
+		cluster.gim_array = get_vertex_set_gim_array(gene_no2incidence_array, cluster.vertex_set)
+		
+		if self.debug:
+			print "cluster vertex_set: ", cluster.vertex_set
+			print "cluster edge_set: ", cluster.edge_set
+			print "cluster splat_connectivity: ", cluster.splat_connectivity
+			print "cluster recurrence_array: ", cluster.recurrence_array
+			print "cluster.d_matrix:", cluster.d_matrix
+			print "cluster.gim_array:", cluster.gim_array
+			raw_input("Continue?(Y/n)")
+		cluster_list.append(cluster)
+			
+		self.cluster_no += 1
+		self.cooccurrent_cluster_id += 1
+		return cluster_list
 	
 	def get_edge_list_given_edge_id_list(self, curs, edge_id_list, edge_table='edge_cor_vector'):
 		"""
@@ -560,6 +613,8 @@ class codense2db:
 			add calculate_unknown_gene_ratio()
 		12-06-05
 			add gene_no2incidence_array to parser_type ==4
+		05-31-06
+			add type 5 (haifeng's output)
 			
 			--db_connect()
 			--get_haiyan_no2gene_no()
@@ -587,7 +642,7 @@ class codense2db:
 			haiyan_no2gene_no = {}	#a blank dictionary, 
 		known_gene_no2go_no_set = get_known_genes_dict(curs)	#10-14-05	used to get unknown_gene_ratio
 		
-		if self.parser_type == 4:	#12-06-05
+		if self.parser_type == 4 or self.parser_type==5:	#12-06-05
 			if self.gim_inputfname == None:
 				sys.stderr.write("\n parser_type = 4 needs gim_inputfname.\n")
 				sys.exit(3)
@@ -599,7 +654,8 @@ class codense2db:
 		mapping_dict = {1:haiyan_no2gene_no,
 			2:haiyan_no2gene_no,
 			3:None,
-			4:gene_no2incidence_array}
+			4:gene_no2incidence_array,
+			5:gene_no2incidence_array}
 		self.create_tables(curs, self.table, self.mcl_table, self.pattern_table)
 		no = 0
 		
