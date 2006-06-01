@@ -450,8 +450,8 @@ class codense2db:
 		cluster.connectivity = cluster.splat_connectivity
 		#05-31-06 fake recurrence_array
 		cluster.recurrence_array = [0,0,0]
-		#05-31-06 forget about the d_matrix
-		#cluster.d_matrix = 
+		#05-31-06 fake the d_matrix
+		cluster.d_matrix = [[0,0,0]]
 		
 		cluster.gim_array = get_vertex_set_gim_array(gene_no2incidence_array, cluster.vertex_set)
 		
