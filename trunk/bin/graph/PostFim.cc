@@ -66,6 +66,8 @@ void PostFim::read_input_filename(char* input_filename, int no_of_datasets)
 /*
 *01-10-06
 read pattern signature and its frequency
+2006-08-08
+	fix a bug in the indexing of signature_frequency_vector
 */
 {
 	std::cerr<<"Read "<<input_filename<<"..."<<std::endl;
@@ -89,17 +91,17 @@ read pattern signature and its frequency
 		#if defined(DEBUG0)
 			std::cerr<<std::endl<<"size: "<<signature_frequency_vector.size()<<std::endl;
 		#endif
-		for (int i=0; i<signature_frequency_vector.size()-2; i++)	//exclude the last frequency
+		for (int i=0; i<signature_frequency_vector.size()-1; i++)	//exclude the last frequency 2006-08-08
 			sig_bitset[signature_frequency_vector[i]-1] = 1;
 		#if defined(DEBUG0)
 			std::cerr<<sig_bitset<<std::endl;
 		#endif
 		pattern_bitset_vector.push_back(sig_bitset);
 		#if defined(DEBUG0)
-			std::cerr<<signature_frequency_vector[signature_frequency_vector.size()-2]<<std::endl;
+			std::cerr<<signature_frequency_vector[signature_frequency_vector.size()-1]<<std::endl;	//2006-08-08
 		#endif
 		sig_bitset.reset();
-		freq_of_signature_vector.push_back(signature_frequency_vector[signature_frequency_vector.size()-2]);	//the last element is frequency
+		freq_of_signature_vector.push_back(signature_frequency_vector[signature_frequency_vector.size()-1]);	//the last element is frequency, 2006-08-08
 		signature_frequency_vector.clear();
 	}
 	
