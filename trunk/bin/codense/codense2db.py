@@ -422,6 +422,7 @@ class codense2db:
 		"""
 		05-31-06 parse haifeng's output, only first two columns
 			based on fimbfs_parser()
+		2006-08-22 use ], [ as separator for edge_set
 		"""
 		
 		cluster_list = []
@@ -436,7 +437,7 @@ class codense2db:
 		cluster.cooccurrent_cluster_id = self.cooccurrent_cluster_id
 		cluster.cluster_id = self.cluster_no
 		
-		cluster.edge_set = row[1][2:-2].split('), (')
+		cluster.edge_set = row[1][2:-2].split('], [')
 		for i in range(len(cluster.edge_set)):
 			cluster.edge_set[i] = cluster.edge_set[i].split(',')
 			cluster.edge_set[i] = map(int, cluster.edge_set[i])
