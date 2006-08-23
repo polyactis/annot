@@ -7,6 +7,8 @@ Option:
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database, protein_interaction(default)
 	-i ...,	input file list, ',' separated, or just one
+	-a ...,	acc_file, gene2accession from NCBI Gene
+	-x ...,	tax_id list, ',' delimited, just for acc_file
 	-t ...,	interaction table, 'intact_interaction'(default)
 	-e ...,	experiment table, 'intact_expt'(default)
 	-c,	commit this database transaction
@@ -25,8 +27,11 @@ Description:
 
 import sys, getopt, os
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
+sys.path += [os.path.expanduser('~/script/microarray/bin')]
+from MdbId2GeneId import MdbId2GeneId
 from codense.common import db_connect
 import cElementTree as ElementTree
+from sets import Set
 
 class interaction_attribute:
 	def __init__(self):
@@ -50,12 +55,14 @@ class IntActXML2db:
 	12-29-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None,  input_fname_list=[],\
-		interaction_table='intact_interaction', expt_table='intact_expt', \
+		acc_file=None, tax_id_list=[], interaction_table='intact_interaction', expt_table='intact_expt', \
 		commit=0, debug=0, report=0):
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.input_fname_list = input_fname_list
+		self.acc_file = acc_file
+		self.tax_id_list = tax_id_list
 		self.interaction_table = interaction_table
 		self.expt_table = expt_table
 		self.commit = int(commit)
@@ -82,10 +89,12 @@ class IntActXML2db:
 			repr(interaction_attrib.expt_id_array), interaction_attrib.tax_id, interaction_attrib.is_cross_species,\
 			interaction_attrib.intact_id))
 	
-	def parse_intact_xml_file(self, curs, input_fname, expt_table, interaction_table):
+	def parse_intact_xml_file(self, curs, input_fname, expt_table, interaction_table, acc_tax_id2gene_id_list):
 		"""
 		12-28-05
 			xmlns="net:sf:psidev:mi" causes a namespace header to be added for each element
+		12-29-05
+			add acc_tax_id2gene_id_list
 		"""		
 		sys.stderr.write("Parsing %s...\n"%input_fname)
 		namespace = '{net:sf:psidev:mi}'
@@ -112,8 +121,15 @@ class IntActXML2db:
 							uniprot_id_elem = interactor_elem.find('%sxref/%sprimaryRef'%(namespace, namespace))
 							uniprot_id = uniprot_id_elem.get("id")
 							tax_id_elem = interactor_elem.find("%sorganism"%namespace)
-							tax_id = tax_id_elem.get("ncbiTaxId")
-							interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (uniprot_id, tax_id)
+							tax_id = int(tax_id_elem.get("ncbiTaxId"))
+							#12-29-05
+							key = (uniprot_id.upper(), tax_id)
+							gene_id_list = acc_tax_id2gene_id_list.get(key)
+							if gene_id_list and len(gene_id_list)==1:
+								interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (gene_id_list[0], tax_id)
+							else:
+								sys.stderr.write("\t Warning: %s gets entrez gene_id_list: %s\n"%(uniprot_id, gene_id_list))
+								interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (None, tax_id)	#12-29-05 use None
 							interactor_elem.clear()	#release memory
 					if sub_elem.tag == "%sinteractionList"%namespace:
 						for interaction_elem in sub_elem:
@@ -125,15 +141,22 @@ class IntActXML2db:
 							interaction_attrib.intact_id = interaction_elem.find("%sxref/%sprimaryRef"%(namespace, namespace)).get("id")
 							for prot_part_elem in interaction_elem.find("%sparticipantList"%namespace):
 								prot_intact_id = prot_part_elem.find("%sproteinInteractorRef"%namespace).get("ref")
+								#12-29-05
 								uniprot_id, tax_id = interactor_intact_id2uniprot_id_tax_id[prot_intact_id]
-								interaction_attrib.uniprot_id_array.append(uniprot_id)
+								if uniprot_id:	#12-29-05 it could be None if no corresponding gene_id_list or len(gene_id_list)>1
+									interaction_attrib.uniprot_id_array.append(uniprot_id)
+								else:
+									sys.stderr.write("\t Warning: prot_intact_id %s doesn't have proper entrez gene id.\n"%prot_intact_id)
+									interaction_attrib.is_cross_species = 1	#12-29-05 just tag it as bad/incomplete interaction
+									
 								if interaction_attrib.tax_id and tax_id!=interaction_attrib.tax_id:
 									sys.stderr.write("\t Warning: interaction %s has >1 tax_id: %s, %s(ignored).\n"%\
 										(interaction_attrib.intact_id, interaction_attrib.tax_id, tax_id))
 									interaction_attrib.is_cross_species = 1	#interaction not just within one species
 								else:
 									interaction_attrib.tax_id = tax_id
-							self.submit_interaction_table(curs, interaction_attrib, interaction_table)
+							if interaction_attrib.uniprot_id_array:	#12-29-05 not empty
+								self.submit_interaction_table(curs, interaction_attrib, interaction_table)
 							interaction_elem.clear()	#release memory
 					
 					sub_elem.clear()	#release the sub_elem
@@ -141,8 +164,10 @@ class IntActXML2db:
 	
 	def run(self):
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
+		MdbId2GeneId_instance = MdbId2GeneId()
+		acc_tax_id2gene_id_list = MdbId2GeneId_instance.setup_acc2gene_id(self.acc_file, Set(self.tax_id_list))
 		for input_fname in self.input_fname_list:
-			self.parse_intact_xml_file(curs, input_fname, self.expt_table, self.interaction_table)
+			self.parse_intact_xml_file(curs, input_fname, self.expt_table, self.interaction_table, acc_tax_id2gene_id_list)
 		if self.commit:
 			curs.execute("end")
 
@@ -153,7 +178,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:t:e:cbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:a:x:t:e:cbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -163,6 +188,8 @@ if __name__ == '__main__':
 	dbname = 'graphdb'
 	schema = 'protein_interaction'
 	input_fname_list = []
+	acc_file = None
+	tax_id_list = []
 	interaction_table = 'intact_interaction'
 	expt_table = 'intact_expt'
 	commit = 0
@@ -180,6 +207,11 @@ if __name__ == '__main__':
 			schema = arg
 		elif opt in ("-i",):
 			input_fname_list = arg.split(',')
+		elif opt in ("-a",):
+			acc_file = arg
+		elif opt in ("-x",):
+			tax_id_list = arg.split(',')
+			tax_id_list = map(int, tax_id_list)
 		elif opt in ("-t",):
 			interaction_table = arg
 		elif opt in ("-e",):
@@ -190,9 +222,9 @@ if __name__ == '__main__':
 			debug = 1
 		elif opt in ("-r",):
 			report = 1
-	if input_fname_list and schema:
-		instance = IntActXML2db(hostname, dbname, schema, input_fname_list, interaction_table, expt_table, \
-			commit, debug, report)
+	if input_fname_list and schema and acc_file and tax_id_list:
+		instance = IntActXML2db(hostname, dbname, schema, input_fname_list, acc_file, \
+			tax_id_list, interaction_table, expt_table, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
