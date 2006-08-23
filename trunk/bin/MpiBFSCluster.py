@@ -12,6 +12,8 @@ Option:
 	-g ...,	sig_vector file
 	-m ..., --min_sup=...	minimum support of an edge in the database, 0(default)
 	-x ..., --max_sup=...	maximum support of an edge, 200(default)
+	-y ...,	parser type, 1(MpiFromDatasetSignatureToPattern.py's output, default),
+		2(haifeng's version, output of ccomp.py)
 	-n,	output_table is new(IGNORE)
 	-c,	commit the database transaction(IGNORE)
 	-b,	debug version.
@@ -43,6 +45,9 @@ from codense.common import mpi_synchronize, db_connect, output_node, \
 from sets import Set
 from graph.johnson_sp import johnson_sp
 from MpiFromDatasetSignatureToPattern import MpiFromDatasetSignatureToPattern
+from graph.cc_from_edge_list import cc_from_edge_list
+from CcFromBiclusteringOutput import CcFromBiclusteringOutput
+
 
 """
 class cal_distance_bfs_visitor(bgl.Graph.BFSVisitor):
@@ -77,9 +82,11 @@ class MpiBFSCluster:
 	09-19-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, inputfile=None,\
-		outputfile=None, size=2000, sig_vector_fname=None, min_sup=0, max_sup=200, \
+		outputfile=None, size=2000, sig_vector_fname=None, min_sup=0, max_sup=200, parser_type=1,\
 		new_table=0, commit=0, debug=0, report=0):
 		"""
+		2006-08-22
+			add parser_type
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -90,10 +97,14 @@ class MpiBFSCluster:
 		self.sig_vector_fname = sig_vector_fname
 		self.min_sup = int(min_sup)
 		self.max_sup = int(max_sup)
+		self.parser_type = int(parser_type)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
 		self.report = int(report)
+		
+		self.parser_dict = {1: self.default_parser,
+			2: self.haifeng_parser}
 	
 	def input_handler(self, parameter_list, message_size, report=0):
 		"""
@@ -113,6 +124,52 @@ class MpiBFSCluster:
 			sys.stderr.write("Fetching done.\n")
 		return block
 	
+	def default_parser(self, row, j_instance, cfbo_instance):
+		"""
+		2006-08-22
+			default parser, work for annot's pipeline
+		"""
+		vertex_set, edge_set = row[:2]	#04-27-06, just first 2 elements
+		edge_set = edge_set[2:-2].split('), (')
+		for i in range(len(edge_set)):
+			edge_set[i] = edge_set[i].split(',')
+			edge_set[i] = map(int, edge_set[i])
+		#04-27-06, work on each connected component
+		result = []
+		cfe_instance= cc_from_edge_list()
+		cfe_instance.run(edge_set)
+		for cc_edge_list in cfe_instance.cc_list:
+			vertex_set = cfbo_instance.vertex_set_from_cc_edge_list(cc_edge_list)
+			D = j_instance.py_shortest_distance(vertex_set,cc_edge_list)
+			recurrence_array = j_instance.py_recurrence_list()	#MUST be after py_shortest_distance()
+			cc_edge_list.sort()	#10-28-05 to ease codense2db.py	#01-01-06
+			output_row = [vertex_set, cc_edge_list, recurrence_array, D]	#10-28-05, #01-01-06
+			result.append(output_row)
+		return result
+	
+	def haifeng_parser(self, row, j_instance, cfbo_instance):
+		"""
+		2006-08-22
+			output of ccomp.py, no need for cc_from_edge_list()
+		"""
+		vertex_set, edge_set = row[:2]
+		vertex_set = vertex_set[1:-1].split(',')
+		vertex_set = map(int, vertex_set)
+		vertex_set.sort()
+		
+		edge_set = edge_set[2:-2].split('], [')
+		for i in range(len(edge_set)):
+			edge_set[i] = edge_set[i].split(',')
+			edge_set[i] = map(int, edge_set[i])
+			edge_set[i].sort()
+		edge_set.sort()
+		
+		D = j_instance.py_shortest_distance(vertex_set, edge_set)
+		recurrence_array = j_instance.py_recurrence_list()	#MUST be after py_shortest_distance()
+		output_row = [vertex_set, edge_set, recurrence_array, D]	#10-28-05, #01-01-06
+		result = [output_row]
+		return result
+	
 	def node_fire(self, communicator, data, parameter_list):
 		"""
 		10-07-05
@@ -127,34 +184,24 @@ class MpiBFSCluster:
 		01-23-06
 			j_instance directly from parameter_list
 			j_instance also calculates the recurrence_array
+		04-27-06 haifeng's result contains disconnected graphs
+		2006-08-22 add parser_type
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
-		j_instance = parameter_list[0]
+		j_instance, parser_type = parameter_list
 		data = cPickle.loads(data)
 		result = []
+		#04-27-06 haifeng's result contains disconnected graphs
+		cfbo_instance = CcFromBiclusteringOutput()
+		
 		for row in data:
 			try:
-				vertex_set, edge_set = row
-				vertex_set = vertex_set[1:-1].split(',')
-				vertex_set = map(int, vertex_set)
-				vertex_set.sort()	#10-28-05
-				edge_set = edge_set[2:-2].split('), (')	#10-28-05	#01-01-06
-				for i in range(len(edge_set)):
-					edge_set[i] = edge_set[i].split(',')
-					edge_set[i] = map(int, edge_set[i])
-					#edge_set[i].sort()	#10-28-05	#01-01-06
-				D = j_instance.py_shortest_distance(vertex_set, edge_set)
-				recurrence_array = j_instance.py_recurrence_list()	#MUST be after py_shortest_distance()
-				#edge_set.sort()	#10-28-05 to ease codense2db.py	#01-01-06
-				row = [vertex_set, edge_set, recurrence_array, D]	#10-28-05, #01-01-06
-				result.append(row)
+				result += self.parser_dict[parser_type](row, j_instance, cfbo_instance)
 			except:
 				common_string = "Node %s error"%communicator.rank
 				print common_string, sys.exc_info()
-				print common_string, "vertex_set",vertex_set,"edge_set",edge_set
-				print common_string, "d_matrix",D
-				print common_string, "recurrence_array", recurrence_array
+				print common_string, "input_row", row
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
@@ -267,7 +314,7 @@ class MpiBFSCluster:
 			input_node(communicator, parameter_list, free_computing_nodes, self.size, self.report, input_handler=self.input_handler)
 			del inf
 		elif node_rank in free_computing_nodes:	#exclude the last node
-			parameter_list = [j_instance]
+			parameter_list = [j_instance, self.parser_type]
 			computing_node(communicator, parameter_list, self.node_fire, self.cleanup_handler, self.report)
 		elif node_rank==communicator.size-1:
 			writer = csv.writer(open(self.outputfile, 'w'), delimiter='\t')
@@ -281,7 +328,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:g:m:x:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:o:s:g:m:x:y:ncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -296,6 +343,7 @@ if __name__ == '__main__':
 	sig_vector_fname = None
 	min_sup = 0
 	max_sup = 200
+	parser_type = 1
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -322,6 +370,8 @@ if __name__ == '__main__':
 			min_sup = int(arg)
 		elif opt in ("-x", "--max_sup"):
 			max_sup = int(arg)
+		elif opt in ("-y", ):
+			parser_type = int(arg)
 		elif opt in ("-n",):
 			new_table = 1
 		elif opt in ("-c",):
@@ -332,7 +382,7 @@ if __name__ == '__main__':
 			report = 1
 	if inputfile and outputfile and sig_vector_fname:
 		instance = MpiBFSCluster(hostname, dbname, schema, inputfile, outputfile,\
-			size, sig_vector_fname, min_sup, max_sup, new_table, commit, debug, report)
+			size, sig_vector_fname, min_sup, max_sup, parser_type, new_table, commit, debug, report)
 		instance.run()
 	else:
 		print __doc__
