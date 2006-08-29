@@ -423,7 +423,10 @@ class codense2db:
 		05-31-06 parse haifeng's output, only first two columns
 			based on fimbfs_parser()
 		2006-08-22 use ], [ as separator for edge_set
+		2006-08-29 cluster_no increments first(starting from 1)
 		"""
+		self.cluster_no += 1
+		self.cooccurrent_cluster_id += 1
 		
 		cluster_list = []
 		gene_no2incidence_array = argument
@@ -465,9 +468,7 @@ class codense2db:
 			print "cluster.gim_array:", cluster.gim_array
 			raw_input("Continue?(Y/n)")
 		cluster_list.append(cluster)
-			
-		self.cluster_no += 1
-		self.cooccurrent_cluster_id += 1
+		
 		return cluster_list
 	
 	def get_edge_list_given_edge_id_list(self, curs, edge_id_list, edge_table='edge_cor_vector'):
@@ -666,8 +667,8 @@ class codense2db:
 		for row in inf:
 			cluster_list = self.parser_dict[self.parser_type](row, mapping_dict[self.parser_type], curs)
 			for cluster in cluster_list:
-				if len(cluster.vertex_set)<self.min_cluster_size:
-					#too small, ignore
+				if self.parser_type!=5 and len(cluster.vertex_set)<self.min_cluster_size:
+					#too small, ignore, 2006-08-29 if it's haifeng_output_parser, no restriction for cluster size, haifeng imposes 4
 					continue
 				#10-14-05 unknown_gene_ratio to submit to pattern_table
 				cluster.unknown_gene_ratio = self.calculate_unknown_gene_ratio(cluster.vertex_set, known_gene_no2go_no_set)
