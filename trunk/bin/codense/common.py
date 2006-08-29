@@ -1452,6 +1452,8 @@ def cal_hg_p_value(gene_no, go_no, vertex_list, no_of_total_genes, go_no2gene_no
 11-12-05 get a specified segment from chromosome sequence table
 	reverse is handled but complement(strand) is not. Upper level function should take care of this.
 11-15-05 improve it to be more robust, add acc_ver and report if not found in raw_sequence_table
+2006-08-28 fix a bug when the start%chunk_size =0 (sits on the edge of the previous chunk, two more chunks
+	are required)
 """
 def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.annot_assembly', \
 	raw_sequence_table='sequence.raw_sequence', chunk_size=10000):
@@ -1463,11 +1465,11 @@ def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.a
 	acc_ver, orig_start, orig_stop, raw_sequence_start_id = rows[0]
 	if stop>orig_stop:	#11-14-05 to avoid exceeding the boundary
 		stop = orig_stop
-	no_of_chunks_before = start/chunk_size	#how many chunks are before this segment
+	no_of_chunks_before = start/chunk_size-1	#how many chunks are before this segment (2006-08-28) -1 ensures the edge
 	segment_size = stop - start +1
-	no_of_chunks_segment = segment_size/chunk_size + 1	#how many chunks could include this segment
+	no_of_chunks_segment = segment_size/chunk_size + 1	#how many chunks could be included in this segment
 	raw_sequence_start_id += no_of_chunks_before	#the first chunk which contains teh segment
-	offset = no_of_chunks_segment + 1	#add one more chunk to ensure the segment is within
+	offset = no_of_chunks_segment + 2	#add two more chunks to ensure the segment is enclosed(2006-08-28)
 	#get the sequence from raw_sequence_table
 	seq = ''
 	for i in range(offset):
