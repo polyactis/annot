@@ -424,6 +424,7 @@ class codense2db:
 			based on fimbfs_parser()
 		2006-08-22 use ], [ as separator for edge_set
 		2006-08-29 cluster_no increments first(starting from 1)
+		2006-09-21 also parse the recurrence_array
 		"""
 		self.cluster_no += 1
 		self.cooccurrent_cluster_id += 1
@@ -452,8 +453,8 @@ class codense2db:
 		cluster.splat_connectivity = 2*float(cluster.no_of_edges)/(no_of_nodes*(no_of_nodes-1))
 		
 		cluster.connectivity = cluster.splat_connectivity
-		#05-31-06 fake recurrence_array
-		cluster.recurrence_array = [0,0,0]
+		cluster.recurrence_array = row[2][1:-1].split(',')
+		cluster.recurrence_array = map(float, cluster.recurrence_array)
 		#05-31-06 fake the d_matrix
 		cluster.d_matrix = [[0,0,0]]
 		
