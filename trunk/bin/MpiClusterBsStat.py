@@ -17,6 +17,7 @@ Option:
 	-o ...,	output_file, fuzzyDense.out(default)
 	-x ...,	tax_id, 4932(default, yeast), for get_gene_id2gene_symbol
 	-v ...,	sig_vector_fname
+	-f,	run fuzzyDense
 	-n,	CLUSTER_BS_TABLE is new
 	-c,	commit the database transaction
 	-b,	debug version.
@@ -56,12 +57,14 @@ class MpiClusterBsStat:
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
 		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, top_number=5, degree_cut_off=0.3, p_value_cut_off=0.001, \
-		output_file='fuzzyDense.out', tax_id=4932, sig_vector_fname=None, new_table=0, commit=0, debug=0, report=0):
+		output_file='fuzzyDense.out', tax_id=4932, sig_vector_fname=None, fuzzyDense_flag=0, new_table=0, \
+		commit=0, debug=0, report=0):
 		"""
 		12-15-05
 			add p_value_cut_off
 		12-20-05
 			add output_file and tax_id, degree_cut_off
+		2006-09-21 add fuzzyDense_flag
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -76,6 +79,7 @@ class MpiClusterBsStat:
 		self.output_file = output_file
 		self.tax_id = int(tax_id)
 		self.sig_vector_fname = sig_vector_fname
+		self.fuzzyDense_flag = int(fuzzyDense_flag)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
 		self.debug = int(debug)
@@ -217,25 +221,32 @@ class MpiClusterBsStat:
 		"""
 		12-20-05
 			called common's computing_node()
+		2006-09-21 add fuzzyDense_flag
 		"""
 		node_rank = communicator.rank
 		sys.stderr.write("Node no.%s working...\n"%node_rank)
 		data = cPickle.loads(data)
 		gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
-		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off = parameter_list
+		top_number, p_value_cut_off, fuzzyDense_instance, degree_cut_off, fuzzyDense_flag = parameter_list
 		result = []
 		for row in data:
 			id, vertex_set, recurrence_array = row
 			vertex_set = vertex_set[1:-1].split(',')
 			vertex_set = map(int, vertex_set)
-			recurrence_array = recurrence_array[1:-1].split(',')
-			recurrence_array = map(float, recurrence_array)
-			core_vertex_list, on_dataset_index_ls =  fuzzyDense_instance.get_core_vertex_set(vertex_set, recurrence_array, degree_cut_off)
-			if core_vertex_list:
-				ls_to_return = cluster_bs_analysis(core_vertex_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+			if fuzzyDense_flag:
+				recurrence_array = recurrence_array[1:-1].split(',')
+				recurrence_array = map(float, recurrence_array)
+				core_vertex_list, on_dataset_index_ls =  fuzzyDense_instance.get_core_vertex_set(vertex_set, recurrence_array, degree_cut_off)
+				if core_vertex_list:
+					ls_to_return = cluster_bs_analysis(core_vertex_list, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
+						top_number, p_value_cut_off)
+					if ls_to_return:
+						result.append([id, core_vertex_list, on_dataset_index_ls, ls_to_return])
+			else:
+				ls_to_return = cluster_bs_analysis(vertex_set, gene_no2bs_no_set, bs_no2gene_no_set, ratio_cutoff, \
 					top_number, p_value_cut_off)
 				if ls_to_return:
-					result.append([id, core_vertex_list, on_dataset_index_ls, ls_to_return])
+					result.append([id, vertex_set, [0], ls_to_return])	#05-31-06, on_dataset_index_ls is faked by [0]
 		sys.stderr.write("Node no.%s done.\n"%node_rank)
 		return result
 	
@@ -317,7 +328,8 @@ class MpiClusterBsStat:
 	def run(self):
 		"""
 		09-05-05
-			
+		2006-09-21 add fuzzyDense_flag
+		
 			--db_connect()
 			--get_gene_no2bs_no_block()
 			--construct_two_dicts()
@@ -340,24 +352,25 @@ class MpiClusterBsStat:
 			gene_no2bs_no_block = self.get_gene_no2bs_no_block(curs)
 			for node in range(1, communicator.size-1):	#send it to the computing_node
 				communicator.send(gene_no2bs_no_block, node, 0)
-			#12-18-05 get edge2encodedOccurrence
-			MpiCrackSplat_instance = MpiCrackSplat()
-			edge2encodedOccurrence = {}
-			min_sup = 5	#need to expose them
-			max_sup = 40
-			total_vertex_set = self.return_total_vertex_set(curs, self.good_cluster_table)
-			edge2encodedOccurrence, no_of_datasets = self.fill_edge2encodedOccurrence(\
-				self.sig_vector_fname, min_sup, max_sup, total_vertex_set)
-			edge2encodedOccurrence_pickle = cPickle.dumps(edge2encodedOccurrence, -1)
-			for node in free_computing_nodes:	#send it to the computing_node
-				communicator.send(edge2encodedOccurrence_pickle, node, 0)
-			
+			if self.fuzzyDense_flag:	#2006-09-21 add fuzzyDense_flag
+				#12-18-05 get edge2encodedOccurrence
+				MpiCrackSplat_instance = MpiCrackSplat()
+				edge2encodedOccurrence = {}
+				min_sup = 5	#need to expose them
+				max_sup = 40
+				total_vertex_set = self.return_total_vertex_set(curs, self.good_cluster_table)
+				edge2encodedOccurrence, no_of_datasets = self.fill_edge2encodedOccurrence(\
+					self.sig_vector_fname, min_sup, max_sup, total_vertex_set)
+				edge2encodedOccurrence_pickle = cPickle.dumps(edge2encodedOccurrence, -1)
+				for node in free_computing_nodes:	#send it to the computing_node
+					communicator.send(edge2encodedOccurrence_pickle, node, 0)
 		elif node_rank>0 and node_rank<communicator.size-1:
 			data, source, tag, count = communicator.receive(Numeric.Int, 0, 0)
 			gene_no2bs_no_set, bs_no2gene_no_set = self.construct_two_dicts(node_rank, data)
-			#12-18-05
-			data, source, tag = communicator.receiveString(0, 0)
-			edge2encodedOccurrence = cPickle.loads(data)
+			if self.fuzzyDense_flag:	#2006-09-21
+				#12-18-05
+				data, source, tag = communicator.receiveString(0, 0)
+				edge2encodedOccurrence = cPickle.loads(data)
 			
 		elif node_rank==communicator.size-1:	#establish connection before pursuing
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
@@ -376,9 +389,12 @@ class MpiClusterBsStat:
 			curs.execute("close crs")
 			
 		elif node_rank<=communicator.size-2:	#exclude the last node
-			fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
+			if self.fuzzyDense_flag:	#2006-09-21
+				fuzzyDense_instance = fuzzyDense(edge2encodedOccurrence)
+			else:
+				fuzzyDense_instance = None
 			parameter_list = [gene_no2bs_no_set, bs_no2gene_no_set, self.ratio_cutoff, \
-				self.top_number, self.p_value_cut_off, fuzzyDense_instance, self.degree_cut_off]
+				self.top_number, self.p_value_cut_off, fuzzyDense_instance, self.degree_cut_off, self.fuzzyDense_flag]
 			computing_node(communicator, parameter_list, self.computing_node_handler, report=self.report)
 			
 		elif node_rank==communicator.size-1:
@@ -407,7 +423,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:v:ncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:v:fncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -426,6 +442,7 @@ if __name__ == '__main__':
 	output_file = 'fuzzyDense.out'
 	tax_id = 4932
 	sig_vector_fname = None
+	fuzzyDense_flag = 0
 	new_table = 0
 	commit = 0
 	debug = 0
@@ -454,6 +471,8 @@ if __name__ == '__main__':
 			degree_cut_off = float(arg)
 		elif opt in ("-p",):
 			p_value_cut_off = float(arg)
+		elif opt in ("-f",):
+			fuzzyDense_flag = 1
 		elif opt in ("-n",):
 			new_table = 1
 		elif opt in ("-o",):
@@ -472,7 +491,7 @@ if __name__ == '__main__':
 		if cluster_bs_table or output_file:
 			instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
 				cluster_bs_table, size, ratio_cutoff, top_number, degree_cut_off, p_value_cut_off, output_file, \
-				tax_id, sig_vector_fname, new_table, commit, debug, report)
+				tax_id, sig_vector_fname, fuzzyDense_flag, new_table, commit, debug, report)
 			instance.run()
 	else:
 		print __doc__
