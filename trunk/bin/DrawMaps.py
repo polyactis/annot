@@ -1,24 +1,28 @@
 #!/usr/bin/env python
 """
-Usage: DrawMaps.py -k -i -o [OPTIONS]
+Usage: DrawMaps.py -k -i -p -s -o [OPTIONS]
 
 Option:
 	-z ..., --hostname=...	the hostname, zhoudb(default)
 	-d ..., --dbname=...	the database name, graphdb(default)
 	-k ..., --schema=...	which schema in the database
-	-i ...	the inputfname
+	-p ...,	pattern_table
+	-s ...,	cluster_bs_table
+	-i ...	the inputfname, filtered prediction file(output of parse_haifeng_markov())
 	-l ...,	lm_bit of setting1, ('00001', default)
 	-a ...	acc_cutoff of setting1, (0.6 default)
-	-p ...	output prefix
+	-o ...	output prefix
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
 
 Examples:
-	DrawMaps.py -k rnfim33 -i rnfim33m3x33bfsdfg0p0 -p /tmp/rnfim33
+	DrawMaps.py -k hs_fim_65 -i ~/script/haifeng_annot/8-pred/human.n2.s200.pred.1.2.max 
+	 -p pattern_hs_fim_65_m5x65s4l5 -s cluster_bs_hs_fim_65_m5x65s4l5e0p001geneid
+	 -o /tmpcmb-01/yuhuang/map
 
 Description:
-	Draw function_map and gene_function_map.
+	Draw function_map and gene_function_map and tf_map.
 """
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
@@ -31,17 +35,23 @@ else:   #32bit
 import os, sys, csv, getopt
 from codense.common import get_char_dimension, get_text_region, db_connect,\
 	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name, \
-	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid
+	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid, \
+	get_gene_id2gene_symbol, get_go_id2name
 from sets import Set
 import Image, ImageDraw
 from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv, decodeOccurrenceToBv, decodeOccurrence
 
 class DrawMaps:
-	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None,\
+	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, pattern_table='', cluster_bs_table='',\
 		inputfname=None, lm_bit='00001', acc_cutoff=0.6, output_prefix=None, debug=0, report=0):
+		"""
+		2006-09-26
+		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
+		self.pattern_table = pattern_table
+		self.cluster_bs_table = cluster_bs_table
 		self.inputfname = inputfname
 		self.lm_bit = lm_bit
 		self.acc_cutoff = float(acc_cutoff)
@@ -50,36 +60,38 @@ class DrawMaps:
 		self.debug = int(debug)
 		self.report = int(report)
 	
-	def get_no_of_p_funcs_gene_no_go_no_list(self, curs, p_gene_table, given_p_gene_set):
+	def get_no_of_p_funcs_gene_no_go_no_list(self, inputfname):
+		"""
+		2006-09-26
+			from a file
+			go_no is actually go_id (GeneOntology acc, GO:0004283)
+			mcl_id2go_no_set is for  get_recurrence_go_no_rec_array_cluster_id_ls()
+		"""
 		sys.stderr.write("Getting no_of_p_funcs_gene_no_go_no_list...\n")
 		gene_no2go_no_set = {}
-		curs.execute("DECLARE crs CURSOR FOR SELECT p_gene_id, gene_no, go_no \
-			from %s"%p_gene_table)
-		curs.execute("fetch 10000 from crs")
-		rows = curs.fetchall()
+		mcl_id2go_no_set = {}
+		reader = csv.reader(open(inputfname), delimiter='\t')
 		counter = 0
-		real_counter = 0
-		while rows:
-			for row in rows:
-				p_gene_id, gene_no, go_no = row
-				if p_gene_id in given_p_gene_set:
-					if gene_no not in gene_no2go_no_set:
-						gene_no2go_no_set[gene_no] = Set()
-					gene_no2go_no_set[gene_no].add(go_no)
-					real_counter += 1
-				counter += 1
-			if self.report:
-				sys.stderr.write("%s%s/%s"%('\x08'*20, counter, real_counter))
-			curs.execute("fetch 10000 from crs")
-			rows = curs.fetchall()
-		curs.execute("close crs")
+		for row in reader:
+			gene_id, pattern_id, go_id, is_known, is_correct, markov_score, p_value = row
+			gene_no = int(gene_id)
+			pattern_id = int(pattern_id)
+			if gene_no not in gene_no2go_no_set:
+				gene_no2go_no_set[gene_no] = Set()
+			gene_no2go_no_set[gene_no].add(go_id)
+			if pattern_id not in mcl_id2go_no_set:
+				mcl_id2go_no_set[pattern_id] = Set()
+			mcl_id2go_no_set[pattern_id].add(go_id)
+			counter += 1
+		if self.report:
+			sys.stderr.write("%s%s\n"%('\x08'*20, counter))
 		#transform the dict into list
 		no_of_p_funcs_gene_no_go_no_list = []
 		for gene_no, go_no_set in gene_no2go_no_set.iteritems():
 			no_of_p_funcs_gene_no_go_no_list.append([len(go_no_set), gene_no, go_no_set])
 		no_of_p_funcs_gene_no_go_no_list.sort()
 		sys.stderr.write("End getting no_of_p_funcs_gene_no_go_no_list.\n")
-		return no_of_p_funcs_gene_no_go_no_list
+		return no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set
 		
 	def draw_gene_function_map(self, no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
 		output_fname, function_name_length, char_dimension, no_of_functions):
@@ -141,34 +153,44 @@ class DrawMaps:
 		sys.stderr.write("End drawing gene_function_map.\n")
 	
 	
-	def get_recurrence_go_no_rec_array_cluster_id_ls(self, curs, good_cluster_table):
+	def get_recurrence_go_no_rec_array_cluster_id_ls(self, curs, pattern_table, mcl_id2go_no_set):
 		"""
+		2006-09-26
+			from pattern_table and use mcl_id2go_no_set
+			go_no_list is the go_id Set
+			mcl_id2enc_recurrence is for get_recurrence_rec_array_bs_no_list()
 		"""
 		sys.stderr.write("Getting recurrence_go_no_rec_array_cluster_id_ls...\n")
 		no_of_datasets = 0
 		go_no2recurrence_cluster_id = {}
-		curs.execute("DECLARE crs CURSOR FOR SELECT mcl_id, recurrence_array, go_no_list from %s"\
-			%good_cluster_table)
+		mcl_id2enc_recurrence = {}
+		curs.execute("DECLARE crs CURSOR FOR SELECT id, recurrence_array from %s"\
+			%pattern_table)
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		counter = 0
 		while rows:
 			for row in rows:
-				mcl_id, recurrence_array, go_no_list = row
-				recurrence_array = recurrence_array[1:-1].split(',')
-				recurrence_array = map(int, recurrence_array)
-				if no_of_datasets == 0:
-					no_of_datasets = len(recurrence_array)
-				go_no_list = go_no_list[1:-1].split(',')
-				go_no_list = map(int, go_no_list)
-				for go_no in go_no_list:
-					if go_no not in go_no2recurrence_cluster_id:
-						go_no2recurrence_cluster_id[go_no] = [encodeOccurrenceBv(recurrence_array), Set([mcl_id])]
-							#use Set() because mcl_id has duplicates due to different p-values
-					else:
-						go_no2recurrence_cluster_id[go_no][0] = \
-							go_no2recurrence_cluster_id[go_no][0] | encodeOccurrenceBv(recurrence_array)
-						go_no2recurrence_cluster_id[go_no][1].add(mcl_id)
+				mcl_id, recurrence_array = row
+				if mcl_id in mcl_id2go_no_set:
+					#if this pattern has functions predicted
+					recurrence_array = recurrence_array[1:-1].split(',')
+					recurrence_array = map(float, recurrence_array)	#this is not a binary 0/1 array
+					occurrence_cutoff_func = lambda x: int(x>=0.8)	#0.8 is arbitrary
+					recurrence_array = map(occurrence_cutoff_func, recurrence_array)
+					if no_of_datasets == 0:
+						no_of_datasets = len(recurrence_array)
+					go_no_list = mcl_id2go_no_set[mcl_id]
+					encoded_recurrence = encodeOccurrenceBv(recurrence_array)
+					mcl_id2enc_recurrence[mcl_id] = encoded_recurrence	#2006-09-26
+					for go_no in go_no_list:
+						if go_no not in go_no2recurrence_cluster_id:
+							go_no2recurrence_cluster_id[go_no] = [encoded_recurrence, Set([mcl_id])]
+								#use Set() because mcl_id has duplicates due to different p-values
+						else:
+							go_no2recurrence_cluster_id[go_no][0] = \
+								go_no2recurrence_cluster_id[go_no][0] | encoded_recurrence
+							go_no2recurrence_cluster_id[go_no][1].add(mcl_id)
 				counter += 1
 			if self.report:
 				sys.stderr.write("%s%s"%('\x08'*20, counter))
@@ -185,7 +207,7 @@ class DrawMaps:
 		
 		recurrence_go_no_rec_array_cluster_id_ls.sort()
 		sys.stderr.write("End getting recurrence_go_no_rec_array_cluster_id_ls.\n")
-		return recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets
+		return recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, mcl_id2enc_recurrence
 	
 	def draw_function_map(self, recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, go_no2name, \
 		output_fname, function_name_length, char_dimension, no_of_functions):
@@ -258,36 +280,29 @@ class DrawMaps:
 		sys.stderr.write("End drawing function_map.\n")
 		return go_no2index, function_name_region
 	
-	def get_recurrence_rec_array_bs_no_list(self, curs, schema_instance):
+	def get_recurrence_rec_array_bs_no_list(self, curs, cluster_bs_table, mcl_id2enc_recurrence):
 		"""
 		11-01-05
 		""" 
-		cluster_bs_id_set = cluster_bs_id_set_from_good_bs_table(curs, schema_instance.good_bs_table)
 		sys.stderr.write("Getting recurrence_rec_array_bs_no_list...\n")
 		bs_no2enc_recurrence = {}
-		no_of_datasets = 0
-		curs.execute("DECLARE crs CURSOR FOR select g.recurrence_array, c.bs_no_list,c.id from %s g, %s c\
-				where c.mcl_id=g.mcl_id"%(schema_instance.good_cluster_table,\
-				schema_instance.cluster_bs_table))
+		curs.execute("DECLARE crs CURSOR FOR select c.mcl_id, c.bs_no_list from %s c"%(cluster_bs_table))
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		counter = 0
 		real_counter =0
 		while rows:
 			for row in rows:
-				recurrence_array, bs_no_list, id = row
-				if id in cluster_bs_id_set:
-					recurrence_array = recurrence_array[1:-1].split(',')
-					recurrence_array = map(int, recurrence_array)
+				mcl_id, bs_no_list = row
+				if mcl_id in mcl_id2enc_recurrence:
+					encoded_recurrence = mcl_id2enc_recurrence[mcl_id]
 					bs_no_list = bs_no_list[1:-1].split(',')
 					bs_no_list = map(int, bs_no_list)
-					if no_of_datasets == 0:
-						no_of_datasets = len(recurrence_array)
 					for bs_no in bs_no_list:
 						if bs_no not in bs_no2enc_recurrence:
-							bs_no2enc_recurrence[bs_no] = encodeOccurrenceBv(recurrence_array)
+							bs_no2enc_recurrence[bs_no] = encoded_recurrence
 						else:
-							bs_no2enc_recurrence[bs_no] |= encodeOccurrenceBv(recurrence_array)
+							bs_no2enc_recurrence[bs_no] |= encoded_recurrence
 					real_counter += 1
 				counter += 1
 			if self.report:
@@ -302,7 +317,7 @@ class DrawMaps:
 			recurrence_rec_array_bs_no_list.append([recurrence, recurrence_array, bs_no])
 		recurrence_rec_array_bs_no_list.sort()
 		sys.stderr.write("End getting recurrence_rec_array_bs_no_list.\n")
-		return recurrence_rec_array_bs_no_list, no_of_datasets
+		return recurrence_rec_array_bs_no_list
 	
 	def draw_tf_map(self, recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
 		output_fname, function_name_length, char_dimension):
@@ -365,50 +380,51 @@ class DrawMaps:
 	def run(self):
 		"""
 		10-31-05
-		11-28-05
-			draw_tf_map() is off
+		2006-09-26
+			modify it to be compatible with the modified pipeline from haifeng
 		
 			--form_schema_tables()
 			--db_connect()
 			--get_char_dimension()
 			
-			--get_recurrence_rec_array_bs_no_list()
-			--get_mt_no2tf_name()
-			--draw_tf_map()
-			
+			--get_no_of_p_funcs_gene_no_go_no_list()
 			--get_recurrence_go_no_rec_array_cluster_id_ls()
 			--get_go_no2name()
 			--draw_function_map()
 			
-			--p_gene_id_set_from_gene_p_table()
-			--get_no_of_p_funcs_gene_no_go_no_list()
 			--draw_gene_function_map()
+
+			--get_recurrence_rec_array_bs_no_list()
+			--get_mt_no2tf_name()
+			--draw_tf_map()
 		"""
 		schema_instance = form_schema_tables(self.inputfname, self.acc_cutoff, self.lm_bit)
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
 		char_dimension = get_char_dimension()
-		"""
-		recurrence_rec_array_bs_no_list, no_of_datasets = self.get_recurrence_rec_array_bs_no_list(curs, schema_instance)
-		mt_no2tf_name = get_mt_no2tf_name()
-		tf_map_output_fname = '%s.tf_map.png'%self.output_prefix
-		self.draw_tf_map(recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
-			tf_map_output_fname, self.function_name_length, char_dimension)
-		"""
-		recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets = self.get_recurrence_go_no_rec_array_cluster_id_ls(curs, \
-			schema_instance.good_cluster_table)
-		go_no2name = get_go_no2name(curs)
+		
+		#go_no2name = get_go_no2name(curs)
+		go_no2name = get_go_id2name(curs)
+		no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set = self.get_no_of_p_funcs_gene_no_go_no_list(self.inputfname)
+		recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, mcl_id2enc_recurrence = \
+			self.get_recurrence_go_no_rec_array_cluster_id_ls(curs, self.pattern_table, mcl_id2go_no_set)
+		
 		no_of_functions = len(recurrence_go_no_rec_array_cluster_id_ls)
 		function_map_output_fname = '%s.function_map.png'%self.output_prefix
 		go_no2index, function_name_region = self.draw_function_map(recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets,\
-			go_no2name, function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)
+			go_no2name, function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)				
 		
-		given_p_gene_set = p_gene_id_set_from_gene_p_table(curs, schema_instance.gene_p_table)
-		no_of_p_funcs_gene_no_go_no_list = self.get_no_of_p_funcs_gene_no_go_no_list(curs, \
-			schema_instance.p_gene_table, given_p_gene_set)
 		gene_function_map_output_fname = '%s.gene_function_map.png'%self.output_prefix
 		self.draw_gene_function_map(no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
-		gene_function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)
+			gene_function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)
 		
+		
+		#tf_map requires mcl_id2enc_recurrence and no_of_datasets from above
+		recurrence_rec_array_bs_no_list = self.get_recurrence_rec_array_bs_no_list(curs, self.cluster_bs_table, mcl_id2enc_recurrence)
+		mt_no2tf_name = get_gene_id2gene_symbol(curs, tax_id=9606)
+		#mt_no2tf_name = get_mt_no2tf_name()
+		tf_map_output_fname = '%s.tf_map.png'%self.output_prefix
+		self.draw_tf_map(recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
+			tf_map_output_fname, self.function_name_length, char_dimension)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -416,11 +432,13 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema="]
-	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:l:a:p:br", long_options_list)
+	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:s:i:l:a:o:br", long_options_list)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = ''
+	pattern_table = ''
+	cluster_bs_table = ''
 	inputfname = None
 	lm_bit = '00001'
 	acc_cutoff = 0.6
@@ -437,22 +455,26 @@ if __name__ == '__main__':
 		elif opt in ("-d", "--dbname"):
 			dbname = arg
 		elif opt in ("-k", "--schema"):
-			schema = arg	
-		elif opt in ("-i"):
+			schema = arg
+		elif opt in ("-p",):
+			pattern_table = arg
+		elif opt in ("-s",):
+			cluster_bs_table = arg
+		elif opt in ("-i", ):
 			inputfname = arg
-		elif opt in ("-l"):
+		elif opt in ("-l", ):
 			lm_bit = arg
-		elif opt in ("-a"):
+		elif opt in ("-a", ):
 			acc_cutoff = float(arg)
-		elif opt in ("-p"):
+		elif opt in ("-o",):
 			output_prefix = arg
 		elif opt in ("-b", "--debug"):
 			debug = 1
-		elif opt in ("-r"):
+		elif opt in ("-r", ):
 			report = 1
 		
-	if inputfname and output_prefix:
-		instance = DrawMaps(hostname, dbname, schema, inputfname, lm_bit, acc_cutoff, output_prefix, \
+	if pattern_table and cluster_bs_table and inputfname and output_prefix:
+		instance = DrawMaps(hostname, dbname, schema, pattern_table, cluster_bs_table, inputfname, lm_bit, acc_cutoff, output_prefix, \
 			debug, report)
 		instance.run()
 	else:
