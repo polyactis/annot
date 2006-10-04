@@ -1,0 +1,1102 @@
+2 chr14:68523977- ACTN1    8334     5'                   actin cytoskeleton (0015629)
+ 68525535
+3 chr9:121164065- GSN      0.68     internal             actin cytoskeleton (0015629)
+ 121165037                         intron
+3 chr12:55710965- MYO1A    0.84     internal Up          actin filament-based movement (0030048)
+ 55712102                          intron
+2 chr1:177216737- ACBD6    13601    5'                   acyl-CoA binding (0000062)
+ 177217336
+2 chr16:76583084- KIAA1576 11580    3'                   alcohol dehydrogenase activity (0004024)
+ 76584178
+2 chr17:19596922- ALDH3A1  4584     5'                   aldehyde metabolism (0006081)
+ 19598200
+3 chr2:162379239- SLC4A10  0.2      first    Down        anion transport (0006820)
+ 162382441                         intron
+3 chr5:118687056- TNFAIP8  31357    5'       Down        anti-apoptosis (0009616)
+ 118688091
+6 chr4:90958946-  SNCA     43178    3'                   anti-apoptosis (0009616)
+ 90960704
+3 chr19:54149416- BAX      0.03     first    Up          apoptosis (0006915)
+ 54150580                          intron
+4 chr1:67863807-  GADD45A  0.29     internal Up          apoptosis (0006915)
+ 67864861                          intron
+7 chr8:143893708- GML      18563    5'       Up          apoptosis (0006915)
+ 143894655
+3 chr16:23628038- ERN2     0.13     internal             apoptosis (0006915)
+ 23629180                          intron
+2 chr1:50780893-  FAF1     0.69     internal             apoptosis (0006915)
+ 50781817                          intron
+7 chr1:241224465- PNAS-4   28866    3'                   apoptosis (0006915)
+ 241225547
+4 chr19:6527895-  TNFSF7   7776     3'                   apoptosis (0006915)
+ 6529074
+2 chr6:110034808- AK124171 0.16     internal             ATP binding (0005524)
+ 110035812                         intron
+10 chr12:12394778  DHX37    7186     3'                   ATP-dependent helicase activity
+ 8-123949064                                            (0008026)
+3 chr10:96335617- HELLS    0.72     internal             ATP-dependent helicase activity
+ 96336388                          intron               (0008026)
+4 chr7:137306143- AKR1D1   45838    3'                   bile acid catabolism (0030573)
+ 137307138
+4 chr13:11040193  ANKRD10  36516    5'       Down        biological process unknown
+ 3-110403257
+2 chr12:47144559- ANP32D   7145     5'       Down        biological process unknown
+ 47145569
+2 chr2:150292543- C2orf25  22762    5'       Down        biological process unknown
+ 150293901
+6 chr6:20974586-  CDKAL1   0.48     internal Down        biological process unknown
+ 20976134                          intron
+4 chr10:73726812- DDIT4    21013    3'       Up          biological process unknown
+ 73728300
+2 chr3:42800284-  HIG1     85       3'       Down        biological process unknown
+ 42800713
+2 chr2:226326587- AK055226 0.71     internal Up          biological process unknown
+ 226328415                         intron
+2 chr7:33164389-  B1       0.03     internal Up          biological process unknown
+ 33164898                          intron
+4 chr7:33100235-  B1       0.3      internal Up          biological process unknown
+ 33101679                          intron
+3 chr19:18344715- BC004942 2956     3'       Up          biological process unknown
+ 18345958
+2 chr1:28383535-  FLJ20045 36918    3'       Up          biological process unknown
+ 28384557
+6 chr1:111468427- FLJ22457 9354     5'       Up          biological process unknown
+ 111470189
+ 27
+2 chr13:20422679- LATS2    22490 3'       Up biological process unknown
+ 20424088
+5 chr1:141466453- AB007925 1922  5'          biological process unknown
+ 141468029
+2 chr7:130296155- AB029551 44062 3'          biological process unknown
+ 130297251       (mRNA)
+2 chr10:24617458- AB033043 0.7   internal    biological process unknown
+ 24618206                       intron
+3 chr15:50742608- AB037791 0.15  first       biological process unknown
+ 50743868                       intron
+5 chr17:58612743- AB046856 17821 5'          biological process unknown
+ 58614058
+5 chr22:27702966- AB051436 98358 5'          biological process unknown
+ 27705354
+3 chr7:2508083-   AB075830 0.44  first       biological process unknown
+ 2509081                        intron
+5 chr12:19475470- AEBP2    6610  5'          biological process unknown
+ 19477289
+2 chr1:98642523-  AF005043 47714 3'          biological process unknown
+ 98643036        (mRNA)
+2 chr1:98693292-  AF005043 2511  5'          biological process unknown
+ 98694324        (mRNA)
+3 chr22:27036061- AF119850 18726 3'          biological process unknown
+ 27037690
+2 chr9:84356926-  AF174394 90262 3'          biological process unknown
+ 84357776
+4 chr21:18002576- AF304443 932   3'          biological process unknown
+ 18003298
+4 chr16:73458784- AF370390 4609  3'          biological process unknown
+ 73460362
+3 chr1:16631449-  AF379627 2311  3'          biological process unknown
+ 16631910
+2 chr5:129514886- AJ578034 0.87  internal    biological process unknown
+ 129515524                      intron
+2 chr2:12599036-  AK001558 0.88  internal    biological process unknown
+ 12600002        (mRNA)         intron
+3 chr4:169762141- AK055595 24883 5'          biological process unknown
+ 169763319
+2 chr12:10241994  AK058052 27734 5'          biological process unknown
+ 7-102420629
+3 chr12:8484013-  AK074886 43347 5'          biological process unknown
+ 8485503
+4 chr18:10199133- AK091542 33250 3'          biological process unknown
+ 10200034
+2 chr8:126868504- AK093407 0.34  internal    biological process unknown
+ 126869122       (mRNA)         intron
+5 chr11:61522493- AK093779 28955 3'          biological process unknown
+ 61524204
+3 chr15:40750917- AK122666 1377  3'          biological process unknown
+ 40751625
+2 chr2:208598880- AK123204 0.54  internal    biological process unknown
+ 208599522                      intron
+4 chr6:48186032-  AK123835 41684 5'          biological process unknown
+ 48187338
+2 chr1:219366949- AK125494 54407 3'          biological process unknown
+ 219368121
+3 chr19:51328391- AK125754 0.66  first       biological process unknown
+ 51329532                       intron
+5 chr17:34456386- AK125814 0.72  internal    biological process unknown
+ 34457200                       intron
+3 chr16:44958822- AK125968 98698 3'          biological process unknown
+ 44962053
+4 chr16:44980671- AK125968 74368 3'          biological process unknown
+ 44986383
+2 chr5:99545387-  AK126705 89596 5'          biological process unknown
+ 99546467        (mRNA)
+3 chr10:61917221- AK126851 0.16  first       biological process unknown
+ 61918368                       intron
+ 28
+2 chr14:88153029- AK127024 0.94  internal biological process unknown
+ 88154009                       intron
+3 chr1:170342552- AK127170 0.43  internal biological process unknown
+ 170343949                      intron
+2 chr20:46055158- AK127532 71005 5'       biological process unknown
+ 46055622
+2 chr4:55126825-  AK127618 65811 3'       biological process unknown
+ 55128330        (mRNA)
+2 chr10:13345977  AK128177 0.7   internal biological process unknown
+ 3-133460132                    intron
+6 chr9:81865320-  AK128831 25600 3'       biological process unknown
+ 81866112
+2 chr16:74494786- AK129593 21401 5'       biological process unknown
+ 74495821        (mRNA)
+2 chr19:55246645- AK130360 0.06  first    biological process unknown
+ 55247401                       intron
+2 chr3:25308734-  AK131021 90205 3'       biological process unknown
+ 25309397        (mRNA)
+3 chr12:97287654- AL833235 60480 3'       biological process unknown
+ 97289608
+2 chr16:88035835- ANKRD11  0.21  first    biological process unknown
+ 88036929                       intron
+2 chr16:88051454- ANKRD11  0.14  first    biological process unknown
+ 88052975                       intron
+3 chr6:109323787- ARMC2    0.38  internal biological process unknown
+ 109325865                      intron
+3 chr16:27912374- AY358206 0.25  first    biological process unknown
+ 27913306                       intron
+2 chr8:53621206-  AY358213 0.6   internal biological process unknown
+ 53621781                       intron
+2 chr15:73388842- BC006530 6483  5'       biological process unknown
+ 73389865
+2 chr13:75994012- BC012127 94183 3'       biological process unknown
+ 75995491        (mRNA)
+5 chr5:72286527-  BC014311 500   5'       biological process unknown
+ 72288315
+2 chr4:119764568- BC014590 30068 5'       biological process unknown
+ 119765029
+3 chr11:11174917  BC029570 18521 5'       biological process unknown
+ 6-111750529
+5 chr5:27505201-  BC039509 260   5'       biological process unknown
+ 27508642
+2 chr20:4379823-  BC039673 19466 5'       biological process unknown
+ 4380481         (mRNA)
+2 chr10:16277178- BC040585 33709 3'       biological process unknown
+ 16279385        (mRNA)
+7 chr1:184338383- BC040856 1710  5'       biological process unknown
+ 184340304
+2 chr4:165999595- BC062791 32094 5'       biological process unknown
+ 166000793       (mRNA)
+4 chr14:22075307- BC063432 0.02  internal biological process unknown
+ 22076384                       intron
+2 chr16:51968563- BX537874 6180  5'       biological process unknown
+ 51970133
+4 chr1:199702497- C1orf37  4272  5'       biological process unknown
+ 199703908
+3 chr20:33358933- C20orf44 657   5'       biological process unknown
+ 33360037
+2 chr4:113550507- C4orf16  1700  3'       biological process unknown
+ 113551321
+2 chr6:119001605- C6orf204 7433  5'       biological process unknown
+ 119003029
+2 chr6:119076858- C6orf204 0.02  first    biological process unknown
+ 119077690                      intron
+3 chr6:166731532- C6orf83  5093  5'       biological process unknown
+ 166732582
+6 chr9:115784942- C9orf27  17902 5'       biological process unknown
+ 115786619
+ 29
+2 chr1:6858299-   CAMTA1    0.08  internal biological process unknown
+ 6859653                         intron
+2 chr1:158795674- CAPON     0.08  first    biological process unknown
+ 158796416                       intron
+2 chr9:26966133-  CCDC2     0.19  internal biological process unknown
+ 26967862                        intron
+3 chr10:89592571- CFLP1     0.9   internal biological process unknown
+ 89593382                        intron
+2 chr8:57329451-  CHCHD7    35723 3'       biological process unknown
+ 57330247
+2 chr10:12528776  CR607950  19794 3'       biological process unknown
+ 7-125288788     (mRNA)
+2 chr1:216147723- CR609066  20606 3'       biological process unknown
+ 216149091       (mRNA)
+2 chr2:68882195-  D29642    29722 5'       biological process unknown
+ 68884048
+2 chr3:101112955- DOC1      35287 5'       biological process unknown
+ 101114217
+2 chr17:34738689- FBXL20    0.51  internal biological process unknown
+ 34739376                        intron
+2 chr1:229621902- FLJ11383  0.29  internal biological process unknown
+ 229622662                       intron
+2 chr3:48448871-  FLJ12436  0.87  internal biological process unknown
+ 48449598                        intron
+2 chr4:38393481-  FLJ13197  42226 3'       biological process unknown
+ 38394661
+2 chr2:172112599- FLJ13984  0.03  first    biological process unknown
+ 172113283                       intron
+2 chr15:42724512- FLJ21439  0.41  internal biological process unknown
+ 42726099                        intron
+2 chr8:143407398- FLJ31164  0.39  internal biological process unknown
+ 143407877                       intron
+2 chr3:196389663- FLJ35155  0.41  internal biological process unknown
+ 196390223                       intron
+2 chr2:108519802- GCC2      3588  5'       biological process unknown
+ 108520625
+2 chr10:11852709  HSPA12A   35017 5'       biological process unknown
+ 2-118527865
+2 chr10:86274468- KIAA1128  6216  3'       biological process unknown
+ 86275311
+2 chr1:142475316- KIAA1245  0.32  internal biological process unknown
+ 142476424                       intron
+2 chr9:112486398- KIAA1958  0.91  internal biological process unknown
+ 112487823                       intron
+6 chr1:111618845- LOC128344 11175 3'       biological process unknown
+ 111620291
+2 chr12:2676616-  LOC283439 586   3'       biological process unknown
+ 2677718
+2 chr19:4575513-  MGC17791  14179 5'       biological process unknown
+ 4576350
+2 chr6:169626932- MGC43690  46604 3'       biological process unknown
+ 169628334
+3 chr1:120553086- MGC57827  0.1   first    biological process unknown
+ 120555329                       intron
+2 chrX:17325543-  NHS       0.48  first    biological process unknown
+ 17326285                        intron
+2 chr10:13210351- OPTN      0.76  internal biological process unknown
+ 13211978                        intron
+2 chr14:70612561- PCNX      0.83  internal biological process unknown
+ 70613759                        intron
+2 chr1:171298284- RABGAP1L  0.53  internal biological process unknown
+ 171299542                       intron
+2 chr11:1808137-  SYT8      2609  5'       biological process unknown
+ 1808988
+2 chr6:76038723-  TMEM30A   0.36  internal biological process unknown
+ 76040001                        intron
+3 chr7:72392433-  BCL7B     2212  3'       biological_process unknown (0000004)
+ 72393124
+ 30
+6 chr9:91988780-  SPTLC1   31560 5'            biosynthesis (0009058)
+ 91990143
+2 chr15:29229665- TRPM1    48444 5'       Down calcium channel activity (0005262)
+ 29230722
+4 chr1:150352200- S100A2   821   5'       Up   calcium ion binding (0005509)
+ 150353947
+3 chr17:57846357- FLJ25818 0.97  internal      calcium ion binding (0005509)
+ 57848070                       intron
+6 chr9:111986264- SUSD1    0.22  internal      calcium ion binding (0005509)
+ 111988117                      intron
+3 chr12:73857967- KCNC2    0.18  first         cation transport (0006812)
+ 73858516                       intron
+6 chr14:31559311- ARHGAP5  53735 5'       Down cell adhesion (0007155)
+ 31560651
+2 chr4:188034775- FAT      14639 5'       Down cell adhesion (0007155)
+ 188036171
+3 chr3:175329355- NLGN1    0.78  internal Down cell adhesion (0007155)
+ 175330050                      intron
+6 chr4:30911633-  PCDH7    90636 3'       Down cell adhesion (0007155)
+ 30912963
+3 chr10:68646653- CTNNA3   0.27  internal Up   cell adhesion (0007155)
+ 68648526                       intron
+5 chr15:71244564- NEO1     0.45  internal Down cell adhesion (0007155)
+ 71245730                       intron
+3 chr14:51611868- NID2     6352  5'       Up   cell adhesion (0007155)
+ 51614297
+4 chr12:27593036- PPFIBP1  0.14  first    Up   cell adhesion (0007155)
+ 27594797                       intron
+12 chr13:11357257  GAS6     0.59  internal      cell adhesion (0007155)
+ 8-113573996                    intron
+2 chr4:78622099-  CCNG2    0.68  internal Down cell cycle (0007049)
+ 78622692                       intron
+6 chr4:78611167-  CCNG2    0.64  internal Down cell cycle (0007049)
+ 78612302                       intron
+7 chr4:78620134-  CCNG2    0.67  internal Down cell cycle (0007049)
+ 78621688                       intron
+5 chr6:36742675-  CDKN1A   10838 5'       Up   Cell cycle (0007049)
+ 36743642
+13 chr6:36751902-  CDKN1A   3     5'       Up   Cell cycle (0007049)
+ 36754502
+3 chr12:6486806-  CNAP1    0.36  internal Down cell cycle (0007049)
+ 6487748                        intron
+4 chr5:57793144-  SNK      1300  5'       Up   cell cycle (0007049)
+ 57794331
+2 chr2:205138572- ALS2CR19 97269 5'            cell cycle (0007049)
+ 205138959
+3 chr10:12764556  FANK1    0.62  first         Cell cycle (0007049)
+ 5-127646819                    intron
+2 chr11:11088640  BTG4     0.06  first         cell cycle arrest (0007050)
+ 3-110887294                    intron
+2 chr17:10049719- GAS7     7126  5'            cell cycle arrest (0007050)
+ 10050050
+18 chr17:65114449- MAP2K6   63382 3'            cell cycle arrest (0007050)
+ 65116192
+2 chr17:56277707- BCAS3    0.23  internal Down cell growth and/or maintenance (0008151)
+ 56278256                       intron
+5 chr1:177799988- IER5     8359  3'       Up   cell growth and/or maintenance (0008151)
+ 177800842
+8 chr1:177835206- IER5     43577 3'       Up   cell growth and/or maintenance (0008151)
+ 177836591
+2 chr20:56941551- GNAS     21911 3'            cell growth and/or maintenance (0008151)
+ 56942313
+2 chr8:20219256-  LZTS1    62173 5'            cell growth and/or maintenance (0008151)
+ 20220193
+11 chr4:158049533- PDGFC    0.95  internal      cell growth and/or maintenance (0008151)
+ 158051027                      intron
+2 chr1:183440255- PTGS2    59056 5'            cell motility (0006928)
+ 183440759
+ 31
+2 chr2:101234532- C2orf29  92804 5'       Down cell proliferation (0008283)
+ 101235091
+2 chr16:11881529- GSPT1    0.81  internal Down cell proliferation (0008283)
+ 11882129                       intron
+7 chr4:124076519- FGF2     27558 5'       Up   cell proliferation (0008283)
+ 124077909
+6 chr12:87455649- KITLG    0.24  first    Up   cell proliferation (0008283)
+ 87456827                       intron
+10 chr2:70734862-  TGFA     42249 5'       Up   cell proliferation (0008283)
+ 70736664
+3 chr5:141927955- FGF1     23640 3'            cell proliferation (0008283)
+ 141929665
+10 chr8:128875604- MYC      52751 3'            cell proliferation (0008283)
+ 128877901
+3 chrX:117655729  IL13RA1  0.18  first         cell surface receptor linked signal
+ -117656338                     intron        transduction (0007166)
+2 chr11:11914513  PVRL1    40506 5'            cell-cell adhesion (0016337)
+ 5-119146475
+4 chr1:41616611-  EDN2     0.22  internal      cell-cell signaling (0007267)
+ 41618083                       intron
+2 chr1:150311630- S100A6   7817  3'            cell-cell signaling (0007267)
+ 150312331
+5 chr6:112414685- WISP3    65911 5'            cell-cell signaling (0007267)
+ 112416243
+2 chr16:31203300- ITGAM    0.34  internal Up   cell-matrix adhesion (0007160)
+ 31204614                       intron
+3 chr16:31192294- ITGAM    0.18  internal Up   cell-matrix adhesion (0007160)
+ 31193444                       intron
+8 chr7:150822098- PRKAG2   0.59  internal Up   cholesterol biosynthesis (0006695)
+ 150823498                      intron
+2 chr1:151688943- PMVK     20267 3'            cholesterol biosynthesis (0006695)
+ 151690013
+3 chr15:91146087- CHD2     97338 5'       Up   chromatin assembly or disassembly
+ 91147084                                     (0006333)
+3 chr15:91293728- CHD2     265   3'       Up   chromatin assembly or disassembly
+ 91295019                                     (0006333)
+2 chr7:18233502-  HDAC9    74398 5'       Down chromatin modification (0016568)
+ 18234210
+2 chr5:98202843-  CHD1     15617 3'            chromosome organization and biogenesis
+ 98203731                                     (0007001)
+7 chr2:37792420-  CDC42EP3 0.63  first    Up   cytoskeletal regulatory protein binding
+ 37793729                       intron        (0005519)
+5 chr7:133986832- CALD1    0.34  internal Up   cytoskeleton (0005856)
+ 133989025                      intron
+3 chr8:142088029- PTK2     7515  5'       Down cytoskeleton (0005856)
+ 142088637
+3 chr9:92641535-  BICD2    34977 5'       Up   cytoskeleton (0005856)
+ 92642452
+3 chr10:13839987- FRMD4A   0.83  internal Up   cytoskeleton (0005856)
+ 13841321                       intron
+12 chr14:66468089- GPHN     0.63  internal      cytoskeleton (0005856)
+ 66470675                       intron
+10 chr8:41794748-  ANK1     20451 5'       Down cytoskeleton organization and biogenesis
+ 41796055                                     (0007010)
+4 chr1:42667726-  FLJ20972 0.91  internal Down cytoskeleton organization and biogenesis
+ 42669044                       intron        (0007010)
+2 chr7:2209382-   CHST12   4473  5'       Down dermatan sulfate biosynthesis (0030208)
+ 2211990
+2 chr11:12043756- DKK3     56551 5'       Down development (0007275)
+ 12044667
+2 chr5:52822200-  FST      4513  3'            development (0007275)
+ 52822745
+2 chr18:42701671- PIAS2    0.61  internal Down DNA binding (0003677)
+ 42702587                       intron
+2 chr5:70892094-  BDP1     0.93  internal      DNA binding (0003677)
+ 70893102                       intron
+3 chr11:47192744- DDB2     342   5'       Up   DNA repair (0006281)
+ 47194120
+ 32
+3 chr20:5048561-  PCNA     200   5'       Up   DNA repair (0006281)
+ 5049184
+4 chr8:103317718- RRM2B    0.04  first    Up   DNA repair (0006281)
+ 103318997                      intron
+3 chr3:14194514-  XPC      0     5'       Up   DNA repair (0006281)
+ 14195958
+2 chr11:10771096  ATM      0.79  internal      DNA repair (0006281)
+ 1-107711632                    intron
+2 chr6:57573724-  PRIM2A   0.86  internal      DNA replication
+ 57574265                       intron
+7 chr8:124692871- FBXO32   70244 5'            electron transport (0006118)
+ 124694497
+3 chr17:78047056- NARF     7628  3'            electron transport (0006118)
+ 78047847
+4 chr9:116287827- ASTN2    0.98  internal Up   energy pathways (0006091)
+ 116290043                      intron
+3 chr15:86964786- FLJ12484 4300  5'       Up   exonuclease activity (0004527)
+ 86966080
+7 chr16:20783998- MGC48972 0.8   first         exonuclease activity (0004527)
+ 20785636                       intron
+2 chrX:132645449  GPC3     0.44  internal Down extracellular matrix (0005578)
+ -132646433                     intron
+2 chr2:33150960-  LTBP1    0.15  internal Down extracellular matrix (0005578)
+ 33151544                       intron
+3 chr4:73801010-  ADAMTS3  1507  5'            extracellular matrix (0005578)
+ 73802395
+2 chr22:44185994- FBLN1    32642 5'            extracellular matrix (0005578)
+ 44186654
+3 chr13:10957238  COL4A1   26606 3'       Up   extracellular matrix structural constituent
+ 5-109573846                                  (0005201)
+2 chr13:99500023- PCCA     38290 5'       Down fatty acid metabolism (0006631)
+ 99501047
+8 chr6:151269949- FTHFSDC1 7620  5'       Down folic acid and derivative biosynthesis
+ 151271345                                    (0009396)
+5 chr6:81302271-  AK126122 66756 3'            glycolysis (0006096)
+ 81303465
+6 chr1:9175241-   ENO1     0.12  internal      glycolysis (0006096)
+ 9177064                        intron
+2 chr9:77910011-  GNAQ     34086 5'       Down G-protein coUpled receptor protein
+ 77911059                                     signaling pathway (0007186)
+4 chr17:15807293- ADORA2B  0.6   first    Up   G-protein coUpled receptor protein
+ 15808314                       intron        signaling pathway (0007186)
+2 chr10:11577464  ADRB1    18407 5'       Up   G-protein coUpled receptor protein
+ 2-115775397                                  signaling pathway (0007186)
+3 chr2:133133837- GPR39    0.55  first    Up   G-protein coUpled receptor protein
+ 133134898                      intron        signaling pathway (0007186)
+2 chr12:61899590- AVPR1A   68657 5'            G-protein coUpled receptor protein
+ 61900899                                     signaling pathway (0007186)
+3 chr11:87927175- GRM5     0.91  internal      G-protein coUpled receptor protein
+ 87929030                       intron        signaling pathway (0007186)
+2 chr11:4441824-  OR52K3P  10338 5'            G-protein coUpled receptor protein
+ 4442933                                      signaling pathway (0007186)
+3 chr12:53852376- OR9K2    41549 3'            G-protein coUpled receptor protein
+ 53853086        (refseq)                     signaling pathway (0007186)
+6 chr5:152171146- AK123816 0.45  Internal      G-protein coUpled receptor protein
+ 152172529                      intron        signaling pathway [0007186]
+6 chr2:48979734-  LHCGR    85266 5'            G-protein signaling (0007187)
+ 48981172
+2 chr7:80897005-  HGF      78620 3'            growth factor activity (0008083)
+ 80897475
+2 chr3:17610395-  TBC1D5   0.25  internal      GTPase activator activity (0005096)
+ 17612103                       intron
+2 chr19:17313844- GTPBP3   21    3'            GTPase activity (0003924)
+ 17314438
+2 chr9:95778398-  AL389952 0.4   internal      helicase activity (0004386)
+ 95779577                       intron
+3 chr19:43957618- LGALS7   1630  5'            heterophilic cell adhesion (0007157)
+ 43958245
+ 33
+5 chr9:136719829- NOTCH1    3754  5'       Up   immune response (0006955)
+ 136721148
+3 chr2:204716756- ICOS      64954 3'            immune response (0006955)
+ 204717594
+4 chr6:31412635-  M12678    15604 3'            immune response (0006955)
+ 31414025
+3 chr6:31465968-  MICA      11703 5'            immune response (0006955)
+ 31467646
+3 chr6:31562637-  MICB      10084 5'            immune response (0006955)
+ 31563757
+5 chr14:50136549- SPG3A     0.55  internal      immune response (0006955)
+ 50137733                        intron
+3 chr8:22981574-  TNFRSF10  100   5'       Up   induction of apoptosis (0006917)
+ 22983332        B
+2 chr22:17291232- PIG6      0.28  first    Up   induction of apoptosis by oxidative stress
+ 17291990                        intron        (0008631)
+5 chr10:45253603- ALOX5     0.89  internal      inflammatory response (0006954)
+ 45254649                        intron
+2 chr8:57981054-  FLJ20421  53117 3'            inositol or phosphatidylinositol
+ 57981801                                      phosphatase activity (0004437)
+2 chr1:227069711- COG2      14349 5'            intracellular protein transport (0006886)
+ 227070623
+4 chr10:10655889  SORCS3    0.27  first         intracellular protein transport (0006886)
+ 6-106560109                     intron
+2 chr20:17778498- SNX5      91155 3'       Down intracellular signaling cascade (0007242)
+ 17779090
+6 chr16:4130436-  ADCY9     25412 5'            intracellular signaling cascade (0007242)
+ 4131734
+2 chr15:99019902- ASB7      13138 3'            intracellular signaling cascade (0007242)
+ 99020324
+2 chr7:29141547-  CHN2      0.42  first         intracellular signaling cascade (0007242)
+ 29142007                        intron
+3 chr2:46310853-  PRKCE     0.98  internal      intracellular signaling cascade (0007242)
+ 46311743                        intron
+3 chr8:82922424-  SNX16     5440  5'            intracellular signaling cascade (0007242)
+ 82924235
+3 chr17:22682037- WSB1      17251 3'            intracellular signaling cascade (0007242)
+ 22683065
+3 chr20:47188589- STAU      0.65  internal Down intracellular transporter activity (0005478)
+ 47189717                        intron
+3 chr7:116864069- CFTR      0.8   internal      ion channel activity (0005216)
+ 116865036                       intron
+3 chr1:230150728- KCNK1     35972 3'            ion transport (0006811)
+ 230151420
+3 chr6:39358686-  KCNK17    15710 3'            ion transport (0006811)
+ 39359048
+2 chr1:211562905- KCNK2     3518  5'            ion transport (0006811)
+ 211564072
+2 chr21:44842261- KRTAP10-7 1900  5'            keratin filament (0045095)
+ 44843024
+4 chr19:15617927- CYP4F3    0.24  internal Up   leukotriene metabolism (0006691)
+ 15618763                        intron
+3 chr19:15863930- CYP4F2    0.23  internal      leukotriene metabolism (0006691)
+ 15865273                        intron
+2 chr2:178164773- AGPS      0.56  internal      lipid biosynthesis (0008610)
+ 178164967                       intron
+2 chr11:59096869- OSBP      562   3'       Down lipid transport (0006869)
+ 59097884
+7 chr5:110857599- STARD4    508   3'       Down lipid transport (0006869)
+ 110859125
+10 chr7:40529658-  C7orf10   0.8   internal      metabolism (0008152)
+ 40531147                        intron
+4 chr14:23209479- DHRS2     24793 3'            metabolism (0008152)
+ 23210108
+3 chr15:47345137- GALK2     0.64  internal      metabolism (0008152)
+ 47346358                        intron
+3 chr9:96108151-  HSD17B3   0.52  internal      metabolism (0008152)
+ 96109324                        intron
+ 34
+3 chr2:118589205- INSIG2    5381  3'            metabolism (0008152)
+ 118590770
+2 chr16:87721146- LOC197322 0.54  internal      metabolism (0008152)
+ 87721433                        intron
+2 chr7:21706371-  DNAH11    0.98  internal      microtubule motor activity (0003777)
+ 21708009                        intron
+3 chr3:36949079-  MLH1      54245 5'       Down mismatch repair (0006298)
+ 36949987
+2 chr2:47889038-  MSH6      32282 5'       Down mismatch repair (0006298)
+ 47889689
+5 chr1:198169831- PHLDA3    2868  5'            morphogenesis (0009653)
+ 198170441
+2 chr20:35050354- RBL1      8160  3'       Down negative regulation of cell cycle (0045786)
+ 35051735
+2 chr22:22492800- SMARCB1   0.82  internal Down negative regulation of cell cycle (0045786)
+ 22493381                        intron
+4 chr13:50001247- DLEU1     1046  3'            negative regulation of cell cycle (0045786)
+ 50002206
+3 chr9:36064280-  RECK      0.43  internal      negative regulation of cell cycle (0045786)
+ 36065428                        intron
+4 chr1:201225177- MDM4      0.04  first    Down negative regulation of cell proliferation
+ 201226276                       intron        (0008285)
+3 chr19:49965946- CBLC      5959  5'       Up   negative regulation of epidermal growth
+ 49967006                                      factor receptor activity (0007175)
+4 chr1:117133659- PTGFRN    30355 5'            negative regulation of protein biosynthesis
+ 117134375                                     (0017148)
+2 chr3:33484389-  UBP1      27515 5'       Down negative regulation of transcription
+ 33484666                                      (0016481)
+3 chr12:98392890- EB-1      0.39  internal      neurogenesis (0007399)
+ 98393747                        intron
+6 chr5:37883475-  GDNF      7936  5'            neurogenesis (0007399)
+ 37884595
+2 chr1:151599121- KCNN3     0.34  internal      neurogenesis (0007399)
+ 151599699                       intron
+2 chr6:36683759-  SFRS3     4572  3'            nuclear mRNA splicing (0000398)
+ 36684225
+2 chr6:152635159- SYNE1     1000  5'            nuclear organization and biogenesis
+ 152635700                                     (0006997)
+4 chr3:180269957- WIG1      0.02  first    Up   nucleic acid binding (0003676)
+ 180271353                       intron
+2 chr9:16627209-  BNC2      0.29  internal      nucleic acid binding (0003676)
+ 16627911                        intron
+2 chr18:58390748- ZCCHC2    0.77  internal      nucleic acid binding (0003676)
+ 58391432                        intron
+4 chr6:26812561-  ZNF322A   44819 5'            nucleic acid binding (0003676)
+ 26813388
+2 chr10:63766158- ZNF365    36990 5'            nucleic acid binding (0003676)
+ 63766966
+3 chr13:41274727- AB011136  0.21  internal Up   nucleotide binding (0000166)
+ 41275802                        intron
+5 chr12:77053081- NAV3      0.41  internal Up   nucleotide binding (0000166)
+ 77054242                        intron
+2 chr12:12195584  ABCB9     0.61  internal      oligopeptide transport (0006857)
+ 2-121956603                     intron
+3 chr12:12193649  ABCB9     2045  3'            oligopeptide transport (0006857)
+ 4-121938707
+2 chr15:61507445- CA12      46347 5'            one-carbon compound metabolism
+ 61508569                                      (0006730)
+2 chr2:42934765-  HAAO      3399  5'            oxidoreductase activity (0016491)
+ 42935017
+2 chr19:46275427- CYP2A13   9912  5'            oxidoreductase activity (0016712)
+ 46276304
+3 chr7:98979755-  CYP3A7    2385  5'            oxidoreductase activity (0016712)
+ 98980587
+3 chr7:151206867- GALNT11   0.48  first         polypeptide N-
+ 151207691                       intron        acetylgalactosaminyltransferase activity
+ (0004653)
+ 35
+3 chr2:154826593- GALNT13  0.4   internal      polypeptide N-
+ 154828585                      intron        acetylgalactosaminyltransferase activity
+ (0004653)
+3 chr11:34663117- EHF      24005 3'            positive regulation of transcription
+ 34664263                                     (0045893)
+3 chr18:22294391- KCTD1    0.96  internal      potassium ion transport (0006813)
+ 22295582                       intron
+2 chr8:95072056-  PPM2C    66279 3'       Up   protein amino acid dephosphorylation
+ 95073257                                     (0006470)
+3 chr8:134472408- SIAT4A   66202 3'            protein amino acid glycosylation
+ 134474124                                    (0006486)
+5 chr2:88676930-  EIF2AK3  8566  3'       Down protein amino acid phosphorylation
+ 88677568                                     (0006468)
+2 chr8:8302075-   AK122582 25476 5'            protein amino acid phosphorylation
+ 8302982                                      (0006468)
+8 chr8:8257062-   AK122582 0.29  internal      protein amino acid phosphorylation
+ 8258330                        intron        (0006468)
+3 chr4:114839516- CAMK2D   0.66  internal      protein amino acid phosphorylation
+ 114840722                      intron        (0006468)
+2 chr1:203208778- DYRK3    0.84  internal      protein amino acid phosphorylation
+ 203209454                      intron        (0006468)
+2 chr5:179616260- MAPK9    0.5   internal      protein amino acid phosphorylation
+ 179617779                      intron        (0006468)
+3 chr1:46134298-  MAST2    0.66  internal      protein amino acid phosphorylation
+ 46136015                       intron        (0006468)
+6 chr12:826876-   PRKWNK1  0.6   internal      protein amino acid phosphorylation
+ 828190                         intron        (0006468)
+3 chr5:171467474- STK10    0.55  internal      protein amino acid phosphorylation
+ 171468762                      intron        (0006468)
+8 chr4:78059015-  ShrmL    894   3'       Up   protein binding (0005515)
+ 78060785
+2 chr10:25085197- ARHGAP21 32647 5'            protein binding (0005515)
+ 25086813
+2 chr16:21916662- MGC50721 0.12  first         protein binding (0005515)
+ 21917972                       intron
+9 chr15:61235856- RPS27L   83    5'       Up   protein biosynthesis (0006412)
+ 61237660
+4 chr19:47055922- RPS19    0.01  first         protein biosynthesis (0006412)
+ 47057051                       intron
+2 chr4:124055485- FLJ35630 31783 3'            protein folding (0006457)
+ 124056557
+3 chr15:81207295- AP3B2    31752 5'            protein transport (0015031)
+ 81208829
+8 chr4:40986864-  APBB2    777   5'            protein transport (0015031)
+ 40989274
+2 chr1:232159128- CHS1     0.95  internal      protein transport (0015031)
+ 232160368                      intron
+2 chr3:123679743- KPNA1    0.4   internal      protein transporter activity (0008565)
+ 123680672                      intron
+2 chr4:7821881-   SORCS2   0.61  internal      protein transporter activity (0008565)
+ 7822865                        intron
+3 chr10:11446559  VTI1A    0.92  internal      protein transporter activity (0008565)
+ 1-114466275                    intron
+3 chr2:212165550- ERBB4    0.92  internal Down protein tyrosine kinase [0004713]
+ 212166599                      intron
+9 chr10:12955111  PTPRE    43715 5'       Up   protein tyrosine phosphatase activity
+ 9-129552684                                  (0004725)
+7 chr1:211000966- PTPN14   0.67  internal      protein tyrosine phosphatase activity
+ 211002000                      intron        (0004725)
+2 chr11:5667802-  TRIM22   0.01  first    Up   protein ubiquitination (0016567)
+ 5668510                        intron
+2 chr19:58490202- BIRC8    3511  5'            protein ubiquitination (0016567)
+ 58490660
+2 chr1:172954068- COP1     46297 5'            protein ubiquitination (0016567)
+ 172954909
+2 chr17:58162840- FLJ35757 0.7   internal      protein ubiquitination (0016567)
+ 58164902                       intron
+ 36
+2 chr10:92988050- RNF159  10354 3'            protein ubiquitination (0016567)
+ 92989198
+2 chr10:10179318  CPN1    0.93  internal Down proteolysis and peptidolysis (0006508)
+ 3-101794775                   intron
+6 chr19:18335537- PGPEP1  2000  3'            proteolysis and peptidolysis (0006508)
+ 18337814
+2 chr3:114101822- CD200R1 21052 3'            receptor activity (0004872)
+ 114103174
+2 chr2:119547367- MARCO   78907 3'            receptor activity (0004872)
+ 119548295
+2 chr6:129509627- LAMA2   0.42  internal      regulation of cell adhesion (0030155)
+ 129510918                     intron
+4 chr2:105919948- NCK2    0.37  first    Down regulation of epidermal growth factor
+ 105921131                     intron        receptor activity (0007176)
+2 chrX:69113561-  IGBP1   22042 5'            regulation of signal transduction
+ 69114296                                    (0009966)
+3 chr8:67664389-  MYBL1   13313 5'       Down regulation of transcription (0006355)
+ 67665687
+2 chr3:20094710-  PCAF    0.34  internal Down regulation of transcription (0006355)
+ 20095306                      intron
+2 chr7:137701994- TIF1    0.79  internal Down regulation of transcription (0006355)
+ 137704423                     intron
+6 chr1:209157999- ATF3    11399 5'       Up   regulation of transcription (0006355)
+ 209159107
+3 chr2:191301555- NAB1    46383 5'       Up   regulation of transcription (0006355)
+ 191303006
+3 chr9:124445453- NR6A1   0.66  internal Up   regulation of transcription (0006355)
+ 124446468                     intron
+5 chr6:106652399- PRDM1   0.49  internal Up   regulation of transcription (0006355)
+ 106653614                     intron
+2 chr15:78564721- ARNT2   0.42  internal      regulation of transcription (0006355)
+ 78565132                      intron
+2 chr21:29697827- BACH1   41741 3'            regulation of transcription (0006355)
+ 29698558
+2 chr22:48474602- BRD1    12059 3'            regulation of transcription (0006355)
+ 48475733
+2 chr16:3829126-  CREBBP  0.27  internal      regulation of transcription (0006355)
+ 3829829                       intron
+2 chr2:100052349- LAF4    0.3   internal      regulation of transcription (0006355)
+ 100053864                     intron
+2 chr2:169134238- LASS6   3092  5'            regulation of transcription (0006355)
+ 169135249
+2 chr3:120994904- NR1I2   0.3   first         regulation of transcription (0006355)
+ 120996070                     intron
+6 chr1:196649507- NR5A2   77691 5'            regulation of transcription (0006355)
+ 196650735
+5 chr4:26084221-  RBPSUH  0.77  internal      regulation of transcription (0006355)
+ 26085683                      intron
+3 chr9:3202391-   RFX3    10803 3'            regulation of transcription (0006355)
+ 3203845
+3 chr6:85602044-  TBX18   72154 5'            regulation of transcription (0006355)
+ 85603706
+2 chr10:11481689  TCF7L2  0.54  internal      regulation of transcription (0006355)
+ 1-114817646                   intron
+3 chr9:81435988-  TLE1    0.92  internal      regulation of transcription (0006355)
+ 81437072                      intron
+4 chr13:47628530- VDRIP   61289 5'            regulation of transcription (0006355)
+ 47629500
+7 chr13:47538049- VDRIP   8849  3'            regulation of transcription (0006355)
+ 47539243
+3 chr8:145896298- ZNF251  18650 3'            regulation of transcription (0006355)
+ 145898453
+2 chr19:9011211-  ZNF560  26870 3'            regulation of transcription (0006355)
+ 9011684
+2 chr1:31189338-  PUM1    0.13  internal      regulation of translation (0006445)
+ 31190186                      intron
+3 chr7:86604121-  TP53AP1 0.69  internal Up   response to DNA damage stimulus
+ 86605580                      intron        (0006974)
+ 37
+4 chr5:41157842-  C6        18981 3'            response to pathogenic bacteria
+ 41159114                                      (0009618)
+8 chr21:33660665- IFNAR1    6672  3'            response to virus (0009615)
+ 33662530
+4 chr19:13624625- MGC10471  93411 5'            response to virus (0009615)
+ 13626341
+3 chr1:43286807-  EBNA1BP2  10267 3'            ribosome biogenesis (0007046)
+ 43288807
+3 chr2:177859894- HNRPA3    41842 5'            RNA binding (0003723)
+ 177861162
+4 chr17:52956395- MSI2      0.63  internal      RNA binding (0003723)
+ 52957111                        intron
+3 chr17:34278957- LASP1     100   5'            SH3/SH2 adaptor protein activity
+ 34280068                                      (0005070)
+2 chr1:237426033- RGS7      0.72  internal      signal transducer activity (0004871)
+ 237427272                       intron
+2 chr4:56317130-  NMU       0.62  internal Down signal transduction (0007165)
+ 56317964                        intron
+2 chr7:79425001-  GNAI1     0.19  internal Up   signal transduction (0007165)
+ 79425827                        intron
+3 chr17:19830631- AKAP10    8910  5'            signal transduction (0007165)
+ 19831404
+2 chr5:141073540- ARAP3     31606 5'            signal transduction (0007165)
+ 141074067
+2 chr18:55007293- GRP       30522 5'            signal transduction (0007165)
+ 55007857
+5 chr11:60087306- MS4A12    55831 3'            signal transduction (0007165)
+ 60088475
+3 chrX:150382746  PASD1     19476 5'            signal transduction (0007165)
+ -150383185
+2 chr5:149124037- PPARGC1   0.29  first         signal transduction (0007165)
+ 149125083       B               intron
+3 chr8:67198890-  RNF29     2271  5'            signal transduction (0007165)
+ 67199560
+2 chr4:187363156- TLR3      1464  5'            signal transduction (0007165)
+ 187363995
+3 chr14:10172603  WDR20     0.67  first         signal transduction (0007165)
+ 3-101727328                     intron
+3 chr16:65518223- RRAD      1284  5'       Up   small GTPase mediated signal
+ 65519868                                      transduction (0007264)
+3 chr9:127136622- GARNL3    0.23  internal      small GTPase regulatory/interacting
+ 127137764                       intron        protein activity (0005083)
+6 chr9:4778277-   RCL1      3570  5'            snRNP recycling (0000244)
+ 4779366
+6 chr14:20289485- FAM12A    3110  3'            sperm displacement (0007321)
+ 20290907
+4 chr10:17328119- VIM       8521  3'       Down structural constituent of cytoskeleton
+ 17330136                                      (0005200)
+2 chr18:3063649-  MYOM1     0.95  internal      structural constituent of muscle (0008307)
+ 3063837                         intron
+3 chr12:50855976- LOC144501 0.65  internal Up   structural molecule activity (0005198)
+ 50856990                        intron
+2 chr8:8520497-   AK123547  75680 5'            structural molecule activity (0005198)
+ 8521395
+2 chr22:17937314- CLDN5     50837 5'            structural molecule activity (0005198)
+ 17938068
+2 chr17:23633681- FLJ40504  0.78  internal      structural molecule activity (0005198)
+ 23634161                        intron
+2 chr12:9955086-  AY359126  0.59  internal      sugar binding (0005529)
+ 9956444                         intron
+2 chr8:42725978-  CHRNA6    3065  3'            synaptic transmission (0007268)
+ 42727080
+6 chr2:1470401-   TPO       0.57  internal Up   thyroid hormone generation (0006590)
+ 1472500                         intron
+2 chr11:11940045  TRIM29    86082 3'            transcription factor activity (0003700)
+ 7-119401122
+2 chr16:14401388- PARN      34685 3'            transcriptional repressor activity (0016564)
+ 14402374
+ 38
+5 chr4:10976711-  HS3ST1   98918 3'               transferase activity (0016740)
+ 10977770
+2 chrX:131737795  HS6ST2   0.24  internal         transferase activity (0016740)
+ -131738539                     intron
+3 chr11:3593372-  ART5     21875 3'               transferase activity (0016757)
+ 3594436
+3 chr12:15579421- PTPRO    10171 5'          Up   transmembrane receptor protein tyrosine
+ 15580381                                        phosphatase activity (0005001)
+2 chr18:7723666-  PTPRM    20940 5'          Down transmembrane receptor protein tyrosine
+ 7724030                                         phosphatase activity (0005001)
+3 chr18:7718071-  PTPRM    25906 5'          Down transmembrane receptor protein tyrosine
+ 7719064                                         phosphatase activity (0005001)
+4 chr6:111534382- SLC16A10 0.14  first            transport (0006810)
+ 111535658                      intron
+3 chr14:36359059- SLC25A21 0.71  internal         transport (0006810)
+ 36360419                       intron
+7 chr9:84083088-  SLC28A3  38468 3'               transport (0006810)
+ 84084177
+2 chr16:66557346- SLC12A4  0.08  first            transporter activity (0005215)
+ 66558162                       intron
+4 chr18:53798740- NEDD4L   63027 5'          Down ubiquitin cycle (0006512)
+ 53799589
+5 chr2:238630189- NCE2     26079 5'               ubiquitin cycle (0006512)
+ 238631620
+4 chr2:61415888-  USP34    0.68  internal    Down ubiquitin-dependent protein catabolism
+ 61417156                       intron           (0006511)
+4 chrX:40807995-  USP9X    0.63  internal    Down ubiquitin-dependent protein catabolism
+ 40809364                       intron           (0006511)
+2 chr8:103508334- EDD      14663 5'               ubiquitin-dependent protein catabolism
+ 103509177                                       (0006511)
+2 chr12:91680696- EEA1     0.93  internal    Down vesicle fusion (0006906)
+ 91681867                       intron
+4 chr1:178222231- CACNA1E  0.12  internal         voltage-gated calcium channel activity
+ 178223504                      intron           (0005245)
+2 chr10:79089142- KCNMA1   21845 5'          Up   voltage-gated potassium channel activity
+ 79089778                                        (0005249)
+2 chr9:92830162-  FGD3     0.22  internal         zinc ion binding (0008270)
+ 92831561                       intron
+8 chr15:78081823- BCL2A1   31125 5'          Down
+ 78083548
+3 chr7:10895281-  PHF14    0.84  internal    Down
+ 10896157                       intron
+4 chr17:46385667- SPAG9    8612  3'          Down
+ 46387669
+4 chr12:10075119  FLJ11259 21498 5'          Up
+ 0-100752098
+5 chr15:47704355- MDS009   0.17  internal    Up
+ 47705679                       intron
+3 chr18:41903484- PSTPIP2  0.01  first       Up
+ 41905359                       intron
+2 chr7:1115351-                  4.7 kb from CpG
+ 1116123
+4 chr1:179461712- AF336876 19349 3'
+ 179462929
+9 chr4:84448849-  AF338197 12901 5'
+ 84450177
+3 chr2:186257853- AF424542 0.31  Internal
+ 186258613                      intron
+2 chr10:29420510- AK023966 22661 3'
+ 29422132
+3 chr15:60341378- AK126077 472   3'
+ 60342654
+3 chrX:47434292-  AK126949 17217 5'
+ 47435337
+3 chr2:51394754-  AK127244 0.16  Internal
+ 51396351                       intron
+4 chr6:72133713-  AK127397 4624  3'
+ 72135052
+ 39
+5 chr4:174278188- AK128523 3778  3'
+ 174279299
+3 chr18:66260749- BC001368 5228  3'
+ 66262447
+4 chr12:64318800- BC001368 0.26  Internal
+ 64320324                       intron
+6 chr8:29683561-  BC003524 22017 5'
+ 29684618
+3 chr3:195203204- BC027871 500   5'
+ 195204978
+8 chr7:123480048- BC031318 90255 3'
+ 123481129
+5 chr12:12590463  BC032874 17784 3'
+ 8-125906869
+3 chr15:27681234- BC034566 6314  3'
+ 27682857
+2 chr5:57166888-  BC041836 54623 3'
+ 57167291        (mRNA)
+3 chr4:133089219- BC041865 0.33  first
+ 133089940                      intron
+2 chr6:147406014- BC044307 0.44  internal
+ 147407278       (mRNA)         intron
+4 chr17:31381324- CCL23    12206 5'
+ 31382497
+9 chr12:15980549- CGI-26   0.2   first
+ 15982680                       intron
+3 chr11:10022164- CMT4B2   0.48  internal
+ 10023259                       intron
+3 chr2:62098415-  COMMD1   0.23  first
+ 62099097                       intron
+3 chr8:133106297- D63477   11346 3'
+ 133107034
+6 chr4:76168203-  DKFZP564 45898 5'
+ 76169620        O0823
+4 chr3:123595148- E2IG5    0.36  first
+ 123596318                      intron
+3 chr17:64204479- FAM20A   95789 5'
+ 64206055
+9 chr8:124925928- FLJ23790 29070 3'
+ 124926890
+9 chr8:126270209- FLJ32440 0.35  internal
+ 126271296                      intron
+3 chr11:11448765  IGSF4    56416 3'
+ 5-114488749
+9 chr1:231060802- IRF2BP2  8796  5'
+ 231062153
+8 chr6:110309889- KIAA0274 56565 3'
+ 110311139
+3 chr6:159023724- KIAA1423 894   3'
+ 159025441
+4 chr16:86357183- KLHDC4   100   5'
+ 86360298
+4 chr1:75549433-  MGC34032 0.58  internal
+ 75550502                       intron
+3 chr14:37019275- MIPOL1   0.8   internal
+ 37020476                       intron
+5 chr2:170903601- MYO3B    0.09  internal
+ 170904621                      intron
+3 chr3:108563329- NYD-SP17 14424 5'
+ 108564453
+3 chr14:70401330- PCNX     41467 5'
+ 70402407
+5 chr19:46725987- R29124_1 47512 5'
+ 46726858
+6 chr14:71310476- SIPA1L1  34605 3'
+ 71311948
+4 chr13:83413163- SLITRK1  58634 5'
+ 83414947
+ 40
+3 chr9:128624334- TBC1D13 4127  5'
+ 128625054
+3 chr2:99115322-  TSGA10  0.7   internal
+ 99116193                      intron
+3 chr4:177311146- WDR17   50171 5'
+ 177312109
+2 chr11:28499144-
+ 28499729
+2 chr11:97119470-
+ 97119979
+2 chr12:68771023-
+ 68772035
+2 chr13:10345502
+ 1-103455830
+2 chr13:71569716-
+ 71570279
+2 chr18:21366958-
+ 21367718
+2 chr2:103712507-
+ 103713424
+2 chr2:164634644-
+ 164635869
+2 chr2:21965746-
+ 21967214
+2 chr20:7700458-
+ 7701452
+2 chr21:19888722-
+ 19890405
+2 chr3:103894239-
+ 103894961
+2 chr4:129964821-
+ 129965240
+2 chr4:169192724-
+ 169193699
+2 chr5:56399106-
+ 56400000
+2 chr5:98813448-
+ 98813761
+2 chr7:108383554-
+ 108385256
+2 chr7:120744726-
+ 120745778
+2 chr7:52025652-
+ 52026598
+2 chr8:20329730-
+ 20330217
+2 chr8:5165758-
+ 5166971
+2 chr9:73528539-
+ 73529367
+2 chrX:113120101
+ -113120884
+3 chr1:69232796-
+ 69233680
+3 chr10:16246681-
+ 16248118
+3 chr10:67044280-
+ 67045604
+3 chr11:48766160-
+ 48772288
+3 chr11:97066965-
+ 97068506
+3 chr12:22875285-
+ 22876047
+3 chr12:87205972-
+ 87207147
+3 chr12:89129714-
+ 89131284
+ 41
+3 chr12:90798732-
+ 90799810
+3 chr13:26386739-
+ 26387340
+3 chr14:27936394-
+ 27937799
+3 chr14:33836568-
+ 33838083
+3 chr16:44947116-
+ 44949762
+3 chr16:53238996-
+ 53240473
+3 chr17:48158254-
+ 48160111
+3 chr17:52149611-
+ 52150336
+3 chr2:136966740-
+ 136967531
+3 chr2:226753583-
+ 226754432
+3 chr21:15458636-
+ 15459767
+3 chr4:108657743-
+ 108658946
+3 chr4:134668632-
+ 134669736
+3 chr4:163616396-
+ 163617779
+3 chr5:123605810-
+ 123606498
+3 chr5:174563720-
+ 174564238
+3 chr5:81865175-
+ 81867348
+3 chr9:78870565-
+ 78872193
+4 chr1:184108916-
+ 184109905
+4 chr11:70167437-
+ 70168383
+4 chr12:77641940-
+ 77643468
+4 chr17:57576098-
+ 57577369
+4 chr2:169265298-
+ 169266349
+4 chr4:117247922-
+ 117249179
+4 chr4:188216741-
+ 188217836
+4 chr5:173688070-
+ 173689158
+4 chr5:36477866-
+ 36479004
+4 chr5:67386-
+ 68792
+4 chr7:120739160-
+ 120740669
+5 chr1:215162337-
+ 215163779
+5 chr16:25472258-
+ 25473207
+5 chr19:32423843-
+ 32425732
+5 chr3:154814334-
+ 154815818
+5 chr7:90879021-
+ 90880289
+ 42
+6 chr7:152123892-
+ 152125163
+7 chr19:32428502-
+ 32432178
