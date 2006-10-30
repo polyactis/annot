@@ -27,15 +27,18 @@ Description:
 
 import sys, getopt, os
 sys.path += [os.path.join(os.path.expanduser('~/script/annot/bin'))]
+sys.path += [os.path.join(os.path.expanduser('..'))]
+sys.path += [os.path.join(os.path.expanduser('../../../microarray/bin'))]
 sys.path += [os.path.expanduser('~/script/microarray/bin')]
 from MdbId2GeneId import MdbId2GeneId
-from codense.common import db_connect
+from codense.common import db_connect, get_gene_symbol2gene_id
 import cElementTree as ElementTree
 from sets import Set
 
 class interaction_attribute:
 	def __init__(self):
 		self.uniprot_id_array = []
+		self.gene_id_array = []
 		self.interaction_type_id = None
 		self.expt_id_array = []
 		self.tax_id = None
@@ -68,6 +71,7 @@ class IntActXML2db:
 		self.commit = int(commit)
 		self.debug = int(debug)
 		self.report = int(report)
+		self.gene_symbol2gene_id = {}
 	
 	def submit_expt_table(self, curs, expt_attrib, expt_table):
 		"""
@@ -84,10 +88,10 @@ class IntActXML2db:
 	
 	def submit_interaction_table(self, curs, interaction_attrib, interaction_table):
 		curs.execute("insert into %s(uniprot_id_array, interaction_type_id, expt_id_array, \
-			tax_id, is_cross_species, intact_id) values(ARRAY%s, '%s', ARRAY%s, %s, %s, '%s')"%(interaction_table,\
+			tax_id, is_cross_species, intact_id, gene_id_array) values(ARRAY%s, '%s', ARRAY%s, %s, %s, '%s', ARRAY%s)"%(interaction_table,\
 			repr(interaction_attrib.uniprot_id_array), interaction_attrib.interaction_type_id,\
 			repr(interaction_attrib.expt_id_array), interaction_attrib.tax_id, interaction_attrib.is_cross_species,\
-			interaction_attrib.intact_id))
+			interaction_attrib.intact_id, repr(interaction_attrib.gene_id_array)))
 	
 	def parse_intact_xml_file(self, curs, input_fname, expt_table, interaction_table, acc_tax_id2gene_id_list):
 		"""
@@ -121,46 +125,82 @@ class IntActXML2db:
 							uniprot_id_elem = interactor_elem.find('%sxref/%sprimaryRef'%(namespace, namespace))
 							uniprot_id = uniprot_id_elem.get("id")
 							tax_id_elem = interactor_elem.find("%sorganism"%namespace)
-							tax_id = int(tax_id_elem.get("ncbiTaxId"))
-							#12-29-05
-							key = (uniprot_id.upper(), tax_id)
-							gene_id_list = acc_tax_id2gene_id_list.get(key)
-							if gene_id_list and len(gene_id_list)==1:
-								interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (gene_id_list[0], tax_id)
+							if not tax_id_elem:
+								interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (uniprot_id.upper(), None, None)
 							else:
-								sys.stderr.write("\t Warning: %s gets entrez gene_id_list: %s\n"%(uniprot_id, gene_id_list))
-								interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (None, tax_id)	#12-29-05 use None
+								tax_id = int(tax_id_elem.get("ncbiTaxId"))
+								#12-29-05
+								key = (uniprot_id.upper(), tax_id)
+								gene_id_list = acc_tax_id2gene_id_list.get(key)
+								if gene_id_list and len(gene_id_list)==1:
+									interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (uniprot_id.upper(), int(gene_id_list[0]), tax_id)
+								else:
+									#sys.stderr.write("\t Warning: %s gets entrez gene_id_list: %s\n"%(uniprot_id, gene_id_list))
+									interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (uniprot_id.upper(), None, tax_id)	#12-29-05 use None
+									#10-25-06 mrinal
+									if not self.gene_symbol2gene_id.has_key(str(tax_id)):
+										print "Getting gene symbol mappings for tax_id",tax_id
+										self.gene_symbol2gene_id[str(tax_id)] = get_gene_symbol2gene_id(curs, tax_id)
+									gs2gid = self.gene_symbol2gene_id[str(tax_id)]
+	
+									names_elem = interactor_elem.find('%snames'%namespace)
+									gene_names = Set()
+									gene_ids = Set()
+									for alias_elem in names_elem:
+										if alias_elem.tag == '%salias'%namespace:
+											alias_type = alias_elem.get("type")
+											if alias_type =="gene name":
+												gene_names.add(alias_elem.text)
+											elif alias_type =="gene name synonym":
+												gene_names.add(alias_elem.text)
+									for gene_name in gene_names:
+										if gs2gid.has_key(gene_name):
+											gene_ids.add(gs2gid[gene_name])
+									if len(gene_ids)==1:
+										interactor_intact_id2uniprot_id_tax_id[interactor_intact_id] = (uniprot_id.upper(), int(gene_ids.pop()), tax_id)
+									else:
+										sys.stderr.write("\t Warning: Couldn't find gene ids for interactor id %s\n"%(interactor_intact_id))
 							interactor_elem.clear()	#release memory
 					if sub_elem.tag == "%sinteractionList"%namespace:
+						skipped=0
+						wrote=0
 						for interaction_elem in sub_elem:
 							interaction_attrib = interaction_attribute()
-							interaction_attrib.expt_id_array = [expt_ref_elem.get("ref") \
+							interaction_attrib.expt_id_array = [expt_ref_elem.text \
 								for expt_ref_elem in interaction_elem.find("%sexperimentList"%namespace)]
 							interaction_attrib.interaction_type_id = \
 								interaction_elem.find('%sinteractionType/%sxref/%sprimaryRef'%(namespace, namespace, namespace)).get("id")
 							interaction_attrib.intact_id = interaction_elem.find("%sxref/%sprimaryRef"%(namespace, namespace)).get("id")
 							for prot_part_elem in interaction_elem.find("%sparticipantList"%namespace):
-								prot_intact_id = prot_part_elem.find("%sproteinInteractorRef"%namespace).get("ref")
+								prot_intact_id = prot_part_elem.find("%sinteractorRef"%namespace).text
 								#12-29-05
-								uniprot_id, tax_id = interactor_intact_id2uniprot_id_tax_id[prot_intact_id]
-								if uniprot_id:	#12-29-05 it could be None if no corresponding gene_id_list or len(gene_id_list)>1
-									interaction_attrib.uniprot_id_array.append(uniprot_id)
-								else:
-									sys.stderr.write("\t Warning: prot_intact_id %s doesn't have proper entrez gene id.\n"%prot_intact_id)
-									interaction_attrib.is_cross_species = 1	#12-29-05 just tag it as bad/incomplete interaction
-									
+								uniprot_id, gene_id, tax_id = interactor_intact_id2uniprot_id_tax_id[prot_intact_id]
+								interaction_attrib.uniprot_id_array.append(uniprot_id)
+								
 								if interaction_attrib.tax_id and tax_id!=interaction_attrib.tax_id:
 									sys.stderr.write("\t Warning: interaction %s has >1 tax_id: %s, %s(ignored).\n"%\
 										(interaction_attrib.intact_id, interaction_attrib.tax_id, tax_id))
 									interaction_attrib.is_cross_species = 1	#interaction not just within one species
 								else:
 									interaction_attrib.tax_id = tax_id
-							if interaction_attrib.uniprot_id_array:	#12-29-05 not empty
+
+								#10-25-06 (mrinal)
+								if gene_id:
+									interaction_attrib.gene_id_array.append(gene_id)
+								else:
+									sys.stderr.write("\t Warning: prot_intact_id %s doesn't have proper NCBI gene id.\n"%prot_intact_id)
+									interaction_attrib.is_cross_species = 1 # tag it as bad
+								
+							if interaction_attrib.uniprot_id_array and interaction_attrib.gene_id_array:	#12-29-05 not empty
 								self.submit_interaction_table(curs, interaction_attrib, interaction_table)
+								wrote+=1
+							else:
+								skipped+=1
 							interaction_elem.clear()	#release memory
 					
 					sub_elem.clear()	#release the sub_elem
 		sys.stderr.write("Done.\n")
+		print "wrote:",wrote,"skipped:",skipped
 	
 	def run(self):
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
@@ -187,6 +227,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = 'protein_interaction'
+	#schema = 'mrinal_pi'
 	input_fname_list = []
 	acc_file = None
 	tax_id_list = []

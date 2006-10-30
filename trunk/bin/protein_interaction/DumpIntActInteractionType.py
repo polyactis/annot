@@ -22,18 +22,20 @@ Description:
 
 import sys, os, getopt, re
 sys.path += [os.path.expanduser('~/script/annot/bin')]
+sys.path += [os.path.expanduser('..')]
 from codense.common import db_connect
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 		from python2_3 import *
 
 class interaction_type_attribute:
 	def __init__(self):
+		self.is_a = []
 		self.tag2variable = {
-			'term': None,
+			'name': None,
 			'id': None,
-			'definition': None,
-			'obsolete term': 0,
-			'definition_reference': None
+			'def': None,
+			'exact_synonym': None,
+			'is_obsolete': 0,
 			}
 
 class DumpIntActInteractionType:
@@ -46,7 +48,8 @@ class DumpIntActInteractionType:
 		self.table = table
 		self.commit = int(commit)
 		self.debug = int(debug)
-	
+		self.regex = re.compile('"(.*)" \[.*\]')
+		self.isaregex = re.compile(' ! .*')
 	
 	def submit2table(self, curs, table, interaction_type_attrib):
 		"""
@@ -54,10 +57,14 @@ class DumpIntActInteractionType:
 			solve the '-within-text problem
 			change acc to interaction_type_id
 		"""
-		curs.execute("insert into " + table +" (interaction_type_id, name, definition, is_obsolete) \
-			values(%s, %s, %s, %s)", (interaction_type_attrib.tag2variable['id'],\
-			interaction_type_attrib.tag2variable['term'], interaction_type_attrib.tag2variable['definition'], \
-			interaction_type_attrib.tag2variable['obsolete term']))
+		curs.execute("insert into " + table +" (interaction_type_id, name, definition, is_obsolete, exact_synonym) \
+			values(%s, %s, %s, %s, %s)", (interaction_type_attrib.tag2variable['id'],\
+			interaction_type_attrib.tag2variable['name'], interaction_type_attrib.tag2variable['def'], \
+			interaction_type_attrib.tag2variable['is_obsolete'], \
+			interaction_type_attrib.tag2variable['exact_synonym']))
+		for isa in interaction_type_attrib.is_a:
+			curs.execute("insert into " + table+"_rel (interaction_type_id, is_a_interaction_type_id) \
+				values(%s, %s)", (interaction_type_attrib.tag2variable['id'],isa))
 	
 	def parse_block(self, block):
 		"""
@@ -74,17 +81,24 @@ class DumpIntActInteractionType:
 			colon_position = line.find(':')
 			tag = line[:colon_position]
 			value = line[colon_position+2:-1]	#+2 to skip ': '
-			if tag == 'obsolete term':
-				if value.find('OBSOLETE') == 0:
+			if tag == 'is_obsolete':
+				if value.find('true') == 0:
 					interaction_type_attrib.tag2variable[tag] = 1
+			elif tag == 'is_a':
+				value = self.isaregex.sub('',value)
+				interaction_type_attrib.is_a.append(value)
 			else:
-				value = value.replace("'", '"')	#replace ' with "
+				#value = value.replace("'", '"')	#replace ' with "
+				value = self.regex.sub('\\1',value)
+				#print "%s = %s"%(tag,value)
 				interaction_type_attrib.tag2variable[tag] = value
 		if self.debug:
 			print interaction_type_attrib.tag2variable['id']
-			print interaction_type_attrib.tag2variable['term']
-			print interaction_type_attrib.tag2variable['definition']
-			print interaction_type_attrib.tag2variable['obsolete term']
+			print interaction_type_attrib.tag2variable['name']
+			print interaction_type_attrib.tag2variable['def']
+			print interaction_type_attrib.tag2variable['is_obsolete']
+			for isa in interaction_type_attrib.is_a:
+				print "is a %s"%(isa)
 			raw_input("continue?(Y/n)")
 		return interaction_type_attrib
 	
@@ -92,13 +106,22 @@ class DumpIntActInteractionType:
 		sys.stderr.write("Parsing...")
 		inf = open(input_fname, 'r')
 		block = []
+		state = 0
 		for line in inf:
-			if line=='\n':
-				interaction_type_attrib = self.parse_block(block)
-				self.submit2table(curs, table, interaction_type_attrib)
-				block = []
-			else:
-				block.append(line)
+			#print line
+			if state==0:
+				# searching for [Term]
+				if line=='[Term]\n':
+					state=1
+			elif state==1:
+				# Accepting text until newline
+				if line=='\n':
+					interaction_type_attrib = self.parse_block(block)
+					self.submit2table(curs, table, interaction_type_attrib)
+					block = []
+					state=0
+				else:
+					block.append(line)
 		del inf
 		sys.stderr.write("done.\n")
 	
@@ -127,6 +150,7 @@ if __name__ == '__main__':
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
 	schema = 'protein_interaction'
+	#schema = 'mrinal_pi'
 	input_fname = ''
 	table = 'intact_interaction_type'
 	commit = 0
