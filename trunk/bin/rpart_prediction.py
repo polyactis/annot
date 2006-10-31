@@ -470,7 +470,7 @@ if __name__ == '__main__':
 	training_perc = 0.8
 	type = 1
 	mty = 0
-	bit_string = '11111'
+	bit_string = '1111111'
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
