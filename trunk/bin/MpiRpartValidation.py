@@ -18,7 +18,7 @@ Option:
 	-t ...,	type, 1(default, rpart), 2(randomForest)
 	-m ...,	mty list(see rpart_prediction.py's doc)
 			0(default, automatically choosen by randomForest)
-	-b ...,	bit_string, '11111'(default)
+	-b ...,	bit_string, '1111111'(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-u,	enable debug flag
 	-c,	commit the database transaction(IGNORE)
@@ -31,6 +31,8 @@ Examples:
 
 Description:
 	Program to do rpart validation. Inherit rpart_prediction.py
+	For bit_string's meaning see rpart_prediction.py's doc.
+	
 """
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
@@ -363,7 +365,7 @@ if __name__ == '__main__':
 	no_of_validations = 10
 	type = 1
 	mty_ls = [0]
-	bit_string = '11111'
+	bit_string = '1111111'
 	need_cal_hg_p_value = 0
 	debug = 0
 	commit = 0
