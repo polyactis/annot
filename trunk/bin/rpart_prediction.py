@@ -17,7 +17,7 @@ Option:
 	-t ...,	type, 1(default, rpart), 2(randomForest)
 	-m ...,	(randomForest)Number of variables randomly sampled as candidates at each split
 			0(default, automatically choosen by randomForest)
-	-b ...,	bit_string, '11111'(default)
+	-b ...,	bit_string, '1111111'(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
 	-u,	enable debug flag
 	-c,	commit the database transaction
@@ -30,7 +30,8 @@ Examples:
 
 Description:
 	Program to do rpart fittng and prediction.
-	bit_string corresponds to p_value, recurrence, connectivity, cluster_size, gradient
+	bit_string corresponds to (1)p_value, (2)recurrence, (3)connectivity, (4)cluster_size, 
+		(5)edge_gradient/m1_score, (6)avg_degree(vertex_gradient), (7)unknown_ratio
 	
 """
 import sys, os, math
@@ -99,6 +100,7 @@ class rpart_prediction:
 			mcl_id2vertex_list might blow the memory.(?)
 		11-19-05
 			separate predictions totally into known and unknown
+		2006-10-30, add avg_degree(vertex_gradient) and unknown_cut_off
 		"""
 		sys.stderr.write("Fetching data from old p_gene_table...\n")
 		prediction_pair2instance = {}
@@ -149,8 +151,10 @@ class rpart_prediction:
 					mcl_id2vertex_list[mcl_id], no_of_total_genes, go_no2gene_no_set, r)
 			
 			is_correct = p_attr_instance.is_correct_dict[is_correct_type]
+			#2006-10-30, add avg_degree(vertex_gradient) and unknown_cut_off
 			data_row = [p_attr_instance.p_value_cut_off, p_attr_instance.recurrence_cut_off, p_attr_instance.connectivity_cut_off,\
-				p_attr_instance.cluster_size_cut_off, p_attr_instance.edge_gradient, p_attr_instance.gene_no, p_attr_instance.go_no, \
+				p_attr_instance.cluster_size_cut_off, p_attr_instance.edge_gradient, p_attr_instance.vertex_gradient, \
+				p_attr_instance.unknown_cut_off, p_attr_instance.gene_no, p_attr_instance.go_no, \
 				is_correct]
 			if is_correct!=-1:
 				known_data.append(data_row)	#to do fitting
@@ -231,6 +235,7 @@ class rpart_prediction:
 	def randomForest_fit(self, known_data, parameter_list, bit_string='11111'):
 		"""
 		03-17-06
+		2006-10-302006-10-30, add avg_degree(vertex_gradient) and unknown_cut_off
 		"""
 		if self.debug:
 			sys.stderr.write("Fitting randomForest...\n")
@@ -240,7 +245,7 @@ class rpart_prediction:
 		r._libPaths(os.path.join(lib_path, 'R'))	#better than r.library("randomForest", lib_loc=os.path.join(lib_path, "R")) (see plone doc)
 		r.library('randomForest')
 		
-		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'gradient']
+		coeff_name_list = ['p_value', 'recurrence', 'connectivity', 'cluster_size', 'gradient', 'avg_degree', 'unknown_ratio']	#2006-10-30
 		formula_list = []
 		for i in range(len(bit_string)):
 			if bit_string[i] == '1':
@@ -250,7 +255,8 @@ class rpart_prediction:
 		known_data = array(known_data)
 		set_default_mode(NO_CONVERSION)
 		data_frame = r.as_data_frame({"p_value":known_data[:,0], "recurrence":known_data[:,1], "connectivity":known_data[:,2], \
-			"cluster_size":known_data[:,3], "gradient":known_data[:,4], "is_correct":r.factor(known_data[:,-1])})	#03-17-06, watch r.factor
+			"cluster_size":known_data[:,3], "gradient":known_data[:,4], "avg_degree":known_data[:,5], "unknown_ratio":known_data[:,6],\
+			"is_correct":r.factor(known_data[:,-1])})	#03-17-06, watch r.factor	#2006-10-30
 		
 		if mty>0:
 			fit = r.randomForest(formula, data=data_frame, mty=mty)
@@ -265,13 +271,15 @@ class rpart_prediction:
 	def randomForest_predict(self, fit_model, data):
 		"""
 		03-17-06
+		2006-10-30, add avg_degree(vertex_gradient) and unknown_cut_off
 		"""
 		if self.debug:
 			sys.stderr.write("Predicting by randomForest...\n")
 		data = array(data)
 		set_default_mode(NO_CONVERSION)
 		data_frame = r.as_data_frame({"p_value":data[:,0], "recurrence":data[:,1], "connectivity":data[:,2], \
-			"cluster_size":data[:,3], "gradient":data[:,4], "is_correct":r.factor(data[:,-1])})
+			"cluster_size":data[:,3], "gradient":data[:,4], "avg_degree":data[:,5], "unknown_ratio":data[:,6], \
+			"is_correct":r.factor(data[:,-1])})
 		set_default_mode(BASIC_CONVERSION)
 		pred = r.predict(fit_model, data_frame)
 		del data_frame
@@ -331,12 +339,15 @@ class rpart_prediction:
 		03-17-06
 			add pred_type, 1 is dict, rpart's prediction result (also randomForest fit model's 'predicted')
 				2 is list, randomForest's prediction result
+		2006-10-30
+			adjust the data row index as avg_degree and unknown_ratio are added
 		"""
 		no_of_correct_predictions = 0
 		gene_set = Set()
 		prediction_set = Set()	#11-23-05
 		for i in range(len(data)):
-			p_value, recurrence, connectivity, cluster_size, edge_gradient, gene_no, go_no, is_correct = data[i]
+			p_value, recurrence, connectivity, cluster_size, edge_gradient = data[i][:5]	#2006-10-30
+			gene_no, go_no, is_correct = data[i][-3:]
 			if pred_type==1:
 				key_in_pred = repr(i+1)	#WATCH R's index starts from 1
 			elif pred_type==2:
