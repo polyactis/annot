@@ -22,7 +22,7 @@ Description:
 	Calculate the parameter cutoff corresponding to an accuracy_cut_off.
 	Which parameter based on bit_string(e.g. 001, 1, 01, 0001, 00010):
 		1: 'p_value_cut_off'; 2: 'recurrence_cut_off'; 3: 'connectivity_cut_off';
-		4: 'cluster_size_cut_off'; 5: 'edge_gradient'; 6:'rpart_prob'
+		4: 'cluster_size_cut_off'; 5: 'edge_gradient'; 6:'randomForest prediction bit'(depth_cut_off)
 	In MpiStatCluster.py's resulting p_gene table, p_value_cut_off=edge_gradient.
 	10-28-05 memory threshold is 1.5e7
 """
@@ -44,6 +44,7 @@ class OneParameterCutoffSeeker:
 		lm_table=None, accuracy_cut_off=0, judger_type=0, which=0, commit=0, report=0, debug=0):
 		"""
 		11-09-05 add the sixth parameter: rpart_prob(which is vertex_gradient in p_gene_table)
+		2006-10-31 set depth_cut_off as the 6-th bit, replace vertex_gradient
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -61,7 +62,7 @@ class OneParameterCutoffSeeker:
 			2: 'connectivity_cut_off',
 			3: 'cluster_size_cut_off',
 			4: 'edge_gradient',
-			5: 'vertex_gradient'}
+			5: 'depth_cut_off'}
 	
 	def get_prediction_step(self, curs, table, is_correct_dict, judger_type):
 		"""
