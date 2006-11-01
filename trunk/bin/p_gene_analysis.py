@@ -304,6 +304,7 @@ class p_gene_analysis:
 			add edge_gradient
 		11-09-05 add p.vertex_gradient
 		#10-27-05 no need to convert p-value by -log
+		2006-10-31 replace vertex_gradient with depth_cut_off(which is the randomForest prediction class)
 		"""
 		gene_no = row[0]
 		go_no = row[1]
@@ -323,7 +324,7 @@ class p_gene_analysis:
 			if p_value ==0:
 				p_value = 1e-8
 			#10-23-05 no need to convert p-value
-			(is_accepted, score) = self.prediction_accepted(go_no, [p_value, recurrence, connectivity, cluster_size, edge_gradient, vertex_gradient])
+			(is_accepted, score) = self.prediction_accepted(go_no, [p_value, recurrence, connectivity, cluster_size, edge_gradient, depth_cut_off])	#2006-10-31
 		else:
 			is_accepted = (p_value <= self.p_value_cut_off)
 			score = p_value
