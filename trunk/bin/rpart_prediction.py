@@ -232,7 +232,7 @@ class rpart_prediction:
 			sys.stderr.write("Done rpart_predict.\n")
 		return pred
 
-	def randomForest_fit(self, known_data, parameter_list, bit_string='11111'):
+	def randomForest_fit(self, known_data, parameter_list, bit_string='1111111'):
 		"""
 		03-17-06
 		2006-10-302006-10-30, add avg_degree(vertex_gradient) and unknown_cut_off
@@ -298,18 +298,23 @@ class rpart_prediction:
 		vertex_list = map(int, vertex_list)
 		return vertex_list
 	
-	def record_data(self, curs, MpiPredictionFilter_instance, prediction_ls, pred, schema_instance):
+	def record_data(self, curs, MpiPredictionFilter_instance, prediction_ls, pred, schema_instance, pred_type=1):
 		"""
 		11-09-05
 		11-18-05 pred is type="class"
+		2006-10-31 depth_cut_off = prediction class bit
+		2006-10-31 add pred_type
 		"""
 		sys.stderr.write("Recording prediction...\n")
 		for i in range(len(prediction_ls)):
 			p_attr_instance = prediction_ls[i]
-			p_attr_instance.vertex_gradient = int(pred[repr(i+1)])	#WATCH R's index starts from 1
+			if pred_type==1:	#2006-10-31
+				key_in_pred = repr(i+1)	#WATCH R's index starts from 1
+			elif pred_type==2:
+				key_in_pred = i
+			p_attr_instance.depth_cut_off = int(pred[key_in_pred])
 			MpiPredictionFilter_instance.submit_to_p_gene_table(curs, schema_instance.p_gene_table, p_attr_instance)
 		sys.stderr.write("Done recording prediction...\n")
-	
 	
 	
 	####11-17-05  for parameter tuning purpose
@@ -440,8 +445,13 @@ class rpart_prediction:
 			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.mcl_table, new_schema_instance.mcl_table)
 			MpiPredictionFilter_instance.view_from_table(curs, old_schema_instance.pattern_table, new_schema_instance.pattern_table)
 			MpiPredictionFilter_instance.createGeneTable(curs, new_schema_instance.p_gene_table)
-			self.record_data(curs, MpiPredictionFilter_instance, unknown_prediction_ls, unknown_pred, new_schema_instance)
-			self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance)
+			self.record_data(curs, MpiPredictionFilter_instance, unknown_prediction_ls, unknown_pred, new_schema_instance, pred_type=self.type)
+			if self.type==2:	#2006-10-31 randomForest's model has its own oob prediction, but use rpart's way of storing prediction
+				fit_model_py = fit_model.as_py(BASIC_CONVERSION)
+				known_pred = fit_model_py['predicted']
+				self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance, pred_type=1)
+			else:
+				self.record_data(curs, MpiPredictionFilter_instance, known_prediction_ls, known_pred, new_schema_instance, pred_type=self.type)
 			curs.execute("end")
 		
 
