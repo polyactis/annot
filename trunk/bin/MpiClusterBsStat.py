@@ -17,6 +17,7 @@ Option:
 	-o ...,	output_file, fuzzyDense.out(default)
 	-x ...,	tax_id, 4932(default, yeast), for get_gene_id2gene_symbol
 	-v ...,	sig_vector_fname
+	-y ...,	type of TFBS association information, 1(computational, default), 2(experiment)
 	-f,	run fuzzyDense
 	-n,	CLUSTER_BS_TABLE is new
 	-c,	commit the database transaction
@@ -50,14 +51,58 @@ from MpiCrackSplat import MpiCrackSplat	#12-18-05	for fill_edge2encodedOccurrenc
 from fuzzyDense import fuzzyDense	#12-18-05	for fuzzyDense()
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 	from python2_3 import *
+
+def get_gene_no2bs_no_block_from_expt_tf_mapping(curs, gene_table='gene'):
+	"""
+	2006-10-03
+		input_node takes care of this
+		format:
+			[gene_no1, bs_no11, bs_no12, ..., -1, gene_no2, gene_no21, ..., -1]
+		-1 is the dilimiter
+	"""
+	sys.stderr.write("Getting gene_id set from %s"%gene_table)
+	curs.execute("select gene_id from %s"%gene_table)
+	from sets import Set
+	gene_id_set = Set()
+	rows = curs.fetchall()
+	for row in rows:
+		gene_id_set.add(row[0])
+	sys.stderr.write("Done.\n")
+	sys.stderr.write("Getting gene_no2bs_no_block from tf_mapping...\n")
+		
+	curs.execute("DECLARE crs0 CURSOR FOR select distinct gene_id, mt_no from graph.tf_mapping")
+	curs.execute("fetch 5000 from crs0")
+	rows = curs.fetchall()
+	gene_no2bs_no_set = {}
+	while rows:
+		for row in rows:
+			gene_id, mt_no = row
+			if gene_id in  gene_id_set:
+				gene_no = int(gene_id)
+				if gene_no not in gene_no2bs_no_set:
+					gene_no2bs_no_set[gene_no] = Set()
+				gene_no2bs_no_set[gene_no].add(mt_no)
+		curs.execute("fetch 5000 from crs0")
+		rows = curs.fetchall()
 	
+	gene_no2bs_no_block = []
+	for gene_no, mt_no_set in gene_no2bs_no_set.iteritems():
+		gene_no2bs_no_block.append(gene_no)
+		for mt_no in mt_no_set:
+			gene_no2bs_no_block.append(mt_no)
+		gene_no2bs_no_block.append(-1)	#delimiter
+	gene_no2bs_no_block = Numeric.array(gene_no2bs_no_block)
+	sys.stderr.write("Done.\n")
+	return gene_no2bs_no_block
+
+
 class MpiClusterBsStat:
 	"""
 	09-19-05
 	"""
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None, good_cluster_table=None,\
 		cluster_bs_table=None,  size=2000, ratio_cutoff=1/3.0, top_number=5, degree_cut_off=0.3, p_value_cut_off=0.001, \
-		output_file='fuzzyDense.out', tax_id=4932, sig_vector_fname=None, fuzzyDense_flag=0, new_table=0, \
+		output_file='fuzzyDense.out', tax_id=4932, sig_vector_fname=None, tfbs_association_type=1, fuzzyDense_flag=0, new_table=0, \
 		commit=0, debug=0, report=0):
 		"""
 		12-15-05
@@ -65,6 +110,7 @@ class MpiClusterBsStat:
 		12-20-05
 			add output_file and tax_id, degree_cut_off
 		2006-09-21 add fuzzyDense_flag
+		2006-11-02 add tfbs_association_type
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -79,6 +125,7 @@ class MpiClusterBsStat:
 		self.output_file = output_file
 		self.tax_id = int(tax_id)
 		self.sig_vector_fname = sig_vector_fname
+		self.tfbs_association_type = int(tfbs_association_type)
 		self.fuzzyDense_flag = int(fuzzyDense_flag)
 		self.new_table = int(new_table)
 		self.commit = int(commit)
@@ -329,6 +376,8 @@ class MpiClusterBsStat:
 		"""
 		09-05-05
 		2006-09-21 add fuzzyDense_flag
+		2006-11-02 add tfbs_association_type
+		2006-11-02 differentiate good_cluster_table as pattern_xxx or good_xxx for pattern id
 		
 			--db_connect()
 			--get_gene_no2bs_no_block()
@@ -346,10 +395,13 @@ class MpiClusterBsStat:
 		communicator = MPI.world.duplicate()
 		node_rank = communicator.rank
 		free_computing_nodes = range(1,communicator.size-1)
-		
+		print self.tfbs_association_type
 		if node_rank == 0:
 			(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-			gene_no2bs_no_block = self.get_gene_no2bs_no_block(curs)
+			if self.tfbs_association_type==1:	#2006-11-02
+				gene_no2bs_no_block = self.get_gene_no2bs_no_block(curs)
+			elif self.tfbs_association_type==2:
+				gene_no2bs_no_block = get_gene_no2bs_no_block_from_expt_tf_mapping(curs)
 			for node in range(1, communicator.size-1):	#send it to the computing_node
 				communicator.send(gene_no2bs_no_block, node, 0)
 			if self.fuzzyDense_flag:	#2006-09-21 add fuzzyDense_flag
@@ -383,8 +435,12 @@ class MpiClusterBsStat:
 		mpi_synchronize(communicator)
 		
 		if node_rank == 0:
-			curs.execute("DECLARE crs CURSOR FOR select distinct id, vertex_set, recurrence_array\
-				from %s "%(self.good_cluster_table))
+			if self.good_cluster_table.find('pattern')!=-1:	#2006-11-02 it's pattern_xxx table, use id as pattern_id
+				curs.execute("DECLARE crs CURSOR FOR select distinct id, vertex_set, recurrence_array\
+					from %s "%(self.good_cluster_table))
+			else:	#2006-11-02 it's good_xxx table, use mcl_id as pattern_id
+				curs.execute("DECLARE crs CURSOR FOR select distinct mcl_id, vertex_set, recurrence_array\
+					from %s "%(self.good_cluster_table))
 			input_node(communicator, curs, free_computing_nodes, self.size, self.report)
 			curs.execute("close crs")
 			
@@ -423,7 +479,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:v:fncbr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:g:l:s:a:t:e:p:o:x:v:y:fncbr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -442,6 +498,7 @@ if __name__ == '__main__':
 	output_file = 'fuzzyDense.out'
 	tax_id = 4932
 	sig_vector_fname = None
+	tfbs_association_type = 1
 	fuzzyDense_flag = 0
 	new_table = 0
 	commit = 0
@@ -481,6 +538,8 @@ if __name__ == '__main__':
 			tax_id = int(arg)
 		elif opt in ("-v",):
 			sig_vector_fname = arg
+		elif opt in ("-y",):
+			tfbs_association_type = int(arg)
 		elif opt in ("-c",):
 			commit = 1
 		elif opt in ("-b",):
@@ -491,7 +550,7 @@ if __name__ == '__main__':
 		if cluster_bs_table or output_file:
 			instance = MpiClusterBsStat(hostname, dbname, schema, good_cluster_table,\
 				cluster_bs_table, size, ratio_cutoff, top_number, degree_cut_off, p_value_cut_off, output_file, \
-				tax_id, sig_vector_fname, fuzzyDense_flag, new_table, commit, debug, report)
+				tax_id, sig_vector_fname, tfbs_association_type, fuzzyDense_flag, new_table, commit, debug, report)
 			instance.run()
 	else:
 		print __doc__
