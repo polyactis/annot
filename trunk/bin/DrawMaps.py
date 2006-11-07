@@ -12,6 +12,7 @@ Option:
 	-l ...,	lm_bit of setting1, ('00001', default)
 	-a ...	acc_cutoff of setting1, (0.6 default)
 	-o ...	output prefix
+	-y ...	type of -i(inputfname), 1(schema prefix, default), 2(filtered prediction file)
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
@@ -36,16 +37,18 @@ import os, sys, csv, getopt
 from codense.common import get_char_dimension, get_text_region, db_connect,\
 	form_schema_tables, p_gene_id_set_from_gene_p_table, get_go_no2name, \
 	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid, \
-	get_gene_id2gene_symbol, get_go_id2name
+	get_gene_id2gene_symbol, get_go_id2name, get_go_no2go_id
 from sets import Set
 import Image, ImageDraw
 from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv, decodeOccurrenceToBv, decodeOccurrence
 
 class DrawMaps:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, pattern_table='', cluster_bs_table='',\
-		inputfname=None, lm_bit='00001', acc_cutoff=0.6, output_prefix=None, debug=0, report=0):
+		inputfname=None, lm_bit='00001', acc_cutoff=0.6, output_prefix=None, type=1, debug=0, report=0):
 		"""
 		2006-09-26
+		2006-11-06
+			add type
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -56,16 +59,19 @@ class DrawMaps:
 		self.lm_bit = lm_bit
 		self.acc_cutoff = float(acc_cutoff)
 		self.output_prefix = output_prefix
+		self.type = int(type)
 		self.function_name_length = 40	#truncate if exceed, no public interface
 		self.debug = int(debug)
 		self.report = int(report)
 	
-	def get_no_of_p_funcs_gene_no_go_no_list(self, inputfname):
+	def get_no_of_p_funcs_gene_no_go_no_list_from_file(self, inputfname):
 		"""
 		2006-09-26
 			from a file
 			go_no is actually go_id (GeneOntology acc, GO:0004283)
 			mcl_id2go_no_set is for  get_recurrence_go_no_rec_array_cluster_id_ls()
+		2006-11-06
+			rename it from get_no_of_p_funcs_gene_no_go_no_list to get_no_of_p_funcs_gene_no_go_no_list_from_file
 		"""
 		sys.stderr.write("Getting no_of_p_funcs_gene_no_go_no_list...\n")
 		gene_no2go_no_set = {}
@@ -92,7 +98,46 @@ class DrawMaps:
 		no_of_p_funcs_gene_no_go_no_list.sort()
 		sys.stderr.write("End getting no_of_p_funcs_gene_no_go_no_list.\n")
 		return no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set
-		
+	
+	def get_no_of_p_funcs_gene_no_go_no_list_from_db(self, curs, p_gene_table, given_p_gene_set, go_no2go_id):
+		"""
+		2006-11-06
+			modified after the old version of get_no_of_p_funcs_gene_no_go_no_list
+		"""
+		sys.stderr.write("Getting no_of_p_funcs_gene_no_go_no_list...\n")
+		gene_no2go_no_set = {}
+		mcl_id2go_no_set = {}
+		curs.execute("DECLARE crs CURSOR FOR SELECT p_gene_id, gene_no, go_no, mcl_id \
+			from %s"%p_gene_table)
+		curs.execute("fetch 10000 from crs")
+		rows = curs.fetchall()
+		counter = 0
+		real_counter = 0
+		while rows:
+			for row in rows:
+				p_gene_id, gene_no, go_no, mcl_id = row
+				if p_gene_id in given_p_gene_set:
+					if gene_no not in gene_no2go_no_set:
+						gene_no2go_no_set[gene_no] = Set()
+					gene_no2go_no_set[gene_no].add(go_no2go_id[go_no])
+					if mcl_id not in mcl_id2go_no_set:
+						mcl_id2go_no_set[mcl_id] = Set()
+					mcl_id2go_no_set[mcl_id].add(go_no2go_id[go_no])
+					real_counter += 1
+			counter += 1
+			if self.report:
+				sys.stderr.write("%s%s/%s"%('\x08'*20, counter, real_counter))
+			curs.execute("fetch 10000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		#transform the dict into list
+		no_of_p_funcs_gene_no_go_no_list = []
+		for gene_no, go_no_set in gene_no2go_no_set.iteritems():
+			no_of_p_funcs_gene_no_go_no_list.append([len(go_no_set), gene_no, go_no_set])
+		no_of_p_funcs_gene_no_go_no_list.sort()
+		sys.stderr.write("End getting no_of_p_funcs_gene_no_go_no_list.\n")
+		return no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set
+	
 	def draw_gene_function_map(self, no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
 		output_fname, function_name_length, char_dimension, no_of_functions):
 		"""
@@ -169,6 +214,7 @@ class DrawMaps:
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		counter = 0
+		real_counter = 0
 		while rows:
 			for row in rows:
 				mcl_id, recurrence_array = row
@@ -191,9 +237,10 @@ class DrawMaps:
 							go_no2recurrence_cluster_id[go_no][0] = \
 								go_no2recurrence_cluster_id[go_no][0] | encoded_recurrence
 							go_no2recurrence_cluster_id[go_no][1].add(mcl_id)
+					real_counter += 1
 				counter += 1
 			if self.report:
-				sys.stderr.write("%s%s"%('\x08'*20, counter))
+				sys.stderr.write("%s%s\t%s"%('\x08'*20, counter, real_counter))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
 		curs.execute("close crs")
@@ -382,7 +429,9 @@ class DrawMaps:
 		10-31-05
 		2006-09-26
 			modify it to be compatible with the modified pipeline from haifeng
-		
+		2006-11-06
+			add type
+			
 			--form_schema_tables()
 			--db_connect()
 			--get_char_dimension()
@@ -404,7 +453,15 @@ class DrawMaps:
 		
 		#go_no2name = get_go_no2name(curs)
 		go_no2name = get_go_id2name(curs)
-		no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set = self.get_no_of_p_funcs_gene_no_go_no_list(self.inputfname)
+		if self.type==1:
+			go_no2go_id = get_go_no2go_id(curs)
+			given_p_gene_set = p_gene_id_set_from_gene_p_table(curs, schema_instance.gene_p_table)
+			no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set = self.get_no_of_p_funcs_gene_no_go_no_list_from_db(curs, \
+				schema_instance.p_gene_table, given_p_gene_set, go_no2go_id)
+		elif self.type==2:
+			no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set = self.get_no_of_p_funcs_gene_no_go_no_list_from_file(self.inputfname)
+		
+		
 		recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, mcl_id2enc_recurrence = \
 			self.get_recurrence_go_no_rec_array_cluster_id_ls(curs, self.pattern_table, mcl_id2go_no_set)
 		
@@ -432,7 +489,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema="]
-	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:s:i:l:a:o:br", long_options_list)
+	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:s:i:l:a:o:y:br", long_options_list)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
@@ -443,6 +500,7 @@ if __name__ == '__main__':
 	lm_bit = '00001'
 	acc_cutoff = 0.6
 	output_prefix = None
+	type = 1
 	debug = 0
 	report = 0
 
@@ -468,6 +526,8 @@ if __name__ == '__main__':
 			acc_cutoff = float(arg)
 		elif opt in ("-o",):
 			output_prefix = arg
+		elif opt in ("-y",):
+			type = int(arg)
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-r", ):
@@ -475,7 +535,7 @@ if __name__ == '__main__':
 		
 	if pattern_table and cluster_bs_table and inputfname and output_prefix:
 		instance = DrawMaps(hostname, dbname, schema, pattern_table, cluster_bs_table, inputfname, lm_bit, acc_cutoff, output_prefix, \
-			debug, report)
+			type, debug, report)
 		instance.run()
 	else:
 		print __doc__
