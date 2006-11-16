@@ -12,7 +12,7 @@ Option:
 	-l ...,	lm_bit of setting1, ('00001', default)
 	-a ...	acc_cutoff of setting1, (0.6 default)
 	-o ...	output prefix
-	-y ...	type of -i(inputfname), 1(schema prefix, default), 2(filtered prediction file)
+	-y ...	type of -i(inputfname), 1(schema prefix, for p_gene_table and gene_p_table, default), 2(filtered prediction file)
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
@@ -21,7 +21,10 @@ Examples:
 	DrawMaps.py -k hs_fim_65 -i ~/script/haifeng_annot/8-pred/human.n2.s200.pred.1.2.max 
 	 -p pattern_hs_fim_65_m5x65s4l5 -s cluster_bs_hs_fim_65_m5x65s4l5e0p001geneid
 	 -o /tmpcmb-01/yuhuang/map
-
+	
+	DrawMaps.py -k hs_fim_65 -i hs_fim_65_n2s175_m5x65s4l5_ft2 -p pattern_hs_fim_65_n2s175_m5x65s4l5 
+		-s bs_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60p01y1 
+		-o ~/tmp/hs_fim_65_n2s175_m5x65s4l5_ft2_map -l 000001
 Description:
 	Draw function_map and gene_function_map and tf_map.
 """
