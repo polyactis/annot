@@ -9,6 +9,7 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-i ..., p_gene_table
 	-g ...,	gene_p_table
+	-n ...,	prot_interaction_table, 'mrinal_pi.intact_interaction'(default)
 	-c ...,	comp_cluster_bs_table
 	-e ...,	expt_cluster_bs_table
 	-p ...,	pattern_table = 
@@ -33,7 +34,8 @@ Description:
 		yellow: standout and associated
 		red: associated
 		blue: not associated and not associated
-	
+	Edges colored red in GO function graph denote protein interaction.
+		They might not be part of the pattern (compare it with TF graph).
 """
 
 
@@ -46,7 +48,7 @@ else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, math
-from codense.common import db_connect, get_gene_id2gene_symbol, get_go_id2name
+from codense.common import db_connect, get_gene_id2gene_symbol, get_go_id2name, pg_1d_array2python_ls
 from sets import Set
 import networkx as nx
 import matplotlib
@@ -56,7 +58,7 @@ import Numeric
 
 class DrawPredGOExptTFCompTF_Patterns:
 	def __init__(self,hostname='zhoudb', dbname='graphdb', schema=None,  \
-		input_fname=None, gene_p_table=None, comp_cluster_bs_table=None, \
+		input_fname=None, gene_p_table=None, prot_interaction_table=None, comp_cluster_bs_table=None, \
 		expt_cluster_bs_table=None, gene_table='gene', go_table='go',\
 		pattern_table=None, output_dir=None, \
 		comp_tf_mapping_table='graph.gene_id2mt_no', expt_tf_mapping_table='graph.tf_mapping',\
@@ -65,12 +67,15 @@ class DrawPredGOExptTFCompTF_Patterns:
 		2006-10-14
 		2006-11-20
 			add gene_p_table
+			
+			add prot_interaction_table
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
 		self.schema = schema
 		self.input_fname = input_fname
 		self.gene_p_table = gene_p_table
+		self.prot_interaction_table = prot_interaction_table
 		self.comp_cluster_bs_table = comp_cluster_bs_table
 		self.expt_cluster_bs_table = expt_cluster_bs_table
 		self.gene_table = gene_table
@@ -180,9 +185,42 @@ class DrawPredGOExptTFCompTF_Patterns:
 		sys.stderr.write("done\n")
 		return go_id2gene_set
 	
-	def draw_pattern(self, figure_no, g, pos, sub_label_map, title_map, go_id_or_mt_no_struct, go_id_or_mt_no2gene_id_set, \
-		output_fname_prefix, is_go_function=0):
-		
+	def get_prot_interaction_graph(self, curs, prot_interaction_table, tax_id):
+		"""
+		2006-11-20
+		"""
+		sys.stderr.write("Getting protein interaction graph ...\n")
+		curs.execute("DECLARE crs0 CURSOR for select gene_id_array, interaction_type_id\
+			from %s where tax_id=%s"%(prot_interaction_table, tax_id))
+		curs.execute("fetch 3000 from crs0")
+		rows = curs.fetchall()
+		prot_interaction_graph = nx.XGraph()
+		counter = 0
+		while rows:
+			for row in rows:
+				gene_id_array, interaction_type_id = row
+				gene_id_array = pg_1d_array2python_ls(gene_id_array)
+				if len(gene_id_array)>1:
+					for i in range(len(gene_id_array)):
+						for j in range(i+1, len(gene_id_array)):
+							prot_interaction_graph.add_edge(gene_id_array[i], gene_id_array[j], interaction_type_id)
+				counter += 1
+			if self.report:
+				sys.stderr.write("%s%s"%('\x08'*20, counter))
+			curs.execute("fetch 3000 from crs0")
+			rows = curs.fetchall()
+		curs.execute("close crs0")
+		sys.stderr.write("%s nodes and %s edges, Done.\n"%(nx.number_of_nodes(prot_interaction_graph),\
+			nx.number_of_edges(prot_interaction_graph)))
+		return prot_interaction_graph
+	
+	def draw_pattern(self, figure_no, old_g, pos, sub_label_map, title_map, go_id_or_mt_no_struct, go_id_or_mt_no2gene_id_set, \
+		output_fname_prefix, is_go_function=0, prot_interaction_graph=None):
+		"""
+		2006-11-20
+			add prot_interaction_graph
+		"""
+		g = old_g.copy()
 		for key in go_id_or_mt_no_struct:
 			figure_no += 1
 			pylab.figure()
@@ -206,7 +244,23 @@ class DrawPredGOExptTFCompTF_Patterns:
 						associated_gene_id_list.append(v)
 					else:
 						other_gene_id_list.append(v)
-			nx.draw_networkx_edges(g, pos, alpha=0.4)
+			if prot_interaction_graph:
+				nodes_of_g = g.nodes()
+				sub_prot_graph = prot_interaction_graph.subgraph(nodes_of_g)
+				interaction_edge_list = []
+				non_interaction_edge_list = []
+				for (u, v) in g.edges():
+					if not sub_prot_graph.has_edge(u,v):
+						non_interaction_edge_list.append((u,v))
+				for (u, v, interaction_type_id) in sub_prot_graph.edges():
+					interaction_edge_list.append((u,v))
+					#if not g.has_edge(u,v):	#expand g, not necesary
+					#	print 'added'
+					#	g.add_edge(u,v)
+				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', edgelist=interaction_edge_list)
+				nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_interaction_edge_list)
+			else:
+				nx.draw_networkx_edges(g, pos, alpha=0.4)
 			if standout_gene_id_list:
 				nx.draw_networkx_nodes(g, pos, nodelist= standout_gene_id_list, node_color='g', alpha=0.4)
 			if standout_and_associated_gene_id_list:
@@ -224,11 +278,14 @@ class DrawPredGOExptTFCompTF_Patterns:
 	
 	def draw_all_patterns(self, curs, mcl_id2pred_go_id2gene_id_set, comp_cluster_bs_table, expt_cluster_bs_table, gene_table, go_table,\
 		pattern_table, output_dir, gene_id2gene_symbol, go_id2name,\
-		comp_tf_mapping_table='graph.gene_id2mt_no', expt_tf_mapping_table='graph.tf_mapping'):
+		comp_tf_mapping_table='graph.gene_id2mt_no', expt_tf_mapping_table='graph.tf_mapping',\
+		prot_interaction_graph=None):
 		"""
 		2006-11-20
 			make it one by one, from user input
 			input_fname becomes mcl_id2pred_go_id2gene_id_set
+		2006-11-21
+			add prot_interaction_graph
 		"""
 		sys.stderr.write("Getting gene_id set from %s..."%gene_table)
 		curs.execute("select gene_id from %s"%gene_table)
@@ -245,14 +302,12 @@ class DrawPredGOExptTFCompTF_Patterns:
 		comp_mcl_id2mt_no_set = self.get_mcl_id2mt_no_set(curs, comp_cluster_bs_table)
 		expt_mcl_id2mt_no_set = self.get_mcl_id2mt_no_set(curs, expt_cluster_bs_table)
 		
-		overlapping_mcl_id_set = Set(comp_mcl_id2mt_no_set.keys())&Set(expt_mcl_id2mt_no_set.keys())&Set(mcl_id2pred_go_id2gene_id_set.keys())
 		sys.stderr.write("Start to draw patterns....\n")
 		pattern_id = raw_input("Please input a pattern id:")
 		curs.execute("select id, edge_set from %s where id=%s"%(pattern_table, pattern_id))
 		rows = curs.fetchall()
 		counter = 0
 		while rows:
-			print rows
 			for row in rows:
 				mcl_id, edge_set = row
 				g = nx.Graph()
@@ -271,7 +326,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 					#1st, draw the GO association
 					output_fname_prefix = os.path.join(output_dir, 'id_%s_go_func'%mcl_id)
 					counter = self.draw_pattern(counter, g, pos, sub_label_map, go_id2name, mcl_id2pred_go_id2gene_id_set[mcl_id], go_id2gene_set, \
-						output_fname_prefix, is_go_function=1)
+						output_fname_prefix, 1, prot_interaction_graph)
+						# add prot_interaction_graph
 				if mcl_id in comp_mcl_id2mt_no_set:
 					#2nd, draw the comp mt_no association
 					output_fname_prefix = os.path.join(output_dir, 'id_%s_comp_mt_no'%mcl_id)
@@ -292,6 +348,13 @@ class DrawPredGOExptTFCompTF_Patterns:
 		sys.stderr.write("done\n")
 	
 	def run(self):
+		"""
+		
+		-get_prot_interaction_graph()
+		
+		2006-11-21
+			add prot_interaction_graph
+		"""
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		gene_id2gene_symbol = get_gene_id2gene_symbol(curs, self.tax_id)
 		go_id2name = get_go_id2name(curs)
@@ -299,10 +362,11 @@ class DrawPredGOExptTFCompTF_Patterns:
 			os.makedirs(self.output_dir)
 		#mcl_id2pred_go_id2gene_id_set = self.get_mcl_id2pred_go_id2gene_id_set(input_fname)
 		mcl_id2pred_go_id2gene_id_set = self.get_mcl_id2pred_go_id2gene_id_set_from_db(curs, self.input_fname, self.gene_p_table)
+		prot_interaction_graph = self.get_prot_interaction_graph(curs, self.prot_interaction_table, self.tax_id)
 		self.draw_all_patterns(curs, mcl_id2pred_go_id2gene_id_set, self.comp_cluster_bs_table, self.expt_cluster_bs_table, \
 			self.gene_table, self.go_table,\
 			self.pattern_table, self.output_dir, gene_id2gene_symbol, go_id2name,\
-			self.comp_tf_mapping_table, self.expt_tf_mapping_table)
+			self.comp_tf_mapping_table, self.expt_tf_mapping_table, prot_interaction_graph)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -310,7 +374,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:g:c:e:p:o:m:t:x:br", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:g:n:c:e:p:o:m:t:x:br", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -321,6 +385,7 @@ if __name__ == '__main__':
 	schema = ''
 	input_fname = None
 	gene_p_table = None
+	prot_interaction_table = 'mrinal_pi.intact_interaction'
 	comp_cluster_bs_table = None
 	expt_cluster_bs_table = None
 	gene_table = 'gene'
@@ -346,6 +411,8 @@ if __name__ == '__main__':
 			input_fname = arg
 		elif opt in ("-g",):
 			gene_p_table = arg
+		elif opt in ("-n",):
+			prot_interaction_table = arg
 		elif opt in ("-c",):
 			comp_cluster_bs_table = arg
 		elif opt in ("-e",):
@@ -366,7 +433,7 @@ if __name__ == '__main__':
 			report = 1
 	if schema and input_fname and gene_p_table and comp_cluster_bs_table and expt_cluster_bs_table and pattern_table and output_dir:
 			instance = DrawPredGOExptTFCompTF_Patterns(hostname, dbname, schema,  \
-				input_fname, gene_p_table, comp_cluster_bs_table, expt_cluster_bs_table, gene_table, go_table, \
+				input_fname, gene_p_table, prot_interaction_table, comp_cluster_bs_table, expt_cluster_bs_table, gene_table, go_table, \
 				pattern_table, output_dir, \
 				comp_tf_mapping_table, expt_tf_mapping_table, tax_id, debug, report)
 			instance.run()
