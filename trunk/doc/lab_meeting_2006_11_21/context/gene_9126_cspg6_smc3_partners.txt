@@ -1,0 +1,34 @@
+CSPG6/SMC3 structural maintenance of chromosomes 3.This gene belongs to the SMC3 subfamily of SMC proteins. The encoded protein occurs in certain cell types as either an intracellular, nuclear protein or a secreted protein. The nuclear form, known as structural maintenance of chromosomes 3, is a component of the multimeric cohesin complex that holds together sister chromatids during mitosis, enabling proper chromosome segregation. Post-translational modification of the encoded protein by the addition of chondroitin sulfate chains gives rise to the secreted proteoglycan bamacan, an abundant basement membrane protein.
+
+
+RAB5A: member RAS oncogene family, identification of a pathway directly linking the small GTPase Rab5, a key regulator of endocytosis, to signal transduction and mitogenesis via APPL1 and APPL2, two Rab5 effectors
+G3BP2: GTPase activating protein (SH3 domain) binding protein 2, 
+SSR1: signal sequence receptor, alpha (translocon-associated protein alpha). The signal sequence receptor (SSR) is a glycosylated endoplasmic reticulum (ER) membrane receptor associated with protein translocation across the ER membrane. The SSR consists of 2 subunits, a 34-kD glycoprotein encoded by this gene and a 22-kD glycoprotein. This gene generates several mRNA species as a result of complex alternative polyadenylation. This gene is unusual in that it utilizes arrays of polyA signal sequences that are exclusively non-canonical.
+
+BUB3 BUB3 budding uninhibited by benzimidazoles 3 homolog (yeast). This gene encodes a protein involved in spindle checkpoint function. The encoded protein contains four WD repeat domains and has sequence similarity with the yeast BUB3 protein. Alternate transcriptional splice variants, encoding different isoforms, have been characterized.
+
+SMC4 structural maintenance of chromosomes 4;
+
+HMGB2 high-mobility group box 2. This gene encodes a member of the non-histone chromosomal high mobility group protein family. The proteins of this family are chromatin-associated and ubiquitously distributed in the nucleus of higher eukaryotic cells. In vitro studies have demonstrated that this protein is able to efficiently bend DNA and form DNA circles. These studies suggest a role in facilitating cooperative interactions between cis-acting proteins by promoting DNA flexibility. This protein was also reported to be involved in the final ligation step in DNA end-joining processes of DNA double-strand breaks repair and V(D)J recombination.
+
+H2AFZ H2A histone family, member Z. Histones are basic nuclear proteins that are responsible for the nucleosome structure of the chromosomal fiber in eukaryotes. Nucleosomes consist of approximately 146 bp of DNA wrapped around a histone octamer composed of pairs of each of the four core histones (H2A, H2B, H3, and H4). The chromatin fiber is further compacted through the interaction of a linker histone, H1, with the DNA between the nucleosomes to form higher order chromatin structures. This gene encodes a replication-independent member of the histone H2A family that is distinct from other members of the family. Studies in mice have shown that this particular histone is required for embryonic development and indicate that lack of functional histone H2A leads to embryonic lethality.
+
+SFRS3 splicing factor, arginine/serine-rich 3. insulin induces the proteasome-dependent degradation of SRp20 as well as the subnuclear relocalization of CLIC1
+
+RRM2 ribonucleotide reductase M2 polypeptide. Ribonucleotide reductase catalyzes the formation of deoxyribonucleotides from ribonucleotides. It is composed of 2 non-identical subunits, proteins M1 and M2. Synthesis of M2 is regulated in a cell-cycle dependent fashion.
+
+MKI67 antigen identified by monoclonal antibody Ki-67. The combination of MCM2, geminin and Ki67 could represent a valuable tool in the understanding of hepatocellular carcinoma progression in cirrhosis. The Ki-67 Antigen expression was associated with the highest levels of proliferation, suggesting a synergistic effect.
+
+
+
+RAD21 RAD21 homolog (S. pombe). The protein encoded by this gene is highly similar to the gene product of Schizosaccharomyces pombe rad21, a gene involved in the repair of DNA double-strand breaks, as well as in chromatid cohesion during mitosis. This protein is a nuclear phospho-protein, which becomes hyperphosphorylated in cell cycle M phase. The highly regulated association of this protein with mitotic chromatin specifically at the centromere region suggests its role in sister chromatid cohesion in mitotic cells.
+
+KNTC2 kinetochore associated 2. HEC is one of several proteins involved in spindle checkpoint signaling. This surveillance mechanism assures correct segregation of chromosomes during cell division by detecting unaligned chromosomes and causing prometaphase arrest until the proper bipolar attachment of chromosomes is achieved.
+
+KIF11 kinesin family member 11. This gene encodes a motor protein that belongs to the kinesin-like protein family. Members of this protein family are known to be involved in various kinds of spindle dynamics. The function of this gene product includes chromosome positioning, centrosome separation and establishing a bipolar spindle during cell mitosis.
+
+CCNB2 cyclin B2. Cyclin B2 is a member of the cyclin family, specifically the B-type cyclins. The B-type cyclins, B1 and B2, associate with p34cdc2 and are essential components of the cell cycle regulatory machinery. B1 and B2 differ in their subcellular localization. Cyclin B1 co-localizes with microtubules, whereas cyclin B2 is primarily associated with the Golgi region. Cyclin B2 also binds to transforming growth factor beta RII and thus cyclin B2/cdc2 may play a key role in transforming growth factor beta-mediated cell cycle control.
+
+BUB1B BUB1 budding uninhibited by benzimidazoles 1 homolog beta (yeast). This gene encodes a kinase involved in spindle checkpoint function. The protein has been localized to the kinetochore and plays a role in the inhibition of the anaphase-promoting complex/cyclosome (APC/C), delaying the onset of anaphase and ensuring proper chromosome segregation. Impaired spindle checkpoint function has been found in many forms of cancer.
+
+CKS2 CDC28 protein kinase regulatory subunit 2. CKS2 protein binds to the catalytic subunit of the cyclin dependent kinases and is essential for their biological function. The CKS2 mRNA is found to be expressed in different patterns through the cell cycle in HeLa cells, which reflects specialized role for the encoded protein.
