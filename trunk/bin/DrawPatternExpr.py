@@ -13,8 +13,12 @@ Option:
 	-P id1,id2,..., --patterns=id1,id2,...	pattern ids
         
 Examples:
-        DrawPatternExpr.py -k hs_fim_65 -i ~/datasets/hs_fim_65/hs_dataset -o ~/graphs -P 97,98
-        
+		DrawPatternExpr.py -k hs_fim_65 -i ~/datasets/hs_fim_65/hs_dataset -o ~/graphs -P 97,98
+		
+		DrawPatternExpr.py -k hs_fim_65 -i ~/datasets/hs_fim_65/hs_dataset
+		-o /tmpcmb-01/yuhuang/graphs -p pattern_hs_fim_65_n2s175_m5x65s4l5 
+		-P 6530 -c bs_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60p01y1
+		
 Description:
         For the given patterns, draws graphs containing the expression levels
         If pattern list is not specified, draws graphs for all patterns
@@ -25,7 +29,7 @@ TAXONOMY_ID=9606
 
 import sys, os, getopt, csv
 from codense.common import *
-import matplotlib
+import matplotlib;matplotlib.use('Agg')
 from matplotlib.font_manager import *
 from pylab import *
 
