@@ -19,6 +19,7 @@ Option:
 			0(default, automatically choosen by randomForest)
 	-b ...,	bit_string, '1111111'(default)
 	-g, 	calculate the hypergeometric p-value to replace p_value_cut_off(gradient)
+	-w,	output known and unknown data into two files, tab-delimited, with header, for R
 	-u,	enable debug flag
 	-c,	commit the database transaction
 	-r,	enable report flag
@@ -57,10 +58,11 @@ os.environ["DISPLAY"] = "hpc-cmb.usc.edu:0.0"
 class rpart_prediction:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, fname1=None, fname2=None, \
 		filter_type=1, is_correct_type=2, rpart_cp=0.01, loss_matrix=[0,1,1,0], prior_prob=None, training_perc=0.8,\
-		type=1, mty=0, bit_string='11111', need_cal_hg_p_value=0, debug=0, commit=0, report=0):
+		type=1, mty=0, bit_string='11111', need_cal_hg_p_value=0, need_output_data_for_R=0, debug=0, commit=0, report=0):
 		"""
 		11-09-05 add rpart_cp
 		03-17-06 add type, mty, bit_string
+		2006-12-05 add need_output_data_for_R
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -77,6 +79,7 @@ class rpart_prediction:
 		self.mty = int(mty)
 		self.bit_string = bit_string
 		self.need_cal_hg_p_value = int(need_cal_hg_p_value)
+		self.need_output_data_for_R = int(need_output_data_for_R)
 		self.debug = int(debug)
 		self.commit = int(commit)
 		self.report = int(report)
@@ -388,7 +391,22 @@ class rpart_prediction:
 			testing_acc_ls.append(self.cal_accuracy(testing_data, pred_testing))
 			training_acc_ls.append(self.cal_accuracy(training_data, pred_training))
 		return testing_acc_ls, training_acc_ls
-		
+	
+	def output_data_for_R(self, data, output_fname):
+		"""
+		2006-12-05
+		"""
+		sys.stderr.write("Outputting data to %s ..."%output_fname)
+		writer = csv.writer(open(output_fname, 'w'), delimiter='\t')
+		header_row = ['p_value', 'recurrence', 'connectivity',\
+			'cluster_size', 'gradient', 'avg_degree', \
+			'unknown_ratio', 'gene_no', 'go_no', 'is_correct']
+		writer.writerow(header_row)
+		for data_row in data:
+			writer.writerow(data_row)
+		del writer
+		sys.stderr.write("Done.\n")
+	
 	def run(self):
 		"""
 		11-09-05
@@ -396,6 +414,8 @@ class rpart_prediction:
 		11-10-05 add need_cal_hg_p_value
 		11-23-05
 			rpart_fit_and_predict() is split
+		2006-12-05
+			add need_output_data_for_R flag
 		
 			--db_connect()
 			--form_schema_tables()
@@ -405,6 +425,8 @@ class rpart_prediction:
 			--data_fetch()
 				--get_vertex_list()
 				--cal_hg_p_value()
+			--output_data_for_R()
+			
 			--rpart_fit()
 			--rpart_predict()
 			--rpart_predict()
@@ -421,6 +443,9 @@ class rpart_prediction:
 		unknown_prediction_ls, known_prediction_ls, unknown_data, known_data = self.data_fetch(curs, old_schema_instance,\
 			self.filter_type, self.is_correct_type, no_of_total_genes, go_no2gene_no_set, need_cal_hg_p_value)
 		
+		if self.need_output_data_for_R:	#2006-12-05
+			self.output_data_for_R(known_data, '%s.known'%self.fname1)
+			self.output_data_for_R(unknown_data, '%s.unknown'%self.fname1)
 		"""
 		testing_acc_ls, training_acc_ls = self.rpart_validation(known_data, self.training_perc, self.rpart_cp, \
 			self.loss_matrix, self.prior_prob)
@@ -461,7 +486,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:t:m:b:gucr", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:i:j:f:y:p:l:o:s:t:m:b:gwucr", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -482,6 +507,7 @@ if __name__ == '__main__':
 	mty = 0
 	bit_string = '1111111'
 	need_cal_hg_p_value = 0
+	need_output_data_for_R = 0
 	debug = 0
 	commit = 0
 	report = 0
@@ -519,6 +545,8 @@ if __name__ == '__main__':
 			bit_string = arg
 		elif opt in ("-g",):
 			need_cal_hg_p_value = 1
+		elif opt in ("-w",):
+			need_output_data_for_R = 1
 		elif opt in ("-u",):
 			debug = 1
 		elif opt in ("-c",):
@@ -528,7 +556,7 @@ if __name__ == '__main__':
 	if schema and fname1 and fname2:
 		instance = rpart_prediction(hostname, dbname, schema, fname1, fname2, \
 			filter_type, is_correct_type, rpart_cp, loss_matrix, prior_prob, training_perc, \
-			type, mty, bit_string, need_cal_hg_p_value, debug, commit, report)
+			type, mty, bit_string, need_cal_hg_p_value, need_output_data_for_R, debug, commit, report)
 		instance.run()
 	else:
 		print __doc__
