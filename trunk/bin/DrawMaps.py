@@ -13,6 +13,8 @@ Option:
 	-a ...	acc_cutoff of setting1, (0.6 default)
 	-o ...	output prefix
 	-y ...	type of -i(inputfname), 1(schema prefix, for p_gene_table and gene_p_table, default), 2(filtered prediction file)
+	-x ...	the font size, 20 (default)
+	-f ...	the font path, /usr/share/fonts/truetype/msttcorefonts/arial.ttf (default)
 	-b	enable debugging, no debug by default
 	-r	report the progress(a number)
 	-h, --help              show this help
@@ -42,16 +44,19 @@ from codense.common import get_char_dimension, get_text_region, db_connect,\
 	cluster_bs_id_set_from_good_bs_table, get_mt_no2tf_name, draw_grid, \
 	get_gene_id2gene_symbol, get_go_id2name, get_go_no2go_id
 from sets import Set
-import Image, ImageDraw
+import Image, ImageDraw, ImageFont
 from MpiFromDatasetSignatureToPattern import encodeOccurrenceBv, decodeOccurrenceToBv, decodeOccurrence
 
 class DrawMaps:
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, pattern_table='', cluster_bs_table='',\
-		inputfname=None, lm_bit='00001', acc_cutoff=0.6, output_prefix=None, type=1, debug=0, report=0):
+		inputfname=None, lm_bit='00001', acc_cutoff=0.6, output_prefix=None, type=1, font_size=20, \
+		font_path='/usr/share/fonts/truetype/msttcorefonts/arial.ttf', debug=0, report=0):
 		"""
 		2006-09-26
 		2006-11-06
 			add type
+		2006-12-13
+			add font_size and font_path
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -63,9 +68,15 @@ class DrawMaps:
 		self.acc_cutoff = float(acc_cutoff)
 		self.output_prefix = output_prefix
 		self.type = int(type)
-		self.function_name_length = 40	#truncate if exceed, no public interface
+		self.font_size = int(font_size)
+		self.font_path = font_path
+		self.function_name_length = 44	#truncate if exceed, no public interface
 		self.debug = int(debug)
 		self.report = int(report)
+	
+	def get_font_and_char_dimension(self, font_size, font_path):
+		font = ImageFont.truetype(font_path, font_size)
+		return (font, font.getsize('a'))
 	
 	def get_no_of_p_funcs_gene_no_go_no_list_from_file(self, inputfname):
 		"""
@@ -142,10 +153,11 @@ class DrawMaps:
 		return no_of_p_funcs_gene_no_go_no_list, mcl_id2go_no_set
 	
 	def draw_gene_function_map(self, no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
-		output_fname, function_name_length, char_dimension, no_of_functions):
+		output_fname, function_name_length, char_dimension, no_of_functions, font):
 		"""
 		10-31-05
 		11-28-05 draw_grid
+		2006-12-13 add font
 		"""
 		sys.stderr.write("Drawing gene_function_map...\n")
 		char_width, char_height = char_dimension
@@ -179,7 +191,7 @@ class DrawMaps:
 			y_offset_upper = y_offset1 + i*gene_no_repr_dimension[1]
 			y_offset_lower = y_offset_upper + gene_no_repr_dimension[1]
 			#draw gene_no
-			text_region = get_text_region(repr(gene_no), gene_no_repr_dimension, rotate=0)
+			text_region = get_text_region(repr(gene_no), gene_no_repr_dimension, rotate=0, font=font)
 			box = (x_offset0, y_offset_upper, x_offset1, y_offset_lower)
 			im.paste(text_region, box)
 			#draw p_function
@@ -189,7 +201,7 @@ class DrawMaps:
 				x_offset_right = x_offset_left + function_name_dimension[1]
 				draw.rectangle((x_offset_left, y_offset_upper, x_offset_right, y_offset_lower), fill=(0,255,0))
 			#draw no_of_p_funcs
-			text_region = get_text_region(repr(no_of_p_funcs), no_of_p_funcs_repr_dimension, rotate=0)
+			text_region = get_text_region(repr(no_of_p_funcs), no_of_p_funcs_repr_dimension, rotate=0, font=font)
 			box = (x_offset2, y_offset_upper, whole_dimension[0], y_offset_lower)
 			im.paste(text_region, box)
 		#11-28-05
@@ -260,11 +272,12 @@ class DrawMaps:
 		return recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, mcl_id2enc_recurrence
 	
 	def draw_function_map(self, recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets, go_no2name, \
-		output_fname, function_name_length, char_dimension, no_of_functions):
+		output_fname, function_name_length, char_dimension, no_of_functions, font):
 		"""
 		10-31-05 from misc.py. make it independent and return something for draw_gene_function_map()
 		11-28-05 add grid
 		11-28-05 include go_no in go_name
+		2006-12-13 add font
 		"""
 		sys.stderr.write("Drawing function_map...\n")
 		
@@ -287,7 +300,7 @@ class DrawMaps:
 		draw = ImageDraw.Draw(im)
 		#dataset_no section
 		for i in range(no_of_datasets):
-			text_region = get_text_region(repr(i+1), dataset_no_dimension, rotate=0)	#no rotate
+			text_region = get_text_region(repr(i+1), dataset_no_dimension, rotate=0, font=font)	#no rotate
 			box = (x_offset0, y_offset1+i*dataset_no_dimension[1], x_offset1, y_offset1+(i+1)*dataset_no_dimension[1])
 			im.paste(text_region, box)
 		#10-31-05 following for draw_gene_function_map() to ensure correspondence.
@@ -303,7 +316,7 @@ class DrawMaps:
 			go_name = '%s %s'%(go_no, go_no2name[go_no])	#11-28-05 include go_no
 			if len(go_name)>function_name_length:
 				go_name = go_name[:function_name_length]
-			text_region = get_text_region(go_name, function_name_dimension)	#rotate
+			text_region = get_text_region(go_name, function_name_dimension, font=font)	#rotate
 			box = (x_offset_left, y_offset0, x_offset_right, y_offset1)
 			im.paste(text_region, box)
 			
@@ -312,11 +325,11 @@ class DrawMaps:
 				draw.rectangle((x_offset_left, y_offset1+(dataset_no-1)*dataset_no_dimension[1], \
 					x_offset_right, y_offset1+dataset_no*dataset_no_dimension[1]), fill=(0,255,0))
 			# write down the recurrence
-			text_region = get_text_region(repr(recurrence), dataset_no_dimension)	#rotate
+			text_region = get_text_region(repr(recurrence), dataset_no_dimension, font=font)	#rotate
 			box = (x_offset_left, y_offset2, x_offset_right, y_offset3)
 			im.paste(text_region, box)
 			#write down the no_of_clusters
-			text_region = get_text_region(repr(len(mcl_id_set)), no_of_clusters_dimension)	#rotate
+			text_region = get_text_region(repr(len(mcl_id_set)), no_of_clusters_dimension, font=font)	#rotate
 			box = (x_offset_left, y_offset3, x_offset_right, whole_dimension[1])
 			im.paste(text_region, box)
 		function_name_region = im.crop(function_name_box)	#10-31-05
@@ -370,9 +383,10 @@ class DrawMaps:
 		return recurrence_rec_array_bs_no_list
 	
 	def draw_tf_map(self, recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
-		output_fname, function_name_length, char_dimension):
+		output_fname, function_name_length, char_dimension, font):
 		"""
 		11-28-05 add grid
+		2006-12-13 add font
 		"""
 		sys.stderr.write("Drawing tf_map...\n")
 		
@@ -395,7 +409,7 @@ class DrawMaps:
 		draw = ImageDraw.Draw(im)
 		#dataset_no section
 		for i in range(no_of_datasets):
-			text_region = get_text_region(repr(i+1), dataset_no_dimension, rotate=0)	#no rotate
+			text_region = get_text_region(repr(i+1), dataset_no_dimension, rotate=0, font=font)	#no rotate
 			box = (x_offset0, y_offset1+i*dataset_no_dimension[1], x_offset1, y_offset1+(i+1)*dataset_no_dimension[1])
 			im.paste(text_region, box)
 			
@@ -407,7 +421,7 @@ class DrawMaps:
 			tf_name = '%s %s'%(bs_no, mt_no2tf_name[bs_no])
 			if len(tf_name)>function_name_length:
 				tf_name = tf_name[:function_name_length]
-			text_region = get_text_region(tf_name, function_name_dimension)	#rotate
+			text_region = get_text_region(tf_name, function_name_dimension, font=font)	#rotate
 			box = (x_offset_left, y_offset0, x_offset_right, y_offset1)
 			im.paste(text_region, box)
 			
@@ -416,7 +430,7 @@ class DrawMaps:
 				draw.rectangle((x_offset_left, y_offset1+(dataset_no-1)*dataset_no_dimension[1], \
 					x_offset_right, y_offset1+dataset_no*dataset_no_dimension[1]), fill=(0,255,0))
 			# write down the recurrence
-			text_region = get_text_region(repr(recurrence), dataset_no_dimension)	#rotate
+			text_region = get_text_region(repr(recurrence), dataset_no_dimension, font=font)	#rotate
 			box = (x_offset_left, y_offset2, x_offset_right, y_offset3)
 			im.paste(text_region, box)
 		#11-28-05
@@ -434,6 +448,8 @@ class DrawMaps:
 			modify it to be compatible with the modified pipeline from haifeng
 		2006-11-06
 			add type
+		2006-12-13
+			use font_path and font_size
 			
 			--form_schema_tables()
 			--db_connect()
@@ -452,7 +468,9 @@ class DrawMaps:
 		"""
 		schema_instance = form_schema_tables(self.inputfname, self.acc_cutoff, self.lm_bit)
 		(conn, curs) =  db_connect(self.hostname, self.dbname, self.schema)
-		char_dimension = get_char_dimension()
+		font = ImageFont.truetype(self.font_path, self.font_size)
+		char_dimension = font.getsize('a')
+		#char_dimension = get_char_dimension()
 		
 		#go_no2name = get_go_no2name(curs)
 		go_no2name = get_go_id2name(curs)
@@ -471,11 +489,11 @@ class DrawMaps:
 		no_of_functions = len(recurrence_go_no_rec_array_cluster_id_ls)
 		function_map_output_fname = '%s.function_map.png'%self.output_prefix
 		go_no2index, function_name_region = self.draw_function_map(recurrence_go_no_rec_array_cluster_id_ls, no_of_datasets,\
-			go_no2name, function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)				
+			go_no2name, function_map_output_fname, self.function_name_length, char_dimension, no_of_functions, font)				
 		
 		gene_function_map_output_fname = '%s.gene_function_map.png'%self.output_prefix
 		self.draw_gene_function_map(no_of_p_funcs_gene_no_go_no_list, go_no2index, function_name_region,\
-			gene_function_map_output_fname, self.function_name_length, char_dimension, no_of_functions)
+			gene_function_map_output_fname, self.function_name_length, char_dimension, no_of_functions, font)
 		
 		
 		#tf_map requires mcl_id2enc_recurrence and no_of_datasets from above
@@ -484,7 +502,7 @@ class DrawMaps:
 		#mt_no2tf_name = get_mt_no2tf_name()
 		tf_map_output_fname = '%s.tf_map.png'%self.output_prefix
 		self.draw_tf_map(recurrence_rec_array_bs_no_list, no_of_datasets, mt_no2tf_name, \
-			tf_map_output_fname, self.function_name_length, char_dimension)
+			tf_map_output_fname, self.function_name_length, char_dimension, font)
 
 if __name__ == '__main__':
 	if len(sys.argv) == 1:
@@ -492,7 +510,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 	
 	long_options_list = ["help", "hostname=", "dbname=", "schema="]
-	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:s:i:l:a:o:y:br", long_options_list)
+	opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:p:s:i:l:a:o:y:x:f:br", long_options_list)
 	
 	hostname = 'zhoudb'
 	dbname = 'graphdb'
@@ -504,6 +522,8 @@ if __name__ == '__main__':
 	acc_cutoff = 0.6
 	output_prefix = None
 	type = 1
+	font_size = 20
+	font_path = '/usr/share/fonts/truetype/msttcorefonts/arial.ttf'
 	debug = 0
 	report = 0
 
@@ -531,6 +551,10 @@ if __name__ == '__main__':
 			output_prefix = arg
 		elif opt in ("-y",):
 			type = int(arg)
+		elif opt in ("-x",):
+			font_size = int(arg)
+		elif opt in ("-f",):
+			font_path = arg
 		elif opt in ("-b", "--debug"):
 			debug = 1
 		elif opt in ("-r", ):
@@ -538,7 +562,7 @@ if __name__ == '__main__':
 		
 	if pattern_table and cluster_bs_table and inputfname and output_prefix:
 		instance = DrawMaps(hostname, dbname, schema, pattern_table, cluster_bs_table, inputfname, lm_bit, acc_cutoff, output_prefix, \
-			type, debug, report)
+			type, font_size, font_path, debug, report)
 		instance.run()
 	else:
 		print __doc__
