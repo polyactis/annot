@@ -74,9 +74,6 @@ class DrawMaps:
 		self.debug = int(debug)
 		self.report = int(report)
 	
-	def get_font_and_char_dimension(self, font_size, font_path):
-		font = ImageFont.truetype(font_path, font_size)
-		return (font, font.getsize('a'))
 	
 	def get_no_of_p_funcs_gene_no_go_no_list_from_file(self, inputfname):
 		"""
