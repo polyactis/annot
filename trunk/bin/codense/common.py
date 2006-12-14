@@ -1272,14 +1272,18 @@ def get_char_dimension():
 	return char_dimension
 
 
-def get_text_region(text, dimension, rotate=1, foreground=(0,0,255), background=(255,255,255)):
+def get_text_region(text, dimension, rotate=1, foreground=(0,0,255), background=(255,255,255), font=None):
 	"""
 	10-31-05 add background and foreground
+	2006-12-13 add font
 	"""
 	import Image, ImageDraw
 	text_im = Image.new('RGB', dimension, background)
 	text_draw = ImageDraw.Draw(text_im)
-	text_draw.text((0,0), text, fill=foreground)
+	if font:
+		text_draw.text((0,0), text, font=font, fill=foreground)
+	else:
+		text_draw.text((0,0), text, fill=foreground)
 	box = (0,0,dimension[0], dimension[1])
 	text_reg = text_im.crop(box)
 	if rotate:
