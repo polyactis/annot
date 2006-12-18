@@ -36,6 +36,11 @@ Description:
 		blue: not associated and not associated
 	Edges colored red in GO function graph denote protein interaction.
 		They might not be part of the pattern (compare it with TF graph).
+	
+	For the augmented PI graph:
+		nodes and edges from the coexpr pattern are marked in 'green' and 'red' color, respectively
+		nodes and edges added by protein interaction are marked in 'red' and 'gray' color, respectively
+		overlapping edges are widened with 'red' color
 """
 
 
@@ -214,6 +219,67 @@ class DrawPredGOExptTFCompTF_Patterns:
 			nx.number_of_edges(prot_interaction_graph)))
 		return prot_interaction_graph
 	
+	def draw_augmented_PI_graph(self, old_g, prot_interaction_graph, old_sub_label_map, gene_id2gene_symbol, output_fname_prefix):
+		"""
+		2006-12-16
+			draw a graph based on old_g but augmented by prot_interaction_graph
+				augment the old graph by node-pairwise searching against the interaction graph
+			old nodes and edges are marked in 'green' and 'red' color, respectively
+			overlapping edges are widened with 'red' color
+		"""
+		g = nx.XGraph()
+		
+		node_list = old_g.nodes()
+		no_of_nodes = len(node_list)
+		overlapping_edge_list = []
+		non_standout_edge_list = []
+		for m in range(no_of_nodes):
+			for n in range(m+1, no_of_nodes):
+				u = node_list[m]
+				v = node_list[n]
+				if prot_interaction_graph.has_node(u) and prot_interaction_graph.has_node(v):
+					shortest_path_list = nx.shortest_path(prot_interaction_graph, u, v)
+					if shortest_path_list:	#check the whole shortest path
+						for i in range(len(shortest_path_list)-1):
+							j = i+1
+							if not g.has_edge(shortest_path_list[i], shortest_path_list[j]):
+								g.add_edge(shortest_path_list[i], shortest_path_list[j], 1)
+								if old_g.has_edge(shortest_path_list[i], shortest_path_list[j]):
+									overlapping_edge_list.append((shortest_path_list[i], shortest_path_list[j]))
+								else:
+									non_standout_edge_list.append((shortest_path_list[i], shortest_path_list[j]))		
+		standout_edge_list = []
+		for (u,v) in old_g.edges():
+			if not g.has_edge(u,v):
+				standout_edge_list.append((u,v))
+		
+		sub_label_map = old_sub_label_map.copy()
+		standout_node_list = []
+		non_standout_node_list = []
+		for v in g:
+			if v not in old_g:
+				sub_label_map[v] = gene_id2gene_symbol[v]
+				non_standout_node_list.append(v)
+		for v in old_g:
+			standout_node_list.append(v)
+			if v not in g:
+				g.add_node(v)
+		pos = nx.spring_layout(g)	#position is determined by the interaction graph
+		
+		if standout_edge_list:
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', edgelist=standout_edge_list)
+		if non_standout_edge_list:
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_standout_edge_list)
+		if overlapping_edge_list:
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', width=5, edgelist=overlapping_edge_list)
+		if standout_node_list:
+			nx.draw_networkx_nodes(g, pos, nodelist= standout_node_list, node_color='g', alpha=0.4)
+		if non_standout_node_list:
+			nx.draw_networkx_nodes(g, pos, nodelist= non_standout_node_list, alpha=0.4)
+		nx.draw_networkx_labels(g, pos, labels=sub_label_map)
+		pylab.savefig('%s.png'%(output_fname_prefix), dpi=300)
+		pylab.clf()
+		
 	def draw_pattern(self, figure_no, old_g, pos, sub_label_map, title_map, go_id_or_mt_no_struct, go_id_or_mt_no2gene_id_set, \
 		output_fname_prefix, is_go_function=0, prot_interaction_graph=None):
 		"""
@@ -271,7 +337,7 @@ class DrawPredGOExptTFCompTF_Patterns:
 				nx.draw_networkx_nodes(g, pos, nodelist= other_gene_id_list, node_color='b', alpha=0.4)
 			nx.draw_networkx_labels(g, pos, labels=sub_label_map)
 			#nx.draw(g, pos, node_color=pylab.array(color_gene_id_list), labels=sub_label_map, alpha=0.4)
-			pylab.savefig('%s_%s_%s.png'%(output_fname_prefix, key, figure_no))
+			pylab.savefig('%s_%s.png'%(output_fname_prefix, key), dpi=300)
 			pylab.clf()
 		return figure_no
 		
@@ -286,6 +352,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 			input_fname becomes mcl_id2pred_go_id2gene_id_set
 		2006-11-21
 			add prot_interaction_graph
+		2006-12-16
+			add --draw_augmented_PI_graph()
 		"""
 		sys.stderr.write("Getting gene_id set from %s..."%gene_table)
 		curs.execute("select gene_id from %s"%gene_table)
@@ -322,6 +390,10 @@ class DrawPredGOExptTFCompTF_Patterns:
 				for v in g:
 					sub_label_map[v] = gene_id2gene_symbol[v]
 				
+				#2006-12-16
+				output_fname_prefix = os.path.join(output_dir, 'id_%s_aug_prot_inter'%mcl_id)
+				self.draw_augmented_PI_graph(g, prot_interaction_graph, sub_label_map, gene_id2gene_symbol, output_fname_prefix)
+				
 				if mcl_id in mcl_id2pred_go_id2gene_id_set:
 					#1st, draw the GO association
 					output_fname_prefix = os.path.join(output_dir, 'id_%s_go_func'%mcl_id)
@@ -350,7 +422,17 @@ class DrawPredGOExptTFCompTF_Patterns:
 	def run(self):
 		"""
 		
-		-get_prot_interaction_graph()
+		--db_connect()
+		--get_gene_id2gene_symbol()
+		--get_go_id2name()
+		--get_mcl_id2pred_go_id2gene_id_set_from_db()
+		--get_prot_interaction_graph()
+		--draw_all_patterns()
+			--get_mt_no2gene_id_set()
+			--get_go_id2gene_set_from_db()
+			--get_mcl_id2mt_no_set()
+			--draw_augmented_PI_graph()
+			--draw_pattern()
 		
 		2006-11-21
 			add prot_interaction_graph
