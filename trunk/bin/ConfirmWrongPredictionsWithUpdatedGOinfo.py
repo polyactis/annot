@@ -145,6 +145,8 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 	def checking_wrong_predictions(self, go_graph, pred_gene_id2go_id_set, direct_gene_id2go_id_set, \
 		no_of_total_wrong_predictions, go_id2go_name, output_fname):
 		"""
+		2006-12-20
+			fix a bug (direct_go_id==go_id)
 		"""
 		sys.stderr.write("Checking wrong predictions ...")
 		writer = csv.writer(open(output_fname, 'w'), delimiter='\t')
@@ -155,11 +157,13 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 				for go_id in go_id_set:
 					evidence_direct_go_id_list_for_this_prediction = []
 					for direct_go_id in direct_go_id_set:
-						if direct_go_id in go_graph.reachable(go_id).items():
+						if direct_go_id in go_graph.reachable(go_id).items() or direct_go_id==go_id:	#2006-12-20
 							evidence_direct_go_id_list_for_this_prediction.append(direct_go_id)
 					if len(evidence_direct_go_id_list_for_this_prediction)>0:
 						no_of_correct_wrong_predictions += 1
 						writer.writerow([gene_id, '%s(%s)'%(go_id, go_id2go_name[go_id]), evidence_direct_go_id_list_for_this_prediction])
+					#else:
+						#writer.writerow([gene_id, '%s'%(go_id), list(direct_go_id_set)])
 		del writer
 		sys.stderr.write("Done\n")
 		return no_of_correct_wrong_predictions
