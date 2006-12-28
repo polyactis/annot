@@ -29,18 +29,19 @@ Examples:
 Description:
 	Draw GO function graph, Experimental TF graph, Computational TF graph.
 		(depends on whether they exist or not)
-	color notation:
+	color notation for labels:
 	 	green: standout but not associated
 		yellow: standout and associated
 		red: associated
-		blue: not associated and not associated
-	Edges colored red in GO function graph denote protein interaction.
+		black: not associated and not associated
+	Edges colored in magenta in GO function graph represent protein interaction.
 		They might not be part of the pattern (compare it with TF graph).
 	
 	For the augmented PI graph:
-		nodes and edges from the coexpr pattern are marked in 'green' and 'red' color, respectively
-		nodes and edges added by protein interaction are marked in 'red' and 'gray' color, respectively
-		overlapping edges are widened with 'red' color
+		edges involved in protein interaction are marked in 'magenta' color. If edges are
+			also in co-expression network, it's widened magenta.
+		nodes ONLY in protein interaction are labeled in 'magenta' color.
+		
 """
 
 
@@ -53,7 +54,7 @@ else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import sys, os, getopt, csv, math
-from codense.common import db_connect, get_gene_id2gene_symbol, get_go_id2name, pg_1d_array2python_ls
+from codense.common import db_connect, get_gene_id2gene_symbol, get_go_id2name, pg_1d_array2python_ls, dict_map
 from sets import Set
 import networkx as nx
 import matplotlib
@@ -226,6 +227,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 				augment the old graph by node-pairwise searching against the interaction graph
 			old nodes and edges are marked in 'green' and 'red' color, respectively
 			overlapping edges are widened with 'red' color
+		2006-12-27
+			just draw the labels, ignore the circle nodes
 		"""
 		g = nx.XGraph()
 		
@@ -266,17 +269,21 @@ class DrawPredGOExptTFCompTF_Patterns:
 				g.add_node(v)
 		pos = nx.spring_layout(g)	#position is determined by the interaction graph
 		
-		if standout_edge_list:
-			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', edgelist=standout_edge_list)
-		if non_standout_edge_list:
-			nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_standout_edge_list)
-		if overlapping_edge_list:
-			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', width=5, edgelist=overlapping_edge_list)
-		if standout_node_list:
-			nx.draw_networkx_nodes(g, pos, nodelist= standout_node_list, node_color='g', alpha=0.4)
-		if non_standout_node_list:
-			nx.draw_networkx_nodes(g, pos, nodelist= non_standout_node_list, alpha=0.4)
-		nx.draw_networkx_labels(g, pos, labels=sub_label_map)
+		if standout_edge_list:	#pure co-expression edges
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=standout_edge_list)
+		if non_standout_edge_list:	#pure interaction edges
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', edgelist=non_standout_edge_list)
+		if overlapping_edge_list:	#overlapping
+			nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', width=5, edgelist=overlapping_edge_list)
+		if standout_node_list:	#in co-expression network
+			nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, standout_node_list, type=3), \
+					font_color='k', alpha=0.4, font_size=10)
+			#nx.draw_networkx_nodes(g, pos, nodelist= standout_node_list, node_color='k', alpha=0.4)
+		if non_standout_node_list:	#pure protein interaction nodes
+			nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, non_standout_node_list, type=3), \
+					font_color='m', alpha=0.4, font_size=10)
+			#nx.draw_networkx_nodes(g, pos, nodelist= non_standout_node_list, alpha=0.4)
+		#nx.draw_networkx_labels(g, pos, labels=sub_label_map)
 		pylab.savefig('%s.png'%(output_fname_prefix), dpi=300)
 		pylab.clf()
 		
@@ -285,6 +292,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 		"""
 		2006-11-20
 			add prot_interaction_graph
+		2006-12-27
+			just draw the labels, ignore the circle nodes
 		"""
 		g = old_g.copy()
 		for key in go_id_or_mt_no_struct:
@@ -323,19 +332,27 @@ class DrawPredGOExptTFCompTF_Patterns:
 					#if not g.has_edge(u,v):	#expand g, not necesary
 					#	print 'added'
 					#	g.add_edge(u,v)
-				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='r', edgelist=interaction_edge_list)
+				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', edgelist=interaction_edge_list)
 				nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_interaction_edge_list)
 			else:
 				nx.draw_networkx_edges(g, pos, alpha=0.4)
 			if standout_gene_id_list:
-				nx.draw_networkx_nodes(g, pos, nodelist= standout_gene_id_list, node_color='g', alpha=0.4)
+				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, standout_gene_id_list, type=3), \
+					font_color='g', alpha=0.4, font_size=10)
+				#nx.draw_networkx_nodes(g, pos, nodelist= standout_gene_id_list, node_color='g', alpha=0.4)
 			if standout_and_associated_gene_id_list:
-				nx.draw_networkx_nodes(g, pos, nodelist= standout_and_associated_gene_id_list, node_color='y', alpha=0.4)
+				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, standout_and_associated_gene_id_list, type=3), \
+					font_color='y', alpha=0.4, font_size=10)
+				#nx.draw_networkx_nodes(g, pos, nodelist= standout_and_associated_gene_id_list, node_color='y', alpha=0.4)
 			if associated_gene_id_list:
-				nx.draw_networkx_nodes(g, pos, nodelist= associated_gene_id_list, node_color='r', alpha=0.4)
+				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, associated_gene_id_list, type=3), \
+					font_color='r', alpha=0.4, font_size=10)
+				#nx.draw_networkx_nodes(g, pos, nodelist= associated_gene_id_list, node_color='r', alpha=0.4)
 			if other_gene_id_list:
-				nx.draw_networkx_nodes(g, pos, nodelist= other_gene_id_list, node_color='b', alpha=0.4)
-			nx.draw_networkx_labels(g, pos, labels=sub_label_map)
+				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, other_gene_id_list, type=3), \
+					font_color='k', alpha=0.4, font_size=10)
+				#nx.draw_networkx_nodes(g, pos, nodelist= other_gene_id_list, node_color='b', alpha=0.4)
+			#nx.draw_networkx_labels(g, pos, labels=sub_label_map)
 			#nx.draw(g, pos, node_color=pylab.array(color_gene_id_list), labels=sub_label_map, alpha=0.4)
 			pylab.savefig('%s_%s.png'%(output_fname_prefix, key), dpi=300)
 			pylab.clf()
