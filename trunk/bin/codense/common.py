@@ -59,14 +59,24 @@ def dict_map(dict, ls, type=1):
 	"""
 	10-13-05
 		add type 2 to return item itself if mapping is not available
+	2006-12-21
+		add type 3 to extract a smaller map
 	"""
-	new_list = []
-	for item in ls:
-		value = dict.get(item)
-		if value:
-			new_list.append(value)
-		elif type==2:
-			new_list.append(item)
+	if type==3:
+		new_list = {}	#it's a dictionary
+		for item in ls:
+			value = dict.get(item)
+			if value:
+				new_list[item] = value
+	else:
+		new_list = []
+		for item in ls:
+			value = dict.get(item)
+			if value:
+				new_list.append(value)
+			elif type==2:
+				new_list.append(item)
+	
 	return new_list
 
 def db_connect(hostname, dbname, schema=None):
@@ -2123,3 +2133,22 @@ def get_probe_id2gene_id_list(curs, organism=None, platform_id=None, probe2gene_
 		probe_id2gene_id_list[probe_id].append(id_linked)
 	sys.stderr.write("End getting probe_id2gene_id_list.\n")
 	return probe_id2gene_id_list
+
+def return_vertex_set_string(vertex_set):
+	"""
+	2006-12-25 modified from CcFromBiclusteringOutput.py
+	"""
+	vertex_set = map(repr, vertex_set)
+	vertex_set_string = ','.join(vertex_set)
+	vertex_set_string = '{'+vertex_set_string+'}'
+	return vertex_set_string
+
+def return_edge_set_string(edge_set):
+	"""
+	2006-12-25 modified from CcFromBiclusteringOutput.py
+	"""
+	edge_set_string_ls = []
+	for edge in edge_set:
+		edge_set_string_ls.append( '{%s,%s}'%(edge[0],edge[1]))
+	edge_set_string = '{' + ','.join(edge_set_string_ls) + '}'
+	return edge_set_string
