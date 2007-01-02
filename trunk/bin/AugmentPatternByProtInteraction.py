@@ -11,7 +11,7 @@ Option:
 	-o ...,	output table, eg, aug_pi_xxx(running_type=1) or output file(running_type=2)
 	-n ...,	prot_interaction_table, 'mrinal_pi.intact_interaction'(default)
 	-y ...,	type of input table, 1(default, good_cluster) or 2(pattern_table)
-	-p ...,	running type, 1(default), 2 (details see below)
+	-p ...,	running type, 1(default), 2, 3, 4 (details see below)
 	-x ...,	tax_id, 9606(default)
 	-c,	commit
 	-b,	debug version.
@@ -26,12 +26,17 @@ Examples:
 	AugmentPatternByProtInteraction.py -k hs_fim_65 
 		-i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 
 		-o /tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.prot_int.hg.p_value -r -p 2
+	AugmentPatternByProtInteraction.py -k hs_fim_65 -i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o ~/tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.hiv_int.hg.p_value -r -p 3 -n /usr/local/research_data/ncbi/gene_2006_12_19/GeneRIF/hiv_interactions
+	AugmentPatternByProtInteraction.py -k hs_fim_65 -i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o ~/tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.int.hg.p_value -r -p 4 -n /usr/local/research_data/ncbi/gene_2006_12_19/GeneRIF/interactions
+	
 Description:
 	Running type:
 	 1: To find all protein interaction among nodes in the pattern via shortest_path.
 	 submit to a new database table
 	 2: calculate protein interaction enrichment p-value (hyper-geometric) for all
 	 patterns and output to file
+	 3: similar to 2 but replacing protein interaction set with hiv interaction set
+	 4: similar to 2 but replacing protein interaction set with interaction set from GeneRIF
 """
 
 
@@ -130,6 +135,52 @@ class AugmentPatternByProtInteraction:
 		sys.stderr.write("done.\n")
 		return total_vertex_set
 	
+	def get_hiv_interaction_set(self, prot_interaction_table, tax_id):
+		"""
+		2006-12-28
+			the data is from NCBI Gene / GeneRIF / hiv_interactions.gz
+			
+		"""
+		sys.stderr.write("Getting HIV interaction set ...")
+		reader = csv.reader(open(prot_interaction_table), delimiter='\t')
+		hiv_interaction_set = Set()
+		for row in reader:
+			tax_id1, gene_id1, acc_ver1, product_name1, interaction_phrase, tax_id2, \
+				gene_id2, acc_ver2, product_name2, pmid_list, update_timestamp, generif_text = row
+			tax_id1 = int(tax_id1)
+			tax_id2 = int(tax_id2)
+			if tax_id1==tax_id:
+				hiv_interaction_set.add(int(gene_id1))
+			if tax_id2==tax_id:
+				hiv_interaction_set.add(int(gene_id2))
+		del reader
+		sys.stderr.write("done.\n")
+		return hiv_interaction_set
+	
+	def get_interaction_set(self, prot_interaction_table, tax_id):
+		"""
+		2006-12-28
+			the data is from NCBI Gene / GeneRIF / interactions.gz
+		"""
+		sys.stderr.write("Getting interaction set ...")
+		reader = csv.reader(open(prot_interaction_table), delimiter='\t')
+		interaction_set = Set()
+		reader.next()
+		for row in reader:
+			tax_id1, gene_id1, acc_ver1, name1, keyphrase1, tax_id2, interactant_id, interactant_id_type, acc_ver2, \
+			name2, complex_id, complex_id_type, complex_name, pubmed_id_list, last_mod, generif_text, \
+			interaction_id, interaction_id_type = row
+			tax_id1 = int(tax_id1)
+			if tax_id1==tax_id:
+				interaction_set.add(int(gene_id1))
+			if tax_id2!='-':
+				tax_id2 = int(tax_id2)
+				if tax_id2==tax_id and interactant_id_type=='GeneID':
+					interaction_set.add(int(interactant_id))
+		del reader
+		sys.stderr.write("done.\n")
+		return interaction_set
+	
 	def cal_pi_hg_p_value(self, vertex_set, prot_int_vertex_set, total_vertex_set):
 		"""
 		2006-12-28
@@ -166,7 +217,7 @@ class AugmentPatternByProtInteraction:
 				if running_type==1:
 					new_vertex_set, new_edge_set = self.augment_pattern_by_prot_interaction(vertex_set, prot_interaction_graph)
 					self.submit_aug_pi_graph(curs, output_table, mcl_id, new_vertex_set, new_edge_set)
-				elif running_type==2:
+				elif running_type in [2,3,4]:
 					log_p_value = self.cal_pi_hg_p_value(vertex_set, prot_int_vertex_set, total_vertex_set)
 					log_p_value_mcl_id_list.append([log_p_value, mcl_id])
 				counter += 1
@@ -203,7 +254,7 @@ class AugmentPatternByProtInteraction:
 		if self.running_type==1:
 			self.create_aug_pi_table(curs, self.output_table)
 			total_vertex_set = None	#2006-12-28 set this to None
-		elif self.running_type==2:
+		elif self.running_type in [2,3,4]:
 			total_vertex_set = self.get_total_vertex_set_from_patterns(curs, self.input_table)
 		else:
 			sys.stderr.write("Unsupported running_type=%s.\n"%self.running_type)
@@ -213,12 +264,21 @@ class AugmentPatternByProtInteraction:
 		elif self.input_type==2:
 			curs.execute("DECLARE crs CURSOR FOR select id, vertex_set from %s"%self.input_table)
 		
-		DrawPredGOExptTFCompTF_Patterns_instance = DrawPredGOExptTFCompTF_Patterns()
-		prot_interaction_graph = DrawPredGOExptTFCompTF_Patterns_instance.get_prot_interaction_graph(\
-			curs, self.prot_interaction_table, self.tax_id)
+		if self.running_type in [1,2]:
+			DrawPredGOExptTFCompTF_Patterns_instance = DrawPredGOExptTFCompTF_Patterns()
+			prot_interaction_graph = DrawPredGOExptTFCompTF_Patterns_instance.get_prot_interaction_graph(\
+				curs, self.prot_interaction_table, self.tax_id)
+		else:
+			prot_interaction_graph = None
 		
 		if self.running_type == 2:
 			prot_int_vertex_set = Set(prot_interaction_graph.nodes())&total_vertex_set
+		elif self.running_type==3:
+			hiv_interaction_set = self.get_hiv_interaction_set(self.prot_interaction_table, self.tax_id)
+			prot_int_vertex_set = hiv_interaction_set&total_vertex_set
+		elif self.running_type==4:
+			interaction_set = self.get_interaction_set(self.prot_interaction_table, self.tax_id)
+			prot_int_vertex_set = interaction_set&total_vertex_set
 		else:
 			prot_int_vertex_set = None	#2006-12-28 set this to None
 		
@@ -229,7 +289,7 @@ class AugmentPatternByProtInteraction:
 		if self.need_commit:
 			curs.execute("end")
 		
-		if self.running_type == 2:
+		if self.running_type in [2,3,4]:
 			self.output_to_file(log_p_value_mcl_id_list, self.output_table)
 
 if __name__ == '__main__':
