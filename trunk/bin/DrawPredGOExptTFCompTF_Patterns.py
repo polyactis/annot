@@ -198,6 +198,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 	def get_prot_interaction_graph(self, curs, prot_interaction_table, tax_id):
 		"""
 		2006-11-20
+		2006-01-05
+			print the number of connected components in the end
 		"""
 		sys.stderr.write("Getting protein interaction graph ...\n")
 		curs.execute("DECLARE crs0 CURSOR for select gene_id_array, interaction_type_id\
@@ -220,8 +222,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 			curs.execute("fetch 3000 from crs0")
 			rows = curs.fetchall()
 		curs.execute("close crs0")
-		sys.stderr.write("%s nodes and %s edges, Done.\n"%(nx.number_of_nodes(prot_interaction_graph),\
-			nx.number_of_edges(prot_interaction_graph)))
+		sys.stderr.write("%s nodes, %s edges and %s components, Done.\n"%(nx.number_of_nodes(prot_interaction_graph),\
+			nx.number_of_edges(prot_interaction_graph), nx.number_connected_components(prot_interaction_graph)))
 		return prot_interaction_graph
 	
 	def draw_augmented_PI_graph(self, old_g, prot_interaction_graph, old_sub_label_map, gene_id2gene_symbol, output_fname_prefix):
