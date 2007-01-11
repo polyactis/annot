@@ -36,7 +36,7 @@ Description:
 		red: associated
 		black: not standout and not associated
 	Edges colored in magenta in GO function graph represent direct, NOT shortest_path,
-		protein interaction. They might not be part of the pattern (compare it with TF graph).
+		protein interaction. If widened, it's part of the pattern (overlapping); otherwise, not.
 	
 	For the augmented (by-shortest_path) PI graph:
 		edges involved in protein interaction are marked in 'magenta' color. If edges are
@@ -236,6 +236,7 @@ class DrawPredGOExptTFCompTF_Patterns:
 		2006-12-27
 			just draw the labels, ignore the circle nodes
 		2006-12-29, some protein interaction genes are new to table gene.gene
+		2007-01-10 add the pure co-expression edges to the interaction graph and re-position
 		"""
 		g = nx.XGraph()
 		
@@ -262,6 +263,7 @@ class DrawPredGOExptTFCompTF_Patterns:
 		for (u,v) in old_g.edges():
 			if not g.has_edge(u,v):
 				standout_edge_list.append((u,v))
+				g.add_edge(u, v, 1)	#2007-01-10
 		
 		sub_label_map = old_sub_label_map.copy()
 		standout_node_list = []
@@ -304,6 +306,9 @@ class DrawPredGOExptTFCompTF_Patterns:
 			add prot_interaction_graph
 		2006-12-27
 			just draw the labels, ignore the circle nodes
+		2007-01-10
+			edges overlapping between interaction and co-expression are separated from interaction_edge_list
+			and they were widened with color 'magenta', the pure- interaction edges are justed colored in 'magenta'
 		"""
 		g = old_g.copy()
 		for key in go_id_or_mt_no_struct:
@@ -333,16 +338,24 @@ class DrawPredGOExptTFCompTF_Patterns:
 				nodes_of_g = g.nodes()
 				sub_prot_graph = prot_interaction_graph.subgraph(nodes_of_g)
 				interaction_edge_list = []
-				non_interaction_edge_list = []
+				non_interaction_edge_list = []	#pure interaction
+				overlapping_edge_list = []	#2007-01-10
 				for (u, v) in g.edges():
 					if not sub_prot_graph.has_edge(u,v):
 						non_interaction_edge_list.append((u,v))
+					else:	#2007-01-10
+						overlapping_edge_list.append((u, v))
 				for (u, v, interaction_type_id) in sub_prot_graph.edges():
-					interaction_edge_list.append((u,v))
+					if not g.has_edge(u, v):	#2007-01-10
+						interaction_edge_list.append((u,v))
 					#if not g.has_edge(u,v):	#expand g, not necesary
 					#	print 'added'
 					#	g.add_edge(u,v)
+				#2007-01-10 overlapping
+				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', width=5, edgelist=overlapping_edge_list)
+				#pure interaction
 				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', edgelist=interaction_edge_list)
+				#pure co-expression
 				nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_interaction_edge_list)
 			else:
 				nx.draw_networkx_edges(g, pos, alpha=0.4)
