@@ -15,6 +15,8 @@
 #include <iterator>	//08-24-05 for std::ostream_iterator
 #include <boost/tokenizer.hpp>	//08-24-05 for tokenizer, parse input file
 #include "boost/tuple/tuple.hpp"	//for boost::tuple	06-22-05
+#include <bvector.h>	//2007-01-17 needs this for bit_vector
+#include <cmath>	//2007-01-17 abs() overloading needs this
 
 using namespace std;
 
