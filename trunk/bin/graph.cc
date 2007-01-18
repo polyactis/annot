@@ -3,6 +3,7 @@
 #include <vector>
 #include <bitset>
 #include <cmath>
+#include <bvector.h>	//2007-01-17 needs this for bit_vector
 #define GENE_CUT_OFF 8
 #define JK_CUT_OFF 7
 #define COR_CUT_OFF 0.6
