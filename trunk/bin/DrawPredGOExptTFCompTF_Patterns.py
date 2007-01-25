@@ -237,9 +237,12 @@ class DrawPredGOExptTFCompTF_Patterns:
 			just draw the labels, ignore the circle nodes
 		2006-12-29, some protein interaction genes are new to table gene.gene
 		2007-01-10 add the pure co-expression edges to the interaction graph and re-position
+		2007-01-25
+			turn off the axis
+			change png format to svg, eps, png
 		"""
 		g = nx.XGraph()
-		
+		pylab.axis("off")
 		node_list = old_g.nodes()
 		no_of_nodes = len(node_list)
 		overlapping_edge_list = []
@@ -296,6 +299,8 @@ class DrawPredGOExptTFCompTF_Patterns:
 					font_color='m', alpha=0.4, font_size=10)
 			#nx.draw_networkx_nodes(g, pos, nodelist= non_standout_node_list, alpha=0.4)
 		#nx.draw_networkx_labels(g, pos, labels=sub_label_map)
+		pylab.savefig('%s.svg'%(output_fname_prefix), dpi=300)
+		pylab.savefig('%s.eps'%(output_fname_prefix), dpi=300)
 		pylab.savefig('%s.png'%(output_fname_prefix), dpi=300)
 		pylab.clf()
 		
@@ -309,11 +314,16 @@ class DrawPredGOExptTFCompTF_Patterns:
 		2007-01-10
 			edges overlapping between interaction and co-expression are separated from interaction_edge_list
 			and they were widened with color 'magenta', the pure- interaction edges are justed colored in 'magenta'
+		2007-01-25
+			turn off the axis
+			add codes to draw a pure network
+			change png format to svg, eps, png
 		"""
 		g = old_g.copy()
 		for key in go_id_or_mt_no_struct:
 			figure_no += 1
 			pylab.figure()
+			pylab.axis("off")
 			pylab.title(title_map[key])
 			standout_gene_id_list = []
 			standout_and_associated_gene_id_list = []
@@ -377,7 +387,19 @@ class DrawPredGOExptTFCompTF_Patterns:
 				#nx.draw_networkx_nodes(g, pos, nodelist= other_gene_id_list, node_color='b', alpha=0.4)
 			#nx.draw_networkx_labels(g, pos, labels=sub_label_map)
 			#nx.draw(g, pos, node_color=pylab.array(color_gene_id_list), labels=sub_label_map, alpha=0.4)
+			pylab.savefig('%s_%s.svg'%(output_fname_prefix, key), dpi=300)
+			pylab.savefig('%s_%s.eps'%(output_fname_prefix, key), dpi=300)
 			pylab.savefig('%s_%s.png'%(output_fname_prefix, key), dpi=300)
+			pylab.clf()
+		if go_id_or_mt_no_struct == []:	#2007-01-25
+			figure_no += 1
+			pylab.figure()
+			pylab.axis("off")
+			nx.draw_networkx_edges(g, pos, alpha=0.4)
+			nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, g.nodes(), type=3), alpha=0.4, font_size=10)
+			pylab.savefig('%s.svg'%(output_fname_prefix), dpi=300)
+			pylab.savefig('%s.eps'%(output_fname_prefix), dpi=300)
+			pylab.savefig('%s.png'%(output_fname_prefix), dpi=300)
 			pylab.clf()
 		return figure_no
 	
@@ -431,6 +453,9 @@ class DrawPredGOExptTFCompTF_Patterns:
 			#2006-12-16
 			output_fname_prefix = os.path.join(output_dir, 'id_%s_aug_prot_inter'%mcl_id)
 			self.draw_augmented_PI_graph(g, prot_interaction_graph, sub_label_map, gene_id2gene_symbol, output_fname_prefix)
+			#2007-01-25 just draw the network
+			output_fname_prefix = os.path.join(output_dir, 'id_%s'%mcl_id)
+			counter = self.draw_pattern(counter, g, pos, sub_label_map, go_id2name, [], go_id2gene_set, output_fname_prefix)
 			
 			if mcl_id in mcl_id2pred_go_id2gene_id_set:
 				#1st, draw the GO association
