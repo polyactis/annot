@@ -26,8 +26,12 @@ Examples:
 	AugmentPatternByProtInteraction.py -k hs_fim_65 
 		-i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 
 		-o /tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.prot_int.hg.p_value -r -p 2
+	
 	AugmentPatternByProtInteraction.py -k hs_fim_65 -i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o ~/tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.hiv_int.hg.p_value -r -p 3 -n /usr/local/research_data/ncbi/gene_2006_12_19/GeneRIF/hiv_interactions
+	
 	AugmentPatternByProtInteraction.py -k hs_fim_65 -i good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o ~/tmp/good_cl_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60.int.hg.p_value -r -p 4 -n /usr/local/research_data/ncbi/gene_2006_12_19/GeneRIF/interactions
+	
+	AugmentPatternByProtInteraction.py -k hs_fim_65 -i pattern_hs_fim_65_n2s175_m5x65s4l5bug -y 2 -o /tmp/pattern_hs_fim_65_n2s175_m5x65s4l5bug.prot_int.hg.p_value -r -p 2
 	
 Description:
 	Running type:
