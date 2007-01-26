@@ -8,8 +8,8 @@ Option:
 	-k ..., --schema=...	which schema in the database
 	-p ...,	pattern_table
 	-s ...,	cluster_bs_table
-	-i ...,	prediction input file
-	-l ...,	lm_bit, 111(default, IGNORE)
+	-i ...,	prediction input file, p_gene_table(2007-01-04)
+	-l ...,	lm_bit, 111(default, IGNORE), gene_p_table(2007-01-04)
 	-a ...,	accuracy cutoff used to prediction, 0.6(default, IGNORE)
 	-o ...,	output_dir
 	-g ...,	organism, for gene_id2symbol
@@ -23,6 +23,7 @@ Examples:
 	ssh $HOSTNAME Schema2Darwin.py -k mm_fim_97 -p -s -i mm_fim_97m4x200
 		-o /tmp/yuhuang/ -g mm
 	
+	Schema2Darwin.py -k hs_fim_65 -p pattern_hs_fim_65_n2s175_m5x65s4l5 -s bs_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60p01y1fe0_1 -i p_gene_hs_fim_65_n2s175_m5x65s4l5_ft2_e5 -l gene_p_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o /tmp/yuhuang -g hs -n 0011
 Description:
 	Program to convert results of one schema into darwin format.
 	Including TF, cluster, prediction from p_gene_table, gene_p_table, good_cluster_table
@@ -210,9 +211,12 @@ class pattern_darwin_format(Thread, darwin_format):
 	
 	def _pattern_darwin_format(self, curs, pattern_table, gene_no2id, go_no2id, output_fname, mcl_id_set=None):
 		"""
+		2007-01-07
+			add edge_set
+		
 		format:
 			r:=[
-			[mcl_id, vertex_set, recurrence_array, recurrence, connectivity, unknown_ratio]
+			[mcl_id, vertex_set, edge_set, recurrence_array, recurrence, connectivity, unknown_ratio]
 			[...],
 			...
 			[]]:
@@ -221,20 +225,26 @@ class pattern_darwin_format(Thread, darwin_format):
 		sys.stderr.write("pattern...\n")
 		of = open(output_fname, 'w')
 		of.write('r:=[\n')
-		curs.execute("DECLARE crs CURSOR FOR select id, vertex_set, recurrence_array, recurrence, \
+		curs.execute("DECLARE crs CURSOR FOR select id, vertex_set, edge_set, recurrence_array, recurrence, \
 			connectivity, unknown_gene_ratio from %s"%pattern_table)
 		curs.execute("fetch 5000 from crs")
 		rows = curs.fetchall()
 		while rows:
 			for row in rows:
-				mcl_id, vertex_set, recurrence_array, recurrence, connectivity, unknown_ratio = row
+				mcl_id, vertex_set, edge_set, recurrence_array, recurrence, connectivity, unknown_ratio = row
 				if mcl_id_set and mcl_id not in mcl_id_set:
 					continue
 				vertex_set = vertex_set[1:-1].split(',')
 				vertex_set = map(int, vertex_set)
 				vertex_set = dict_map(gene_no2id, vertex_set, type=2)
+				edge_set = edge_set[2:-2].split('},{')
+				for i in range(len(edge_set)):
+					edge = edge_set[i].split(',')
+					edge = map(int, edge)
+					edge = dict_map(gene_no2id, edge, type=2)
+					edge_set[i] = edge
 				recurrence_array = '[' + recurrence_array[1:-1] + ']'
-				of.write('[%s, %s, %s, %s, %s, %s],\n'%(mcl_id, repr(vertex_set), recurrence_array,\
+				of.write('[%s, %s, %s, %s, %s, %s, %s],\n'%(mcl_id, repr(vertex_set), repr(edge_set), recurrence_array,\
 					recurrence, connectivity, unknown_ratio))
 			curs.execute("fetch 5000 from crs")
 			rows = curs.fetchall()
@@ -342,9 +352,9 @@ class prediction_darwin_format(Thread, darwin_format):
 			use self.input_fname
 		"""
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
-		#self._prediction_darwin_format(curs, schema_instance.p_gene_table, schema_instance.gene_p_table, \
-			#self.gene_no2id, self.go_no2id, self.output_fname)
-		self._prediction_darwin_format_from_file(self.input_fname, self.gene_no2id, self.go_no2id, self.output_fname)
+		self._prediction_darwin_format(curs, self.input_fname, self.lm_bit, \
+			self.gene_no2id, self.go_no2id, self.output_fname)
+		#self._prediction_darwin_format_from_file(self.input_fname, self.gene_no2id, self.go_no2id, self.output_fname)
 		del conn, curs
 	
 class Schema2Darwin:
