@@ -14,6 +14,7 @@ Option:
 	-g ...,	gene_p table
 	-o ...,	output file
 	-m ...,	organism, 'Homo sapiens'(default)
+	-t ...,	prediction type, 0(default, wrong), -1(unknown), 1(correct)
 	-b,	debug version.
 	-h,	Display the usage infomation.
 	
@@ -48,8 +49,9 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 	"""
 	def __init__(self, hostname='zhoudb', dbname='graphdb', schema=None, \
 		raw_association_table=None, term_table=None, term2term_table=None, p_gene_table=None,\
-		gene_p_table=None, output_fname=None, organism='Homo sapiens', debug=0):
+		gene_p_table=None, output_fname=None, organism='Homo sapiens', prediction_type=0, debug=0):
 		"""
+		2007-01-31 add prediction_type
 		"""
 		self.hostname = hostname
 		self.dbname = dbname
@@ -61,6 +63,7 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 		self.gene_p_table = gene_p_table
 		self.output_fname = output_fname
 		self.organism = organism
+		self.prediction_type = int(prediction_type)
 		self.debug = int(debug)
 		
 		self.branch = 2	#default is biological_process, hidden parameter
@@ -123,13 +126,15 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 		sys.stderr.write("Done\n")
 		return direct_gene_id2go_id_set, go_graph, complement_go_graph, go_id2go_name
 	
-	def get_wrong_predictions(self, curs, p_gene_table, gene_p_table):
+	def get_wrong_predictions(self, curs, p_gene_table, gene_p_table, prediction_type=0):
 		"""
 		2006-12-19
+		2007-01-31
+			add prediction_type
 		"""
 		sys.stderr.write("Getting wrong predictions ...")
 		curs.execute("select p.gene_no, go.go_id from %s p, %s g, go where p.p_gene_id=g.p_gene_id and \
-			p.go_no=go.go_no and p.is_correct=0"%(p_gene_table, gene_p_table))
+			p.go_no=go.go_no and p.is_correct=%s"%(p_gene_table, gene_p_table, prediction_type))
 		rows = curs.fetchall()
 		
 		gene_id2go_id_set = {}
@@ -171,13 +176,14 @@ class ConfirmWrongPredictionsWithUpdatedGOinfo:
 	def run(self):
 		"""
 		2006-12-19
-		
+		2007-01-31
+			get_wrong_predictions()
 		"""
 		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
 		direct_gene_id2go_id_set, go_graph, complement_go_graph, go_id2go_name = self.dstruc_loadin_from_db(curs,\
 			self.raw_association_table, self.term_table, self.term2term_table, \
 			self.organism, self.branch_name_dict, self.branch_unknown_acc_dict, self.branch)
-		pred_gene_id2go_id_set, no_of_total_wrong_predictions = self.get_wrong_predictions(curs, self.p_gene_table, self.gene_p_table)
+		pred_gene_id2go_id_set, no_of_total_wrong_predictions = self.get_wrong_predictions(curs, self.p_gene_table, self.gene_p_table, self.prediction_type)
 		no_of_correct_wrong_predictions = self.checking_wrong_predictions(go_graph, pred_gene_id2go_id_set, \
 			direct_gene_id2go_id_set, no_of_total_wrong_predictions, go_id2go_name, self.output_fname)
 		accuracy = no_of_correct_wrong_predictions/float(no_of_total_wrong_predictions)
@@ -189,7 +195,7 @@ if __name__ == '__main__':
 		sys.exit(2)
 		
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:x:y:p:g:o:m:b", ["help", "hostname=", \
+		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:a:x:y:p:g:o:m:t:b", ["help", "hostname=", \
 			"dbname=", "schema="])
 	except:
 		print __doc__
@@ -205,6 +211,7 @@ if __name__ == '__main__':
 	gene_p_table = None
 	output_fname = None
 	organism = 'Homo sapiens'
+	prediction_type = 0
 	debug = 0
 	for opt, arg in opts:
 		if opt in ("-h", "--help"):
@@ -230,12 +237,14 @@ if __name__ == '__main__':
 			output_fname = arg
 		elif opt in ("-m",):
 			organism = arg
+		elif opt in ("-t",):
+			prediction_type = int(arg)
 		elif opt in ("-b",):
 			debug = 1
 	if schema and p_gene_table and gene_p_table and output_fname:
 		instance = ConfirmWrongPredictionsWithUpdatedGOinfo(hostname, dbname, schema,  \
 			raw_association_table, term_table, term2term_table, p_gene_table, gene_p_table, \
-			output_fname, organism, debug)
+			output_fname, organism, prediction_type, debug)
 		instance.run()
 	else:
 		print __doc__
