@@ -320,6 +320,15 @@ class DrawPredGOExptTFCompTF_Patterns:
 			change png format to svg, eps, png
 		"""
 		g = old_g.copy()
+		"""
+		2007-01-30
+			at font_size=16
+			char_width=12 and char_height=20 is good for svg and eps
+			char_width=50 and char_height=80 is good for png
+		"""
+		char_width = 12
+		char_height = 20
+		
 		for key in go_id_or_mt_no_struct:
 			figure_no += 1
 			pylab.figure()
@@ -366,25 +375,33 @@ class DrawPredGOExptTFCompTF_Patterns:
 				#pure interaction
 				nx.draw_networkx_edges(g, pos, alpha=0.4, edge_color='m', edgelist=interaction_edge_list)
 				#pure co-expression
-				nx.draw_networkx_edges(g, pos, alpha=0.4, edgelist=non_interaction_edge_list)
+				nx.draw_networkx_edges(g, pos, alpha=1.0, edgelist=non_interaction_edge_list)
 			else:
-				nx.draw_networkx_edges(g, pos, alpha=0.4)
+				nx.draw_networkx_edges(g, pos, alpha=1.0)
+			
+			node_size_list = []
+			for v in g:
+				node_size_list.append(len(sub_label_map[v]))	#2007-01-29, it's gonna extend along the x-axis
+			
+			nx.draw_networkx_nodes(g, pos, node_color='w', node_size=node_size_list, node_shape=None, alpha=1, verts=[[-char_width/2, -char_height/2], [-char_width/2, char_height/2], [char_width/2, char_height/2], [char_width/2, -char_height/2]])
+			
 			if standout_gene_id_list:
 				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, standout_gene_id_list, type=3), \
-					font_color='g', alpha=0.4, font_size=10)
+					font_color='g', alpha=0.4, font_size=16)
 				#nx.draw_networkx_nodes(g, pos, nodelist= standout_gene_id_list, node_color='g', alpha=0.4)
 			if standout_and_associated_gene_id_list:
 				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, standout_and_associated_gene_id_list, type=3), \
-					font_color='y', alpha=0.4, font_size=10)
+					font_color='y', alpha=0.4, font_size=16)
 				#nx.draw_networkx_nodes(g, pos, nodelist= standout_and_associated_gene_id_list, node_color='y', alpha=0.4)
 			if associated_gene_id_list:
 				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, associated_gene_id_list, type=3), \
-					font_color='r', alpha=0.4, font_size=10)
+					font_color='r', alpha=0.4, font_size=16)
 				#nx.draw_networkx_nodes(g, pos, nodelist= associated_gene_id_list, node_color='r', alpha=0.4)
 			if other_gene_id_list:
 				nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, other_gene_id_list, type=3), \
-					font_color='k', alpha=0.4, font_size=10)
+					font_color='k', alpha=0.4, font_size=16)
 				#nx.draw_networkx_nodes(g, pos, nodelist= other_gene_id_list, node_color='b', alpha=0.4)
+			
 			#nx.draw_networkx_labels(g, pos, labels=sub_label_map)
 			#nx.draw(g, pos, node_color=pylab.array(color_gene_id_list), labels=sub_label_map, alpha=0.4)
 			pylab.savefig('%s_%s.svg'%(output_fname_prefix, key), dpi=300)
@@ -395,8 +412,15 @@ class DrawPredGOExptTFCompTF_Patterns:
 			figure_no += 1
 			pylab.figure()
 			pylab.axis("off")
-			nx.draw_networkx_edges(g, pos, alpha=0.4)
-			nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, g.nodes(), type=3), alpha=0.4, font_size=10)
+			nx.draw_networkx_edges(g, pos, alpha=0.8)
+			
+			#2007-01-30
+			node_size_list = []
+			for v in g:
+				node_size_list.append(len(sub_label_map[v]))	#2007-01-29, it's gonna extend along the x-axis
+			nx.draw_networkx_nodes(g, pos, node_color='w', node_size=node_size_list, node_shape=None, alpha=1.0, verts=[[-char_width/2, -char_height/2], [-char_width/2, char_height/2], [char_width/2, char_height/2], [char_width/2, -char_height/2]])	#node_shape has to be set to None, otherwise verts won't work
+			
+			nx.draw_networkx_labels(g, pos, labels=dict_map(sub_label_map, g.nodes(), type=3), alpha=0.4, font_size=16)
 			pylab.savefig('%s.svg'%(output_fname_prefix), dpi=300)
 			pylab.savefig('%s.eps'%(output_fname_prefix), dpi=300)
 			pylab.savefig('%s.png'%(output_fname_prefix), dpi=300)
