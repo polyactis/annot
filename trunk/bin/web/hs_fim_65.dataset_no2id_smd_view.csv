@@ -1,0 +1,13 @@
+53	hs_dataset_smd_10	19	Cell-cycle	thymidine-nocodazole	Michael Whitfield
+54	hs_dataset_smd_16	24	Cell-line	Stomach cancer	Xin Chen
+55	hs_dataset_smd_26	16	Infection	PBMC	Cheryl Hemingway
+56	hs_dataset_smd_27	21	Infection	T. cruzi	Barbara Burleigh
+57	hs_dataset_smd_36	40	Lymphoma Classification	tumor tissue	Sean Bohen
+58	hs_dataset_smd_49	14	Primary tissue	Pancreas	Mari Olsen
+59	hs_dataset_smd_5	17	Breast	primary tumor	Anita Langerod
+60	hs_dataset_smd_57	21	Primary tumor	primary tumor	Monique Storz
+61	hs_dataset_smd_6	19	Breast	primary tumor	Hongjuan Zhao
+62	hs_dataset_smd_72	46	Solid tumor	Ovarian	Marci Schaner
+63	hs_dataset_smd_82	38	acute lymphoblastic leukemia	cell line	Bernard Fine
+64	hs_dataset_smd_84	12	prostate cancer	Aging	Samuel DePrimo
+65	hs_dataset_smd_9	9	Cell-cycle	Mitotic selection	Michael Whitfield

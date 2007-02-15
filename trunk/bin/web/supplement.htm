@@ -1,0 +1,35 @@
+<html>
+<head>
+<title></title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body text="#000000" bgcolor="#FFFFFF">
+<p align="left"></p>
+<p align="left"></p>
+<p align="left"> </p>
+<div align="left">
+<table width="100%" border="0" height="21">
+    <tr> 
+      <td bgcolor="#9999FF"><font size="2"><b>
+		<font color="#FFFFFF" face="Verdana">Supplemental 
+        material</font></b></font></td>
+    </tr>
+  </table>
+</div>
+<p align="left"><font face="Verdana" size="2"><b><a href="SupplementalTable1.xls">1. Supplementary Table S1</a></b>
+</p>
+<p>
+<font size="2" face="Verdana">
+In the running of random forest, a small number k of the variables are randomly selected to split the node for each tree. As shown in this <a href="SupplementalTable1.xls">Supplementary Table S1</a>, the performance of random forests is not sensitive to the choice of k.
+</font></p>
+
+<p align="left"><font face="Verdana" size="2"><b><a href="context-specific.csv">2. Context-specific Function Prediciton Results</a></b>
+</p>
+<p><font size="2" face="Verdana">
+We assigned 1126 functions to 895 genes, 779 known and 116 unknown, with a validation accuracy of 70%. Note that predictions on known genes were served only for validation in previous studies. Our predictions on known genes, on the other hand, are of great use in practice because they provide the context information(network topology) of genes' function. Among our assignment, 20% genes are assigned with multiple functions upon different network environments. All the prediction results are in <a href="context-specific.csv">this file</a>. If the <b>is_correct</b> column is -1, the prediction is for an unknown gene. If it's 0, the prediction is wrong for a known gene. If it's 1, the prediction is correct for a known gene. 
+</font></p>
+
+
+</body>
+</html>

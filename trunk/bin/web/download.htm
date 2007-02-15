@@ -1,0 +1,35 @@
+<html>
+<head>
+<title></title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+</head>
+
+<body text="#000000" bgcolor="#FFFFFF">
+<p align="left"></p>
+<p align="left"></p>
+<p align="left"> </p>
+<div align="left">
+<table width="100%" border="0" height="21">
+    <tr> 
+      <td bgcolor="#9999FF"><font size="2"><b>
+		<font color="#FFFFFF" face="Verdana">Supplemental 
+        material</font></b></font></td>
+    </tr>
+  </table>
+</div>
+<p align="left"><font face="Verdana" size="2"><b><a href="65datasets.tar.gz">1. 65 human datasets</a></b>
+</p>
+<p>
+<font size="2" face="Verdana">
+We collected 65 human microarray datasets including 52 Affymetrix (U133 and U95 platforms) and 13 cDNA datasets from the <a href="http://www.ncbi.nlm.nih.gov/geo/">NCBI GEO</a> and <a href="http://genome-www5.stanford.edu/">SMD</a> databases (version December 2005). The selection criteria are that each dataset contains at least eight experiments and that the percentage of statistically significant co-expressed gene pairs (see the section of graph construction for details) is not higher than 3%. The first criterion ensures that the dataset contains enough profiles so that the constructed relation graph is reliable while the second criterion screens the datasets of which too broad perturbations result in a large number of spurious co-expression estimates. The collected datasets are preprocessed before mining as following. The datasets generated from Affymetrix chips are log-transformed (base e) to place them on the same scale as the cDNA datasets. Note that the original values less than 10 are set to 10 first for stability. For each dataset, genes with low expression variation (lowest 10% in terms of the ratio of standard deviation to mean for Affymetrix data and of standard deviation for cDNA data.) are discarded. Finally, genes with more than 30% missing values and arrays with more than 20% missing values are also discarded.
+</font></p>
+
+<p align="left"><font face="Verdana" size="2"><b><a href="dataset_description.xls">2. dataset description</a></b>
+</p>
+<p><font size="2" face="Verdana">
+This file contains the description of all 65 datasets. For GEO datasets, GEO ID, number of columns, dataset title, long description are given. For SMD datasets, we give out information regarding the category, subcategory and experimenter, based on which the user could fetch the corresponding dataset from <a href="http://genome-www5.stanford.edu/">SMD website</a>.
+</font></p>
+
+
+</body>
+</html>
