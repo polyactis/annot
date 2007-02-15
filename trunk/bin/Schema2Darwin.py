@@ -24,6 +24,9 @@ Examples:
 		-o /tmp/yuhuang/ -g mm
 	
 	Schema2Darwin.py -k hs_fim_65 -p pattern_hs_fim_65_n2s175_m5x65s4l5 -s bs_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60p01y1fe0_1 -i p_gene_hs_fim_65_n2s175_m5x65s4l5_ft2_e5 -l gene_p_hs_fim_65_n2s175_m5x65s4l5_ft2_e5_000001a60 -o /tmp/yuhuang -g hs -n 0011
+
+	Schema2Darwin.py -k hs_fim_65 -p pattern_hs_fim_65_n2s175_m5x65s4l5bug -s good_cl_hs_fim_65_n2s175_m5x65s4l5bug_ft2_e5_000001a60 -i p_gene_hs_fim_65_n2s175_m5x65s4l5bug_ft2_e5 -l gene_p_hs_fim_65_n2s175_m5x65s4l5bug_ft2_e5_000001a60  -o /tmp/yuhuang -g hs -n 00001
+	
 Description:
 	Program to convert results of one schema into darwin format.
 	Including TF, cluster, prediction from p_gene_table, gene_p_table, good_cluster_table
@@ -356,7 +359,113 @@ class prediction_darwin_format(Thread, darwin_format):
 			self.gene_no2id, self.go_no2id, self.output_fname)
 		#self._prediction_darwin_format_from_file(self.input_fname, self.gene_no2id, self.go_no2id, self.output_fname)
 		del conn, curs
+
+class context_prediction_csv_format(Thread, darwin_format):
+	"""
+	2007-02-08
+	"""
+	def __init__(self, *arguments):
+		Thread.__init__(self)
+		darwin_format.__init__(self, *arguments)
 	
+	def get_mcl_id_set_from_good_cluster_table(self, curs, good_cluster_table):
+		"""
+		2007-02-08
+			copied from pattern_darwin_format
+		"""
+		sys.stderr.write("Getting mcl_id_set from good_cluster_table...\n")
+		curs.execute("DECLARE crs CURSOR FOR select mcl_id from %s"%good_cluster_table)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		mcl_id_set = Set()
+		while rows:
+			for row in rows:
+				mcl_id_set.add(row[0])
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		sys.stderr.write("mcl_id_set done.\n")
+		return mcl_id_set
+	
+	def get_mcl_id2vertex_edge_recurrence(self, curs, pattern_table, gene_no2id, go_no2id, mcl_id_set):
+		"""
+		2007-02-08
+		
+		"""
+		sys.stderr.write("Getting mcl_id2vertex_edge_recurrence ...\n")
+		mcl_id2vertex_edge_recurrence = {}
+		curs.execute("DECLARE crs CURSOR FOR select id, vertex_set, edge_set, recurrence_array from %s"%pattern_table)
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		recurrence_func = lambda x: int(float(x)>=0.8)
+		while rows:
+			for row in rows:
+				mcl_id, vertex_set, edge_set, recurrence_array = row
+				if mcl_id in mcl_id_set:
+					vertex_set = vertex_set[1:-1].split(',')
+					vertex_set = map(int, vertex_set)
+					vertex_set = dict_map(gene_no2id, vertex_set, type=2)
+					edge_set = edge_set[2:-2].split('},{')
+					for i in range(len(edge_set)):
+						edge = edge_set[i].split(',')
+						edge = map(int, edge)
+						edge = dict_map(gene_no2id, edge, type=2)
+						edge_set[i] = edge
+					recurrence_array = recurrence_array[1:-1].split(',')
+					recurrence_array = map(recurrence_func, recurrence_array)
+					new_recurrence_array = []
+					for i in range(len(recurrence_array)):
+						if recurrence_array[i]==1:
+							new_recurrence_array.append(i+1)
+					mcl_id2vertex_edge_recurrence[mcl_id] = [vertex_set, edge_set, new_recurrence_array]
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		curs.execute("close crs")
+		sys.stderr.write("done.\n")
+		return mcl_id2vertex_edge_recurrence
+	
+	def _prediction_csv_format(self, curs, p_gene_table, gene_p_table, gene_no2id, go_no2id, output_fname, mcl_id2vertex_edge_recurrence):
+		"""
+		2007-02-08
+			copied from prediction_darwin_format
+		"""
+		sys.stderr.write("prediction...\n")
+		writer = csv.writer(open(output_fname, 'w'), delimiter='\t')
+		header = ['gene', 'go_function', 'is_correct',\
+			'hyper-geometric p_value', 'pattern id', 'recurrence', 'dataset id list', 'connectivity',\
+			'cluster_size', 'unknown_ratio', 'avg_degree', 'network_topo_score', 'network neighbors',\
+			'network topology (edge_set)' ]
+		writer.writerow(header)
+		curs.execute("DECLARE crs CURSOR FOR select p.gene_no, p.go_no, p.is_correct_lca, p.avg_p_value, p.mcl_id, p.recurrence_cut_off,\
+			p.connectivity_cut_off, p.cluster_size_cut_off, p.unknown_cut_off, p.vertex_gradient, p.edge_gradient\
+			from %s p, %s g where g.p_gene_id = p.p_gene_id order by gene_no, go_no"%(p_gene_table, gene_p_table))
+		curs.execute("fetch 5000 from crs")
+		rows = curs.fetchall()
+		while rows:
+			for row in rows:
+				gene_no, go_no, is_correct_lca, p_value, mcl_id, recurrence, connectivity, cluster_size, unknown_ratio, avg_degree, network_topo_score = row
+				
+				writer.writerow([gene_no2id.get(gene_no) or gene_no, go_no2id[go_no], is_correct_lca,\
+					p_value, mcl_id, recurrence, mcl_id2vertex_edge_recurrence[mcl_id][2], connectivity,\
+					cluster_size, unknown_ratio, avg_degree, network_topo_score, mcl_id2vertex_edge_recurrence[mcl_id][0],\
+					mcl_id2vertex_edge_recurrence[mcl_id][1] ])
+			curs.execute("fetch 5000 from crs")
+			rows = curs.fetchall()
+		del writer
+		curs.execute("close crs")
+		sys.stderr.write("prediction csv format done.\n")
+		
+	def run(self):
+		"""
+		2007-02-08
+		"""
+		conn, curs = db_connect(self.hostname, self.dbname, self.schema)
+		mcl_id_set = self.get_mcl_id_set_from_good_cluster_table(curs, self.cluster_bs_table)
+		mcl_id2vertex_edge_recurrence = self.get_mcl_id2vertex_edge_recurrence(curs, self.pattern_table, self.gene_no2id, self.go_no2id, mcl_id_set)
+		self._prediction_csv_format(curs, self.input_fname, self.lm_bit, \
+			self.gene_no2id, self.go_no2id, self.output_fname, mcl_id2vertex_edge_recurrence)
+		del conn, curs
+
 class Schema2Darwin:
 	def __init__(self, *arguments):
 		"""
@@ -392,6 +501,8 @@ class Schema2Darwin:
 		12-30-05
 			fix a bug in indexing darwin_instance_list
 		2006-09-25
+		2007-02-08
+			add context_prediction_csv_format
 		"""
 		tf_darwin_ofname = os.path.join(self.output_dir, '%s.tf.darwin'%self.cluster_bs_table)
 		cluster_darwin_ofname = os.path.join(self.output_dir, '%s.cluster.darwin'%os.path.basename(self.input_fname))
@@ -417,9 +528,9 @@ class Schema2Darwin:
 		#mt_no2tf_name = get_mt_no2tf_name()
 		mt_no2tf_name = gene_id2symbol
 		
-		class_list = [tf_darwin_format, cluster_darwin_format, prediction_darwin_format, pattern_darwin_format]
-		output_fname_list = [tf_darwin_ofname, cluster_darwin_ofname, prediction_darwin_ofname, pattern_darwin_ofname]
-		#self.ofname is schema table's ofname.
+		class_list = [tf_darwin_format, cluster_darwin_format, prediction_darwin_format, pattern_darwin_format, context_prediction_csv_format]
+		context_prediction_csv_fname = os.path.join(self.output_dir, '%s.context.csv'%self.input_fname)
+		output_fname_list = [tf_darwin_ofname, cluster_darwin_ofname, prediction_darwin_ofname, pattern_darwin_ofname, context_prediction_csv_fname]
 		darwin_instance_list = []
 		for i in range(len(self.running_bit)):
 			if self.running_bit[i] == '1':
