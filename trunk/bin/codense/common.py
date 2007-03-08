@@ -79,15 +79,22 @@ def dict_map(dict, ls, type=1):
 	
 	return new_list
 
-def db_connect(hostname, dbname, schema=None):
+def db_connect(hostname, dbname, schema=None, password=None, user=None):
 	"""
 	02-28-05
 		establish database connection, return (conn, curs).
 		copied from CrackSplat.py
 	03-08-05
 		parameter schema is optional
+	2007-03-07
+		add password and user two options
 	"""
-	conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
+	connection_string = 'host=%s dbname=%s'%(hostname, dbname)
+	if password:
+		connection_string += ' password=%s'%password
+	if user:
+		connection_string += ' user=%s'%user
+	conn = psycopg.connect(connection_string)
 	curs = conn.cursor()
 	if schema:
 		curs.execute("set search_path to %s"%schema)
