@@ -61,18 +61,20 @@ def dict_map(dict, ls, type=1):
 		add type 2 to return item itself if mapping is not available
 	2006-12-21
 		add type 3 to extract a smaller map
+	2007-05-14
+		bug, "if value" could miss 0
 	"""
 	if type==3:
 		new_list = {}	#it's a dictionary
 		for item in ls:
 			value = dict.get(item)
-			if value:
+			if value is not None:
 				new_list[item] = value
 	else:
 		new_list = []
 		for item in ls:
 			value = dict.get(item)
-			if value:
+			if value is not None:
 				new_list.append(value)
 			elif type==2:
 				new_list.append(item)
