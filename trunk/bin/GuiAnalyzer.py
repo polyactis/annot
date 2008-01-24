@@ -6,7 +6,7 @@ import os, sys, pygtk, Image
 pygtk.require('2.0')
 
 import gtk, gtk.glade
-from scipy import fromimage
+#from scipy import fromimage
 from codense.common import db_connect
 from codense.common import foreach_cb, create_columns, fill_treeview
 from codense.common import get_gene_no2gene_id, get_gene_no2go_no
@@ -19,7 +19,12 @@ class GuiAnalyzer:
 		The integrated program to analyze clusters
 	"""
 	def __init__(self):
-		xml = gtk.glade.XML('guianalyzer.glade')
+		"""
+		2008-01-17
+			use sys.argv[0] to figure out the path of guianalyzer.glade
+		"""
+		program_path = os.path.dirname(sys.argv[0])
+		xml = gtk.glade.XML(os.path.join(program_path, 'guianalyzer.glade'))
 		xml.signal_autoconnect(self)
 		self.window_center = xml.get_widget("window_center")
 		self.window_center.connect("destroy", self.destroy)
