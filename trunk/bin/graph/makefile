@@ -13,7 +13,7 @@ BoostPythonTarget	= clustering.so biclustering.so cc_from_edge_list.so johnson_s
 BoostPythonBinary	= clustering cc_from_edge_list PostFim
 BoostPythonLib  = -lboost_python
 
-SwigInclude	= /usr/include/python2.3
+SwigInclude = `python-config --includes`
 CxxSwigTargets	= _graph_modeling.so
 SwigPy		= graph_modeling.py
 CxxWrap	= graph_modeling_wrap.cc
@@ -71,7 +71,7 @@ $(BoostPythonTarget):	%.so:	%.o
 
 #for boost python binary 
 $(BoostPythonBinary):	%:	%.o
-	-$(CxxCompiler) $(CxxFlags) $(BoostPythonLib) $< $(Libs) -o $@
+	-$(CxxCompiler) $(CxxFlags) $(BoostPythonLib) `python-config --libs` $< $(Libs) -o $@
 
 
 
