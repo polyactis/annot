@@ -1512,11 +1512,14 @@ def get_sequence_segment(curs, gi, start, stop, annot_assembly_table='sequence.a
 		segment = ''.join(segment)
 	return segment
 
-"""
-11-13-05
-"""
 def pg_1d_array2python_ls(pg_array, type_code=int):
-	pg_array = pg_array[1:-1].split(',')
+	"""
+	2008-05-20
+		the new pyscopg2 returns the array in list, rather string
+	11-13-05
+	"""
+	if isinstance(pg_array, str):
+		pg_array = pg_array[1:-1].split(',')
 	pg_array = map(type_code, pg_array)
 	return pg_array
 
