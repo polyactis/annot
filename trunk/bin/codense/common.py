@@ -1936,37 +1936,43 @@ def get_gene_no2tf_set(curs, binding_site_table='harbison2004.binding_site', mat
 12-17-05
 	for TFBindingSiteParse.py
 """
-def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='sequence.entrezgene_mapping',\
-	annot_assembly_table='sequence.annot_assembly'):
+def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='genome.entrezgene_mapping',\
+	annot_assembly_table='genome.annot_assembly'):
 	"""
+	2008-08-12
+		deal with genes with no strand info
+		only start of the gene gets into chromosome2anchor_gene_tuple_ls. not stop.
 	12-11-05
 	"""
 	sys.stderr.write("Getting entrezgene_annotated_anchor ...")
 	chromosome2anchor_gene_tuple_ls = {}
 	gene_id2coord = {}
-	curs.execute("DECLARE eaa_crs CURSOR FOR select e.genomic_gi, a.chromosome, e.gene_id, e.strand, \
-		e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s"%(entrezgene_mapping_table, \
-		annot_assembly_table, tax_id))
-	curs.execute("fetch 5000 from eaa_crs")
+	curs.execute("select e.genomic_gi, a.chromosome, e.gene_id, e.strand, \
+			e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s"%(entrezgene_mapping_table, \
+																					annot_assembly_table, tax_id))
+	#curs.execute("fetch 5000 from eaa_crs")
 	rows = curs.fetchall()
-	while rows:
-		for row in rows:
-			genomic_gi, chromosome, gene_id, strand, start, stop = row
-			gene_id = int(gene_id)
-			if strand=='1':
-				strand = '+'
-			else:
-				strand = '-'
-			if chromosome not in chromosome2anchor_gene_tuple_ls:
-				chromosome2anchor_gene_tuple_ls[chromosome] = []
-			chromosome2anchor_gene_tuple_ls[chromosome].append((start, gene_id))
-			chromosome2anchor_gene_tuple_ls[chromosome].append((stop, gene_id))
-			gene_id2coord[gene_id] = (start, stop, strand, genomic_gi)
-		curs.execute("fetch 5000 from eaa_crs")
-		rows = curs.fetchall()
+	#while rows:
+	for row in rows:
+		genomic_gi, chromosome, gene_id, strand, start, stop = row
+		gene_id = int(gene_id)
+		if strand=='1' or strand=='+1' or strand=='+':
+			strand = '+'
+		elif strand=='-1' or strand=='-':
+			strand = '-'
+		else:
+			strand = strand
+		
+		if chromosome not in chromosome2anchor_gene_tuple_ls:
+			chromosome2anchor_gene_tuple_ls[chromosome] = []
+		
+		chromosome2anchor_gene_tuple_ls[chromosome].append((start, gene_id))
+		gene_id2coord[gene_id] = (start, stop, strand, genomic_gi)
+		#curs.execute("fetch 5000 from eaa_crs")
+		#rows = curs.fetchall()
 	for chromosome in chromosome2anchor_gene_tuple_ls:	#sort the list
 		chromosome2anchor_gene_tuple_ls[chromosome].sort()
-	curs.execute("close eaa_crs")
+	#curs.execute("close eaa_crs")
 	sys.stderr.write("Done.\n")
 	return chromosome2anchor_gene_tuple_ls, gene_id2coord
 	
