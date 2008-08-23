@@ -1,22 +1,5 @@
 #!/usr/bin/env python
 """
-Usage: go_node_distance.py -k SCHEMA [OPTIONS]
-
-Option:
-	-z ..., --hostname=...	the hostname, zhoudb(default)
-	-d ..., --dbname=...	the database name, graphdb(default)
-	-k ..., --schema=...	which schema in the database to get the node_list,
-		public(default)
-	-t ..., --table=...	table to store the node distances, node_distance(default)
-	-b ..., --branch=...	which branch of GO, 0, 1(default) or 2
-	-e, --depth	compute the depth of nodes, default is pairwise distance
-	-a, --all	compute distances between all nodes in that branch,
-		instead of getting node_list from schema.go.
-	-n,	--new_table	table is new. (create it first)
-	-r, --report	report the progress(a number) IGNORE
-	-c, --commit	commit the database transaction
-	-l, --log	enable logging
-	-h, --help              show this help
 
 Examples:
 	#compute pairwise distance only for nodes in sc_54
@@ -45,13 +28,9 @@ Description:
 """
 import sys, os, math
 bit_number = math.log(sys.maxint)/math.log(2)
-if bit_number>40:       #64bit
-	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
-	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
-else:   #32bit
-	sys.path.insert(0, os.path.expanduser('~/lib/python'))
-	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
-import sys, os, psycopg, getopt
+sys.path.insert(0, os.path.expanduser('~/lib/python'))
+sys.path.insert(0, os.path.join(os.path.expanduser('~/script')))
+import sys, os, getopt
 from graphlib import Graph, GraphAlgo
 from sets import Set
 
@@ -63,44 +42,57 @@ class distance_of_2nodes:
 		self.jasmine_distance = jasmine_distance
 
 class go_node_distance:
-	'''
-	03-05-05
-	run()
-		--dstruc_loadin
-		--go_index_setup
+	__doc__ = __doc__
+	option_default_dict = {('drivername', 1,):['mysql', 'v', 1, 'which type of database? mysql or postgres', ],\
+							('hostname', 1, ): ['papaya.usc.edu', 'z', 1, 'hostname of the db server', ],\
+							('dbname', 1, ): ['stock_250k', 'd', 1, 'database name', ],\
+							('schema', 0, ): [None, 'k', 1, 'database schema name', ],\
+							('db_user', 1, ): [None, 'u', 1, 'database username', ],\
+							('db_passwd', 1, ): [None, 'p', 1, 'database password', ],\
+							("table", 0, ): ['node_distance', 't', 1, 'table to store the node distances'],\
+							("depth", 0, ): [0, 'e', 0, 'compute the depth of nodes, default is pairwise distance'],\
+							('all', 0, ): [0, 'a', 0, 'compute distances between all nodes in that branch,\
+		instead of getting node_list from schema.go.'],\
+							('new_table', 0, ): [0, 'n', 0, 'table is new. (create it first)'],\
+							('log', 0, ): [0, 'l', 0, 'enable logging'],\
+							('branch', 0, int):[2, '', 1, 'which GO branch, 1(molecular_function), 2(biological_process), 3(cellular_component)'],\
+							("output_fname", 0, ): [None, 'o', 1, 'if you wanna results into a file'],\
+							('commit', 0, int):[0, 'c', 0, 'commit the db operation.'],\
+							('debug', 0, int):[0, 'b', 0, 'toggle debug mode'],\
+							('report', 0, int):[0, 'r', 0, 'toggle report, more verbose stdout/stderr.']}
+	def __init__(self, **keywords):
+		"""
+		2008-08-22
+			use ProcessOptions
+		"""
+		from pymodule import ProcessOptions
+		self.ad = ProcessOptions.process_function_arguments(keywords, self.option_default_dict, error_doc=self.__doc__, class_to_have_attr=self)
+
+		if self.drivername=='postgres':
+			#input from database
+			try:
+				import psycopg
+			except:
+				import psycopg2 as psycopg
+			self.conn = psycopg.connect('host=%s dbname=%s user=%s passwd=%s'%(hostname, dbname, self.db_user, self.db_passwd))
+			self.curs = self.conn.cursor()
+			if self.schema:
+				self.curs.execute("set search_path to %s"%self.schema)
+		elif self.drivername=='mysql':
+			import MySQLdb
+			self.conn = MySQLdb.connect(db=self.dbname, host=self.hostname, user=self.db_user, passwd = self.db_passwd)
+			self.curs = self.conn.cursor()
 		
-		
-		--node_depth
-		or
-		--node_pairwise_distance
-			--process_2indices
-			--submit
-		--create_indices
-		
-	In this class, go_id refers to the term id in tables of schema go.
-	the index for one go node is its path in tuple form
-	'''
-	def __init__(self, hostname, dbname, schema, table, branch, depth, all, new_table, report=0, \
-		needcommit=0, log=0):
-		self.conn = psycopg.connect('host=%s dbname=%s'%(hostname, dbname))
-		self.curs = self.conn.cursor()
-		self.curs.execute("set search_path to %s"%schema)
 		self.table = table
 		
-		self.depth = int(depth)
-		self.all = int(all)
-		self.new_table = int(new_table)
-		self.report = int(report)
-		self.needcommit = int(needcommit)
-		self.log = int(log)
 		
 		#debugging flags
-		self.debug_process_2indices = int(log)
+		self.debug_process_2indices = int(self.log)
 		#mapping for the branches
 		self.branch_dict = {0:'molecular_function',
 			1:'biological_process',
 			2:'cellular_component'}
-		self.branch = self.branch_dict[int(branch)]
+		self.branch = self.branch_dict[int(self.branch)]
 
 		#mapping between go term id and its index list
 		self.go_id2index = {}
@@ -403,6 +395,21 @@ class go_node_distance:
 	def run(self):
 		"""
 		03-05-05
+		03-05-05
+		run()
+			--dstruc_loadin
+			--go_index_setup
+			
+			
+			--node_depth
+			or
+			--node_pairwise_distance
+				--process_2indices
+				--submit
+			--create_indices
+			
+		In this class, go_id refers to the term id in tables of schema go.
+		the index for one go node is its path in tuple form
 		"""
 		self.dstruc_loadin()
 		#setup self.go_id2index
@@ -472,60 +479,9 @@ class go_node_distance:
 		return min_distance
 
 if __name__ == '__main__':
-	if len(sys.argv) == 1:
-		print __doc__
-		sys.exit(2)
+	from pymodule import ProcessOptions
+	main_class = go_node_distance
+	po = ProcessOptions(sys.argv, main_class.option_default_dict, error_doc=main_class.__doc__)
 	
-	long_options_list = ["help", "hostname=", "dbname=", "schema=", "table=", \
-		"branch=", "depth", "all", "new_table", "report", "commit", "log"]
-	try:
-		opts, args = getopt.getopt(sys.argv[1:], "hz:d:k:t:b:eanrcl", long_options_list)
-	except:
-		print __doc__
-		sys.exit(2)
-	
-	hostname = 'zhoudb'
-	dbname = 'graphdb'
-	schema = 'public'
-	table = 'node_distance'
-	branch = 1
-	depth = 0
-	all = 0
-	new_table = 0
-	report = 0
-	commit = 0
-	log = 0
-	for opt, arg in opts:
-		if opt in ("-h", "--help"):
-			print __doc__
-			sys.exit(2)
-		elif opt in ("-z", "--hostname"):
-			hostname = arg
-		elif opt in ("-d", "--dbname"):
-			dbname = arg
-		elif opt in ("-k", "--schema"):
-			schema = arg
-		elif opt in ("-t", "--table"):
-			table = arg
-		elif opt in ("-b", "--branch"):
-			branch = int(arg)
-		elif opt in ("-e", "--depth"):
-			depth = 1
-		elif opt in ("-a", "--all"):
-			all = 1
-		elif opt in ("-n", "--new_table"):
-			new_table = 1
-		elif opt in ("-r", "--report"):
-			report = 1
-		elif opt in ("-c", "--commit"):
-			commit = 1
-		elif opt in ("-l", "--log"):
-			log = 1
-			
-	if schema:
-		instance = go_node_distance(hostname, dbname, schema, table, branch, depth, all, new_table, report, \
-			commit, log)
-		instance.run()
-	else:
-		print __doc__
-		sys.exit(2)
+	instance = main_class(**po.long_option2value)
+	instance.run()
