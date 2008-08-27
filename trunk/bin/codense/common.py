@@ -12,7 +12,10 @@ else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
 import csv, cPickle
-import psycopg2 as psycopg
+try:
+	import psycopg2 as psycopg
+except:
+	import psycopg	
 from sets import Set
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 	from python2_3 import *
