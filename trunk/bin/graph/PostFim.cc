@@ -71,10 +71,10 @@ read pattern signature and its frequency
 */
 {
 	std::cerr<<"Read "<<input_filename<<"..."<<std::endl;
-	
+
 	std::ifstream datafile(input_filename);
 
-	boost::dynamic_bitset<> sig_bitset(no_of_datasets);	
+	boost::dynamic_bitset<> sig_bitset(no_of_datasets);
 	boost::char_separator<char> sep(" \t()");		//blank, '\t' or '(' or ')' is the separator
 	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
 	std::vector<unsigned int> signature_frequency_vector;
@@ -104,7 +104,7 @@ read pattern signature and its frequency
 		freq_of_signature_vector.push_back(signature_frequency_vector[signature_frequency_vector.size()-1]);	//the last element is frequency, 2006-08-08
 		signature_frequency_vector.clear();
 	}
-	
+
 	datafile.close();
 	std::cerr<<"Done."<<std::endl;
 }
@@ -117,9 +117,9 @@ read edge name and sig_vector
 */
 {
 	std::cerr<<"Read "<<sig_vector_fname<<"..."<<std::endl;
-	
+
 	std::ifstream datafile(sig_vector_fname);
-	boost::dynamic_bitset<> sig_bitset(no_of_datasets);	
+	boost::dynamic_bitset<> sig_bitset(no_of_datasets);
 	boost::char_separator<char> sep(" \t");		//blank, '\t' is the separator
 	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
 	for (std::string line; std::getline(datafile, line);) {
@@ -152,7 +152,7 @@ void PostFim::patternFormation()
 	#if defined(DEBUG)
 		std::cerr << "patternFormation..."<<std::endl;
 	#endif
-	
+
 	/*
 	//03-30-06 some temporary stuff to output edge_bitset_vector and edge_tuple_vector
 	ofstream edge_out;
@@ -172,7 +172,7 @@ void PostFim::patternFormation()
 	}
 	edge_out.close();
 	*/
-	
+
 	std::vector<int> edge_id_vector;
 	for (int i = 0; i<pattern_bitset_vector.size(); i++)
 	{
@@ -196,7 +196,7 @@ void PostFim::patternFormation()
 		}
 		edge_id_vector.clear();	//clear it for the next pattern
 	}
-	
+
 	//clear all patterns, pattern_bitset_vector and freq_of_signature_vector
 	pattern_bitset_vector.clear();
 	freq_of_signature_vector.clear();
@@ -264,7 +264,7 @@ Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vecto
 	{
 		gene1 = edge_tuple_vector[edge_id_vector[i]*2];	//edge_tuple_vector is 2*len(edge_bitset_vector)
 		gene2 = edge_tuple_vector[edge_id_vector[i]*2+1];
-		
+
 		tie(pos, inserted) = gene_no2vertexDescriptor.insert(std::make_pair(gene1, vertexDescriptor()));
 		if (inserted) {
 			u = add_vertex(graph);
@@ -272,7 +272,7 @@ Graph PostFim::init_graph_from_edge_tuple_vector(std::vector<int> &edge_id_vecto
 			pos->second = u;
 		} else
 			u = pos->second;
-		
+
 		tie(pos, inserted) = gene_no2vertexDescriptor.insert(std::make_pair(gene2, vertexDescriptor()));
 		if (inserted) {
 			v = add_vertex(graph);
@@ -305,7 +305,7 @@ std::vector<Graph> PostFim::cc2subgraph(Graph &graph)
 		int component_no = component[i];
 		add_vertex(i, vector_subgraph[component_no]);
 	}
-	
+
 	return vector_subgraph;
 }
 
@@ -320,7 +320,7 @@ void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
 		std::cerr << "outputting...";
 	#endif
 	vertex_name_type vertex2name = get(vertex_name, graph);	//mapping
-	
+
 	boost::graph_traits<Graph>::vertex_descriptor
 		vertex_local, vertex_local1, vertex_global, vertex_global1;
 	int vg_name, vg_name1;
@@ -334,16 +334,16 @@ void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
 		vertex_vector.push_back(get(vertex2name, vertex_global));
 	}
 	sort(vertex_vector.begin(), vertex_vector.end());	//sort it in ascending order
-	
+
 	outf<<"[";
 	for (int i=0; i<no_of_vertices; i++)
 	{
 		outf<<vertex_vector[i];
 		if (i!= no_of_vertices-1)
 			outf << ", ";	//the difference from the middle to the end
-	}		
+	}
 	outf<<"]\t";
-	
+
 	const int no_of_edges = num_edges(subgraph);
 	std::vector<boost::array<unsigned int, 2> > edge_array_vector;
 	boost::array<unsigned int, 2> edge_array;
@@ -369,7 +369,7 @@ void PostFim::output_subgraph(ofstream &outf, Graph &subgraph, Graph &graph)
 		}
 		edge_array_vector.push_back(edge_array);
 	}
-	
+
 	sort(edge_array_vector.begin(), edge_array_vector.end(), cmp_edge_array);	//sort the edges
 	outf<<"[";
 	for (int i=0; i<no_of_edges; i++)
@@ -398,18 +398,18 @@ void PostFim::outputWholeGraph(ofstream &outf, std::vector<int> &edge_id_vector,
 	std::vector<unsigned int> vertex_vector;
 	std::vector<boost::array<unsigned int, 2> > edge_array_vector;
 	boost::array<unsigned int, 2> edge_array;
-	
+
 	bool inserted;
 	unsigned int gene1, gene2;
 	for (int i=0; i<edge_id_vector.size(); i++)
 	{
 		gene1 = edge_tuple_vector[edge_id_vector[i]*2];	//edge_tuple_vector is 2*len(edge_bitset_vector)
 		gene2 = edge_tuple_vector[edge_id_vector[i]*2+1];
-		
+
 		tie(pos, inserted) = gene_no_dict.insert(std::make_pair(gene1, 1));
 		if (inserted)
 			vertex_vector.push_back(gene1);
-		
+
 		tie(pos, inserted) = gene_no_dict.insert(std::make_pair(gene2, 1));
 		if (inserted)
 			vertex_vector.push_back(gene2);
@@ -425,7 +425,7 @@ void PostFim::outputWholeGraph(ofstream &outf, std::vector<int> &edge_id_vector,
 		}
 		edge_array_vector.push_back(edge_array);
 	}
-	
+
 	sort(vertex_vector.begin(), vertex_vector.end());	//sort it in ascending order
 	outf<<"[";
 	for (int i=0; i<vertex_vector.size(); i++)
@@ -433,9 +433,9 @@ void PostFim::outputWholeGraph(ofstream &outf, std::vector<int> &edge_id_vector,
 		outf<<vertex_vector[i];
 		if (i!= vertex_vector.size()-1)
 			outf << ", ";	//the difference from the middle to the end
-	}		
+	}
 	outf<<"]\t";
-	
+
 	sort(edge_array_vector.begin(), edge_array_vector.end(), cmp_edge_array);	//sort the edges
 	outf<<"[";
 	for (int i=0; i<edge_array_vector.size(); i++)
@@ -464,6 +464,7 @@ void PostFim::run()
 
 BOOST_PYTHON_MODULE(PostFim)
 {
+	using namespace boost::python;
 	class_<PostFim, boost::noncopyable>("PostFim", init<int, int, int, std::string>())
 		.def("add_edge_sig_vector", &PostFim::add_edge_sig_vector)
 		.def("add_pattern_signature", &PostFim::add_pattern_signature)
@@ -503,7 +504,7 @@ int main(int argc, char* argv[])
 	  {"no_cc", 0, NULL, 'x'},
 	  {NULL,0,NULL,0}
 	};
-	
+
 	char* output_filename = "PostFim.output";
 	char* input_filename = NULL;
 	char* sig_vector_fname = NULL;
@@ -548,10 +549,10 @@ int main(int argc, char* argv[])
 
 	if (input_filename!=NULL && sig_vector_fname!=NULL)
 	{
-		
+
 		PostFim instance(input_filename, sig_vector_fname, output_filename, no_of_datasets, min_cluster_size, no_cc);
 		instance.run();
-		
+
 	}
 	else
 		print_usage(stderr, 1);

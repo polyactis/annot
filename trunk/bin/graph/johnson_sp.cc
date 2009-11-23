@@ -98,7 +98,7 @@ boost::python::list johnson_sp::calculate_sp(Graph &graph)
 		d_matrix.push_back(one_row);
 	}
 	johnson_all_pairs_shortest_paths(graph, d_matrix);
-	
+
 	//put it into python list
 	for(int i=0; i<d_matrix.size(); i++)
 	{
@@ -139,7 +139,7 @@ boost::python::list johnson_sp::py_recurrence_list()
 /*
 01-23-06
 	calculate the recurrence_list from _recurrence_bitset_vector
-	
+
 	must be run after init_graph_from_vertex_edge_list()
 */
 {
@@ -163,6 +163,7 @@ boost::python::list johnson_sp::py_recurrence_list()
 
 BOOST_PYTHON_MODULE(johnson_sp)
 {
+	using namespace boost::python;
 	class_<johnson_sp>("johnson_sp")
 		.def(init<int>())
 		.def("add_edge_sig_vector", &johnson_sp::add_edge_sig_vector)
