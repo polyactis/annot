@@ -1942,6 +1942,8 @@ def get_gene_no2tf_set(curs, binding_site_table='harbison2004.binding_site', mat
 def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='genome.entrezgene_mapping',\
 	annot_assembly_table='genome.annot_assembly'):
 	"""
+	2010-8-1 make sure chromosome is not null
+	
 	2008-08-12
 		deal with genes with no strand info
 		only start of the gene gets into chromosome2anchor_gene_tuple_ls. not stop.
@@ -1951,10 +1953,12 @@ def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='geno
 	chromosome2anchor_gene_tuple_ls = {}
 	gene_id2coord = {}
 	curs.execute("select e.genomic_gi, a.chromosome, e.gene_id, e.strand, \
-			e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s"%(entrezgene_mapping_table, \
-																					annot_assembly_table, tax_id))
+			e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s and a.chromosome is not null"%\
+			(entrezgene_mapping_table, annot_assembly_table, tax_id))	#2010-8-1 make sure chromosome is not null
+	
 	#curs.execute("fetch 5000 from eaa_crs")
 	rows = curs.fetchall()
+	counter = 0#2010-8-1
 	#while rows:
 	for row in rows:
 		genomic_gi, chromosome, gene_id, strand, start, stop = row
@@ -1973,10 +1977,11 @@ def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='geno
 		gene_id2coord[gene_id] = (start, stop, strand, genomic_gi)
 		#curs.execute("fetch 5000 from eaa_crs")
 		#rows = curs.fetchall()
+		counter += 1
 	for chromosome in chromosome2anchor_gene_tuple_ls:	#sort the list
 		chromosome2anchor_gene_tuple_ls[chromosome].sort()
 	#curs.execute("close eaa_crs")
-	sys.stderr.write("Done.\n")
+	sys.stderr.write("%s genes (including AS-isoforms). Done.\n"%counter)	#2010-8-1 report counter
 	return chromosome2anchor_gene_tuple_ls, gene_id2coord
 	
 """
