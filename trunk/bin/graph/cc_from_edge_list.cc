@@ -505,7 +505,8 @@ void ClusterByEBC::reindex_edge(Graph &graph)
 
 void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, vector<double> &edge_centrality_vector, const int &size_cutoff, const float &conn_cutoff)
 /*
-*09-04-05
+ * 2010-8-13 bugfix. If no_of_edges is below 1 (singletons), add the graph to good_subgraph_vector.
+ * 09-04-05
 *	cut the graph with the edge of maximum betweenness_centrality
 09-07-05
 	a bug arises in calling brandes_betweenness_centrality(), Doug's email solved it.
@@ -527,7 +528,7 @@ void ClusterByEBC::cut_by_betweenness_centrality(Graph &graph, vector<double> &e
 		#ifdef DEBUG
 			std::cerr<<"connectivity: "<<connectivity<<std::endl;
 		#endif
-		if (connectivity>=conn_cutoff)
+		if (no_of_edges<1 || connectivity>=conn_cutoff)	// 2010-8-13 if no_of_edges is below 1, stop here.
 		{
 			#ifdef DEBUG
 				std::cerr<<"good subgraph "<<std::endl;
@@ -631,7 +632,6 @@ twoListTuple ClusterByEBC::graph2list(Graph &graph)
 			<< "," << get(vertex2name, vertex2) << ") ";
 		#endif
 		graph_edge_list.append(boost::python::make_tuple(get(vertex2name, vertex1), get(vertex2name, vertex2)));
-
 	}
 	#if defined(DEBUG)
 		std::cout << std::endl;
