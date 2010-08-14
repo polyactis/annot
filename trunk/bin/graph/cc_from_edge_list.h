@@ -13,7 +13,7 @@
 
 #include <iostream>			// for std::cout
 #include <vector>			//for vector
-#include <boost/property_map.hpp>	//09-05-05 for iterator_property_map
+#include <boost/property_map/property_map.hpp>	//09-05-05 for iterator_property_map
 #include <boost/graph/betweenness_centrality.hpp>	//09-05-05 for betweenness_centrality
 #include <boost/pending/indirect_cmp.hpp>	//Mon Sep  5 11:38:25 2005 for indirect_cmp
 #include <boost/tuple/tuple.hpp>	//Mon Sep  5 19:03:02 2005 for boost::tuple
