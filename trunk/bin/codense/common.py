@@ -8,9 +8,11 @@ bit_number = math.log(sys.maxint)/math.log(2)
 if bit_number>40:       #64bit
 	sys.path.insert(0, os.path.expanduser('~/lib64/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script64')))
 else:   #32bit
 	sys.path.insert(0, os.path.expanduser('~/lib/python'))
 	sys.path.insert(0, os.path.join(os.path.expanduser('~/script/annot/bin')))
+	sys.path.insert(0, os.path.join(os.path.expanduser('~/script')))
 import csv, cPickle
 try:
 	import psycopg2 as psycopg
@@ -19,7 +21,11 @@ except:
 from sets import Set
 if sys.version_info[:2] < (2, 3):       #python2.2 or lower needs some extra
 	from python2_3 import *
-	
+
+# 2011-1-25 get_entrezgene_annotated_anchor() has been moved to pymodule.GenomeDB
+from pymodule.GenomeDB import get_entrezgene_annotated_anchor
+
+
 def index_plus_one(i):
 	'''
 	This small function is used in map() to increase the indices by 1.
@@ -1935,55 +1941,6 @@ def get_gene_no2tf_set(curs, binding_site_table='harbison2004.binding_site', mat
 	sys.stderr.write("Done getting gene_no2tf_set.\n")
 	return gene_no2tf_set
 
-"""
-12-17-05
-	for TFBindingSiteParse.py
-"""
-def get_entrezgene_annotated_anchor(curs, tax_id, entrezgene_mapping_table='genome.entrezgene_mapping',\
-	annot_assembly_table='genome.annot_assembly'):
-	"""
-	2010-8-1 make sure chromosome is not null
-	
-	2008-08-12
-		deal with genes with no strand info
-		only start of the gene gets into chromosome2anchor_gene_tuple_ls. not stop.
-	12-11-05
-	"""
-	sys.stderr.write("Getting entrezgene_annotated_anchor ...")
-	chromosome2anchor_gene_tuple_ls = {}
-	gene_id2coord = {}
-	curs.execute("select e.genomic_gi, a.chromosome, e.gene_id, e.strand, \
-			e.start, e.stop from %s e, %s a where e.genomic_gi = a.gi and e.tax_id=%s and a.chromosome is not null"%\
-			(entrezgene_mapping_table, annot_assembly_table, tax_id))	#2010-8-1 make sure chromosome is not null
-	
-	#curs.execute("fetch 5000 from eaa_crs")
-	rows = curs.fetchall()
-	counter = 0#2010-8-1
-	#while rows:
-	for row in rows:
-		genomic_gi, chromosome, gene_id, strand, start, stop = row
-		gene_id = int(gene_id)
-		if strand=='1' or strand=='+1' or strand=='+':
-			strand = '+'
-		elif strand=='-1' or strand=='-':
-			strand = '-'
-		else:
-			strand = strand
-		
-		if chromosome not in chromosome2anchor_gene_tuple_ls:
-			chromosome2anchor_gene_tuple_ls[chromosome] = []
-		
-		chromosome2anchor_gene_tuple_ls[chromosome].append((start, gene_id))
-		gene_id2coord[gene_id] = (start, stop, strand, genomic_gi)
-		#curs.execute("fetch 5000 from eaa_crs")
-		#rows = curs.fetchall()
-		counter += 1
-	for chromosome in chromosome2anchor_gene_tuple_ls:	#sort the list
-		chromosome2anchor_gene_tuple_ls[chromosome].sort()
-	#curs.execute("close eaa_crs")
-	sys.stderr.write("%s genes (including AS-isoforms). Done.\n"%counter)	#2010-8-1 report counter
-	return chromosome2anchor_gene_tuple_ls, gene_id2coord
-	
 """
 12-18-05
 """
